@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>نموذجي للبرمجة · My Code AI</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e;
+          --accent:#3fb950; --accent2:#58a6ff; --gen:#d2a8ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif; }
+  header { padding:18px 24px; border-bottom:1px solid var(--border); display:flex;
+           align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:20px; }
+  .badge { font-size:12px; padding:3px 9px; border-radius:999px; border:1px solid var(--border);
+           color:var(--muted); }
+  .badge.ok { color:var(--accent); border-color:#238636; }
+  main { display:grid; grid-template-columns: 1fr 300px; gap:18px; padding:18px 24px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; }
+  .editor-wrap { position:relative; }
+  #out { direction:ltr; text-align:left; white-space:pre-wrap; word-break:break-word;
+         font-family: ui-monospace, "JetBrains Mono", Consolas, monospace; font-size:14px;
+         line-height:1.55; min-height:380px; max-height:65vh; overflow:auto; outline:none;
+         background:#0b0f14; border:1px solid var(--border); border-radius:8px; padding:14px; }
+  #out:focus { border-color:var(--accent2); }
+  .gen { color:var(--gen); background:rgba(210,168,255,.07); }
+  .row { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; align-items:center; }
+  button { background:#238636; color:white; border:0; border-radius:8px; padding:10px 18px;
+           font-size:15px; cursor:pointer; font-family:inherit; }
+  button.sec { background:#21262d; border:1px solid var(--border); }
+  button:disabled { opacity:.5; cursor:wait; }
+  label { display:block; font-size:13px; color:var(--muted); margin-top:12px; }
+  input[type=range] { width:100%; }
+  .val { color:var(--text); float:left; direction:ltr; }
+  .stat { display:flex; justify-content:space-between; font-size:13px; padding:5px 0;
+          border-bottom:1px dashed var(--border); }
+  .stat b { direction:ltr; }
+  h3 { margin:0 0 8px; font-size:15px; }
+  .examples button { font-size:12px; padding:6px 10px; direction:ltr; }
+  svg text { fill: var(--muted); font-size:10px; }
+  .hint { font-size:12px; color:var(--muted); margin-top:8px; line-height:1.6; }
+  kbd { background:#21262d; border:1px solid var(--border); border-radius:4px; padding:0 5px; font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧠 نموذجي الخاص للبرمجة</h1>
+  <span class="badge ok">مدرَّب من الصفر · بدون أي نموذج آخر</span>
+  <span class="badge" id="status">جارٍ التحميل…</span>
+</header>
+<main>
+  <section class="panel">
+    <div class="editor-wrap">
+      <div id="out" contenteditable="true" spellcheck="false">def fibonacci(n):
+    </div>
+    </div>
+    <div class="row">
+      <button id="go">✨ أكمل الكود</button>
+      <button class="sec" id="stop" disabled>⏹ إيقاف</button>
+      <button class="sec" id="clear">مسح</button>
+      <span class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> للإكمال</span>
+    </div>
+    <div class="row examples" id="examples"></div>
+    <p class="hint">النموذج يكمل الكود الذي تكتبه (code completion). النص <span class="gen">بهذا اللون</span> هو ما ولّده النموذج.</p>
+  </section>
+  <aside>
+    <div class="panel">
+      <h3>الإعدادات</h3>
+      <label>الإبداعية (temperature) <span class="val" id="tv">0.7</span></label>
+      <input type="range" id="temp" min="0" max="1.5" step="0.05" value="0.7">
+      <label>عدد التوكنات <span class="val" id="nv">150</span></label>
+      <input type="range" id="ntok" min="20" max="400" step="10" value="150">
+      <label>Top-k <span class="val" id="kv">40</span></label>
+      <input type="range" id="topk" min="1" max="100" step="1" value="40">
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h3>معلومات النموذج</h3>
+      <div id="info"></div>
+      <svg id="chart" width="100%" height="140" viewBox="0 0 270 140"></svg>
+      <p class="hint">منحنى الخسارة (loss) أثناء التدريب — كلما انخفض كان النموذج أفضل.</p>
+    </div>
+  </aside>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const out = $("out");
+let ctrl = null;
+
+const EXAMPLES = [
+  "def fibonacci(n):\n    ",
+  "import os\n\ndef list_files(path):\n    \"\"\"Return all files in path.\"\"\"\n",
+  "class Stack:\n    def __init__(self):\n        ",
+  "def is_prime(n):\n    if n < 2:\n        return False\n",
+  "import json\n\ndef load_config(filename):\n",
+  "for i in range(10):\n    ",
+];
+EXAMPLES.forEach(e => {
+  const b = document.createElement("button"); b.className = "sec";
+  b.textContent = e.split("\n").find(l => l.trim() && !l.startsWith("import")) || e;
+  b.onclick = () => { out.textContent = e; };
+  $("examples").appendChild(b);
+});
+
+[["temp","tv"],["ntok","nv"],["topk","kv"]].forEach(([i,v]) =>
+  $(i).oninput = () => $(v).textContent = $(i).value);
+
+function getText() {
+  // innerText keeps line breaks from contenteditable
+  return out.innerText.replace(/\u00a0/g, " ");
+}
+
+async function run() {
+  const prompt = getText();
+  out.textContent = prompt;
+  const span = document.createElement("span"); span.className = "gen";
+  out.appendChild(span);
+  $("go").disabled = true; $("stop").disabled = false;
+  ctrl = new AbortController();
+  try {
+    const r = await fetch("api/complete", {
+      method: "POST", signal: ctrl.signal, headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({prompt, temperature:+$("temp").value,
+                            max_tokens:+$("ntok").value, top_k:+$("topk").value})
+    });
+    if (!r.ok) { span.textContent = "\n# " + await r.text(); return; }
+    const reader = r.body.getReader(); const dec = new TextDecoder();
+    while (true) {
+      const {done, value} = await reader.read(); if (done) break;
+      span.textContent += dec.decode(value, {stream:true});
+      out.scrollTop = out.scrollHeight;
+    }
+  } catch (e) { if (e.name !== "AbortError") span.textContent += "\n# error: " + e; }
+  finally { $("go").disabled = false; $("stop").disabled = true; }
+}
+$("go").onclick = run;
+$("stop").onclick = () => ctrl && ctrl.abort();
+$("clear").onclick = () => { out.textContent = ""; out.focus(); };
+out.addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+  if (e.key === "Tab") { e.preventDefault(); document.execCommand("insertText", false, "    "); }
+});
+
+function chart(hist) {
+  const svg = $("chart"); if (!hist.length) { svg.innerHTML = ""; return; }
+  const W=270,H=140,p=24, xs=hist.map(h=>h.iter), ys=hist.flatMap(h=>[h.val_loss,h.train_loss]);
+  const x0=0,x1=Math.max(...xs), y0=Math.min(...ys)*0.95, y1=Math.max(...ys)*1.02;
+  const X=v=>p+(v-x0)/(x1-x0||1)*(W-p-6), Y=v=>H-p+ -(v-y0)/(y1-y0||1)*(H-p-8);
+  const line=(k,c)=>`<polyline fill="none" stroke="${c}" stroke-width="2" points="${hist.map(h=>X(h.iter)+","+Y(h[k])).join(" ")}"/>`;
+  svg.innerHTML = `<line x1="${p}" y1="${H-p}" x2="${W}" y2="${H-p}" stroke="#30363d"/>`+
+    `<line x1="${p}" y1="4" x2="${p}" y2="${H-p}" stroke="#30363d"/>`+
+    line("train_loss","#58a6ff")+line("val_loss","#3fb950")+
+    `<text x="${p}" y="${H-8}">0</text><text x="${W-30}" y="${H-8}">${x1}</text>`+
+    `<text x="0" y="12">${y1.toFixed(1)}</text><text x="0" y="${H-p}">${y0.toFixed(1)}</text>`+
+    `<text x="${W-80}" y="14" style="fill:#3fb950">val</text><text x="${W-50}" y="14" style="fill:#58a6ff">train</text>`;
+}
+
+async function info() {
+  try {
+    const d = await (await fetch("api/info")).json();
+    if (!d.ready) { $("status").textContent = "النموذج لم يُدرَّب بعد"; return; }
+    $("status").textContent = "جاهز ✓"; $("status").className = "badge ok";
+    const c = d.config;
+    $("info").innerHTML = [
+      ["عدد المعاملات", (d.params/1e6).toFixed(2)+"M"],
+      ["الطبقات / الرؤوس", c.n_layer+" / "+c.n_head],
+      ["حجم التضمين", c.n_embd],
+      ["طول السياق", c.block_size+" tokens"],
+      ["المفردات (BPE)", c.vocab_size],
+      ["خطوات التدريب", d.iter],
+      ["val loss", d.val_loss.toFixed(3)],
+    ].map(([k,v])=>`<div class="stat"><span>${k}</span><b>${v}</b></div>`).join("");
+    chart(d.history);
+  } catch (e) { $("status").textContent = "خطأ في الاتصال"; }
+}
+info(); setInterval(info, 30000);
+</script>
+</body>
+</html>
