@@ -47,6 +47,26 @@ python generate.py                      # وضع تفاعلي
 python server.py --port 8000            # واجهة ويب: http://localhost:8000
 ```
 
+## 📊 نتائج التدريب الفعلية (النموذج المرفق)
+
+- 4.26M معامل · 4 طبقات · 4 رؤوس انتباه · سياق 256 توكن · مفردات 4096
+- 3000 خطوة تدريب (~12 مليون توكن، ~45 دقيقة على CPU بنواتين)
+- خسارة التحقق: **8.3 → 2.52** (perplexity من 4096 إلى **12.4**)
+
+مثال حقيقي من النموذج (المدخل حتى `"""Return all files in path."""`):
+
+```python
+import os
+
+def list_files(path):
+    """Return all files in path."""
+    if not os.path.exists(path) and not os.path.isdir(path):
+        return os.path.join(path)
+    return os.path.join(path, 'rb').split("/")
+```
+
+لاحظ: الصيغة واستخدام `os.path` صحيحة، لكن المنطق غير دقيق — هذا متوقّع لحجم النموذج.
+
 ## ⚠️ توقعات واقعية
 
 النموذج المرفق صغير (**~4 مليون معامل**) ودُرِّب حوالي ساعة على معالج بنواتين فقط،
