@@ -81,7 +81,7 @@ def run_code(code, test):
 
 
 def main():
-    torch.set_num_threads(2)
+    torch.set_num_threads(int(__import__("os").environ.get("THREADS", 2)))
     model, tok, ck = load_chat()
     print(f"chat model iter {ck['iter']}, val loss {ck['val_loss']:.3f}\n")
     ok = 0

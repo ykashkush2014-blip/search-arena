@@ -22,8 +22,11 @@
 | `prepare_data.py` | يجمع الكود، يدرّب الـ tokenizer، ويحوّل البيانات لأرقام |
 | `train.py` | تدريب النموذج من الصفر (مع استئناف تلقائي) |
 | `generate.py` | إكمال الكود من سطر الأوامر |
-| `server.py` + `web/index.html` | واجهة ويب لتجربة النموذج |
-| `checkpoints/model.pt` | أوزان النموذج المدرَّب (ملكك أنت) |
+| `chat_data.py` / `prepare_chat.py` | مولّد بيانات المحادثة + توسيع الـ tokenizer للعربي |
+| `finetune_chat.py` / `chat.py` / `eval_chat.py` | تدريب المحادثة، الاستخدام، والاختبار |
+| `server.py` + `web/` | واجهة الشات + صفحة إكمال الكود |
+| `checkpoints/model.pt` | أوزان نموذج الكود الأساسي |
+| `checkpoints/chat_model.pt` | أوزان المساعد الذكي (ملكك أنت) |
 | `data/tokenizer.json` | المفردات التي تعلّمها الـ tokenizer |
 
 ## التشغيل
@@ -47,7 +50,49 @@ python generate.py                      # وضع تفاعلي
 python server.py --port 8000            # واجهة ويب: http://localhost:8000
 ```
 
-## 📊 نتائج التدريب الفعلية (النموذج المرفق)
+## 💬 المساعد الذكي (محادثة بالعربي والإنجليزي)
+
+فوق نموذج الكود، في **مساعد محادثة**: بتكتبله طلبك بالعربي (فصحى أو عامية) أو بالإنجليزي،
+وبيرد عليك بكود + شرح بنفس لغتك. **كمان مبني من الصفر 100%:**
+
+1. `chat_data.py` بيولّد ~120 ألف مثال (طلب ← رد) من قوالب وأكواد **مكتوبة يدويًا ومُختبرة**
+   (كل حل بيتنفذ ويتفحص قبل التدريب) — بدون استعمال أي نموذج ذكاء اصطناعي لتوليد البيانات.
+   البيانات فيها صياغات كتير، أخطاء إملائية مقصودة، كلمات مفتاحية، وأسماء عشوائية عشان النموذج يفهم **المعنى** مش يحفظ القوالب.
+2. `prepare_chat.py` بيوسّع الـ tokenizer بمفردات عربية (الطلب العربي صار أقصر 5 مرات تقريبًا).
+3. `finetune_chat.py` بيدرّب نموذجك نفسه على المحادثة (الخسارة على ردود المساعد بس).
+4. `eval_chat.py` بيختبره بطلبات **بصياغات ما شافها أبدًا بالتدريب**، وبينفّذ الكود اللي كتبه ليتأكد إنه صحيح.
+
+### النتائج الفعلية
+
+| الاختبار | النتيجة |
+|---|---|
+| كود صحيح (بيتنفذ وبينجح بالاختبارات) لطلبات جديدة بالعربي والإنجليزي | **22 / 24** |
+| محادثة، شرح مفاهيم، رفض أسئلة خارج البرمجة، جافاسكربت | **11 / 11** |
+
+```bash
+python chat.py                              # محادثة بالترمينال
+python chat.py "اكتب دالة بتفحص إذا الرقم أولي"
+python server.py                            # واجهة الشات: http://localhost:8000
+python eval_chat.py                         # شوف النتائج بنفسك
+```
+
+### شو بيعرف؟
+- ~50 دالة: حساب، أرقام أولية، فيبوناتشي، نصوص، قوائم، ترتيب (bubble / merge / quick)، بحث ثنائي، قواميس، ملفات، JSON، regex...
+- برامج: آلة حاسبة، لعبة تخمين، Stack، Queue، Linked List، حساب بنكي، سيرفر ويب، try/except...
+- كلاسات بأي اسم وخصائص (`اعمل كلاس اسمه Car فيه brand و year`)
+- حلقات بأرقامك أنت (`اطبع الأرقام من 1 إلى 37`)
+- شرح مفاهيم: list، dict، class، recursion، OOP، API، git...
+- نسخ جافاسكربت لكتير من الأكواد
+- بيرفض بأدب الأسئلة اللي مش عن البرمجة
+
+### حدوده (بصراحة)
+- بيعرف **بس** المواضيع اللي اتدرّب عليها. إذا سألته عن شي جديد كليًا، رح يجاوب بأقرب شي بيعرفه (وممكن يكون غلط).
+- أحيانًا بيقطع أسماء جديدة ما شافها قبل (مثلًا `Teacher` صارت `Te`).
+- المحادثة سؤال وجواب، ما بيتذكر الرسائل اللي قبل.
+- **عشان توسّعه:** ضيف مهام جديدة لـ `FUNC_TASKS` أو `PROGRAM_TASKS` بملف `chat_data.py`، وبعدين:
+  `python prepare_chat.py && python finetune_chat.py`
+
+## 📊 نتائج تدريب نموذج الكود الأساسي
 
 - 4.26M معامل · 4 طبقات · 4 رؤوس انتباه · سياق 256 توكن · مفردات 4096
 - 3000 خطوة تدريب (~12 مليون توكن، ~45 دقيقة على CPU بنواتين)
@@ -96,7 +141,7 @@ def list_files(path):
 ---
 
 ### English summary
-A ~4M-parameter GPT-style code-completion model with a from-scratch BPE tokenizer,
+A ~4.8M-parameter Arabic/English programming chat assistant (22/24 unseen coding requests solved correctly) on top of a ~4M-parameter GPT-style code-completion model with a from-scratch BPE tokenizer,
 trained from random initialisation on Python source code. No pretrained weights,
 no external models or APIs. Scale it up with the `gpu-base` / `gpu-large` presets
 and more data.
