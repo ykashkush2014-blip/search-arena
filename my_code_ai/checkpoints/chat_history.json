@@ -1,0 +1,17 @@
+[
+ {
+  "iter": 200,
+  "train_loss": 0.3818,
+  "val_loss": 0.675
+ },
+ {
+  "iter": 400,
+  "train_loss": 3.0091,
+  "val_loss": 0.2175
+ },
+ {
+  "iter": 600,
+  "train_loss": 0.1118,
+  "val_loss": 0.1039
+ }
+]

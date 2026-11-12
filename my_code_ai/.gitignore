@@ -2,3 +2,5 @@
 data/*.bin
 # full training state (with optimizer) - large; model.pt is kept
 checkpoints/ckpt.pt
+# regenerate with: python prepare_chat.py
+data/chat.pkl

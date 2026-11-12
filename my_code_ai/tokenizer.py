@@ -2,7 +2,8 @@
 Byte-level BPE tokenizer written from scratch.
 
 No pretrained vocabulary is used: the merges are learned directly from YOUR
-training corpus by `train_tokenizer.py`.
+training corpus by `prepare_data.py` (and extended with Arabic/chat
+vocabulary by `prepare_chat.py`).
 """
 import heapq
 import json
@@ -48,11 +49,19 @@ class BPETokenizer:
         return self.special[EOT]
 
     @classmethod
-    def train(cls, text, vocab_size=4096, verbose=True):
-        """Learn BPE merges from raw text (incremental algorithm + heap)."""
-        num_merges = vocab_size - 256 - 1  # -1 for <|endoftext|>
+    def train(cls, text, vocab_size=4096, verbose=True, base=None):
+        """Learn BPE merges from raw text (incremental algorithm + heap).
+
+        If `base` (an existing BPETokenizer) is given, its merges are kept and
+        new merges are learned on top of them (used to add Arabic vocabulary
+        without breaking the already-trained model)."""
+        n_base = len(base.merges) if base else 0
+        num_merges = vocab_size - 256 - 1 - n_base  # -1 for <|endoftext|>
         chunk_counts = Counter(SPLIT_PATTERN.findall(text))
-        words = [list(c.encode("utf-8")) for c in chunk_counts]
+        if base:
+            words = [list(base._encode_chunk(c)) for c in chunk_counts]
+        else:
+            words = [list(c.encode("utf-8")) for c in chunk_counts]
         counts = list(chunk_counts.values())
 
         pair_counts = defaultdict(int)
@@ -65,7 +74,7 @@ class BPETokenizer:
 
         heap = [(-c, p) for p, c in pair_counts.items()]
         heapq.heapify(heap)
-        tok = cls(special_tokens=[])
+        tok = cls(merges=list(base.merges.keys()) if base else None, special_tokens=[])
         tok.special = {}
 
         for step in range(num_merges):
