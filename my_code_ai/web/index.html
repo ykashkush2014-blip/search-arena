@@ -66,14 +66,22 @@
     .render-area { position: relative; overflow: hidden; min-height: 419px; background: #d9d2d2; perspective: 1100px; isolation: isolate; }
     .render-area::after { content: ""; pointer-events: none; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px); background-size: 35px 35px; opacity: 0; transition: opacity .35s ease; mix-blend-mode: soft-light; }
     .render-area.render-mode::after { opacity: .75; }
-    .render-card { --rx: 0deg; --ry: 0deg; --depth: 19px; position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .3s cubic-bezier(.2,.7,.2,1); transform: rotateX(var(--rx)) rotateY(var(--ry)) scale(1.02); }
+    .render-card { --rx: 0deg; --ry: 0deg; --spin: 0deg; --depth: 19px; position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .3s cubic-bezier(.2,.7,.2,1); transform: rotateX(var(--rx)) rotateY(calc(var(--ry) + var(--spin))) scale(1.02); }
     .image-shadow, .image-layer { position: absolute; inset: 0; background-image: var(--image); background-size: cover; background-position: center; }
     .image-shadow { opacity: 0; filter: saturate(1.25) contrast(1.06) brightness(.88); transform: translate3d(calc(var(--depth) * -.85), calc(var(--depth) * .45), -23px); mix-blend-mode: multiply; transition: opacity .35s ease, transform .2s ease; }
-    .image-layer { transform: translateZ(0px); transition: transform .2s ease; }
+    .image-layer { transform: translateZ(0px); transition: transform .2s ease, opacity .2s ease; }
+    .edit-canvas { position: absolute; z-index: 5; inset: 0; display: none; width: 100%; height: 100%; cursor: crosshair; touch-action: none; transform: translateZ(24px); }
+    .render-area.editing .edit-canvas { display: block; }
+    .render-area.editing .image-layer, .render-area.editing .image-shadow, .render-area.editing .highlight-cut, .render-area.editing .depth-outline { opacity: 0 !important; }
     .highlight-cut { position: absolute; inset: -2%; background: radial-gradient(circle at 37% 29%, rgba(255,255,255,.42), transparent 24%), linear-gradient(102deg, transparent 27%, rgba(255,255,255,.3) 42%, transparent 48%); opacity: 0; transform: translateZ(35px); mix-blend-mode: soft-light; pointer-events: none; transition: opacity .35s ease; }
     .depth-outline { position: absolute; inset: 14% 19% 16% 20%; border: 1px solid rgba(255,255,255,.78); border-radius: 47% 46% 43% 45%; opacity: 0; transform: translateZ(48px) scale(.96); box-shadow: 0 0 0 14px rgba(255,255,255,.10), 0 0 0 36px rgba(255,255,255,.06); transition: opacity .35s ease; }
     .render-mode .image-shadow { opacity: .28; } .render-mode .image-layer { transform: translateZ(20px); } .render-mode .highlight-cut, .render-mode .depth-outline { opacity: 1; }
-    .floating-label { position: absolute; z-index: 5; padding: 6px 8px; color: #1a1a18; background: var(--lime); border-radius: 5px; box-shadow: 0 5px 12px rgba(0,0,0,.14); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; opacity: 0; transform: translateY(5px); transition: opacity .35s ease, transform .35s ease; }
+    .cleanup-hud { position: absolute; z-index: 12; top: 13px; left: 50%; display: none; align-items: center; gap: 7px; padding: 5px; color: #f3f3ed; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; background: rgba(29,29,27,.88); box-shadow: 0 7px 18px rgba(0,0,0,.18); font-size: 10px; white-space: nowrap; transform: translateX(-50%); backdrop-filter: blur(8px); }
+    .render-area.editing .cleanup-hud { display: flex; }
+    .cleanup-hud input { width: 68px; accent-color: var(--lime); }
+    .cleanup-hud button { min-height: 24px; padding: 0 7px; color: #1c1c1a; border: 0; border-radius: 4px; background: var(--lime); font-size: 9px; font-weight: 800; }
+    .cleanup-hud button.cancel-cleanup { color: #d8d8d0; background: transparent; }
+    .floating-label { position: absolute; z-index: 5; padding: 6px 8px; color: #1a1a18; background: var(--lime); border-radius: 5px; box-shadow: 0 5px 12px rgba(0,0,0,.14); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; opacity: 0; pointer-events: none; transform: translateY(5px); transition: opacity .35s ease, transform .35s ease; }
     .render-mode .floating-label { opacity: 1; transform: translateY(0); }
     .tag-fore { left: 15%; top: 22%; } .tag-mid { right: 15%; top: 52%; background: #fff; } .tag-bg { left: 16%; bottom: 14%; background: var(--coral); }
     .view-switch { position: absolute; z-index: 10; left: 14px; bottom: 14px; display: inline-flex; gap: 3px; padding: 4px; background: rgba(28,28,26,.86); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; backdrop-filter: blur(8px); }
@@ -94,10 +102,13 @@
     .range { appearance: none; width: 100%; height: 3px; margin: 11px 0 3px; border-radius: 3px; background: linear-gradient(90deg, var(--lime) 0 66%, #60605b 66%); }
     .range::-webkit-slider-thumb { appearance: none; width: 11px; height: 11px; border: 2px solid #282825; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
     .range.depth-range { background: linear-gradient(90deg, var(--violet) 0 59%, #60605b 59%); } .range.depth-range::-webkit-slider-thumb { background: #a7a0ff; box-shadow: 0 0 0 1px #a7a0ff; }
-    .studio-bottom { display: flex; align-items: center; justify-content: space-between; padding: 12px 5px 0 7px; }
-    .file-name { color: #b4b4ad; font-size: 10px; display: flex; align-items: center; gap: 6px; }
+    .studio-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 5px 0 7px; }
+    .file-name { color: #b4b4ad; font-size: 10px; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .file-name::before { content:""; width: 6px; height: 6px; border-radius: 50%; background: var(--lime); }
-    .render-btn { min-height: 30px; padding: 0 11px; color: #1d1d1b; border: 0; border-radius: 6px; background: var(--lime); font-size: 10px; font-weight: 800; }
+    .studio-actions { display: flex; justify-content: flex-end; gap: 5px; flex-wrap: wrap; }
+    .tool-btn { min-height: 30px; padding: 0 9px; color: #d7d7d0; border: 1px solid #555550; border-radius: 6px; background: #3a3a37; font-size: 9px; font-weight: 750; white-space: nowrap; transition: background .2s ease, color .2s ease; }
+    .tool-btn:hover, .tool-btn.active { color: #1d1d1b; border-color: var(--lime); background: var(--lime); }
+    .render-btn { min-height: 30px; padding: 0 11px; color: #1d1d1b; border: 0; border-radius: 6px; background: var(--lime); font-size: 10px; font-weight: 800; white-space: nowrap; }
     .render-btn.loading { background: #e4e3d8; color: #4d4d47; }
 
     .process { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -144,7 +155,7 @@
     .footer-links { display: flex; gap: 18px; } .footer-links a { color: inherit; text-decoration: none; }
 
     @media (max-width: 1040px) { .hero { grid-template-columns: 1fr; gap: 36px; } .hero-copy { max-width: 650px; } .lede { max-width: 490px; } .studio { max-width: 760px; } .process-inner { grid-template-columns: 1fr 1fr; } .process-intro { grid-column: 1 / -1; } .process-item:not(:last-child)::after { display: none; } }
-    @media (max-width: 720px) { .shell { width: min(100% - 28px, 1440px); } header { height: 70px; } .nav a { display: none; } .nav { gap: 8px; } .nav .btn-light { display: none; } .announcement .shell { text-align:center; line-height: 1.25; padding: 7px 0; min-height: 38px; } .hero { padding-top: 37px; } h1 { font-size: clamp(45px, 14vw, 63px); } .studio { margin-right: -2px; margin-left: -2px; padding: 8px; border-radius: 18px; } .studio-workspace { min-height: 350px; grid-template-columns: 1fr; } .render-area { min-height: 350px; } .studio-side { display: none; } .studio-top { height: 32px; } .process-inner { grid-template-columns: 1fr; gap: 13px; } .workbench { padding: 63px 0; } .section-top { display: block; margin-bottom: 21px; } .section-top p { margin-top: 17px; } .tool-grid { grid-template-columns: 1fr; } .feature { min-height: 214px; } .footer-links { gap: 10px; } footer { gap: 15px; } }
+    @media (max-width: 720px) { .shell { width: min(100% - 28px, 1440px); } header { height: 70px; } .nav a { display: none; } .nav { gap: 8px; } .nav .btn-light { display: none; } .announcement .shell { text-align:center; line-height: 1.25; padding: 7px 0; min-height: 38px; } .hero { padding-top: 37px; } h1 { font-size: clamp(45px, 14vw, 63px); } .studio { margin-right: -2px; margin-left: -2px; padding: 8px; border-radius: 18px; } .studio-workspace { min-height: 350px; grid-template-columns: 1fr; } .render-area { min-height: 350px; } .studio-side { display: none; } .studio-top { height: 32px; } .studio-bottom { align-items: flex-start; flex-direction: column; } .studio-actions { width: 100%; justify-content: flex-start; } .process-inner { grid-template-columns: 1fr; gap: 13px; } .workbench { padding: 63px 0; } .section-top { display: block; margin-bottom: 21px; } .section-top p { margin-top: 17px; } .tool-grid { grid-template-columns: 1fr; } .feature { min-height: 214px; } .footer-links { gap: 10px; } footer { gap: 15px; } }
   </style>
 </head>
 <body>
@@ -169,9 +180,10 @@
         <div class="studio-workspace">
           <div class="render-area render-mode" id="renderArea">
             <div class="render-card" id="renderCard" style="--image:url('assets/hero-sculpture.png')">
-              <div class="image-shadow"></div><div class="image-layer" id="imageLayer"></div><div class="highlight-cut"></div><div class="depth-outline"></div>
+              <div class="image-shadow"></div><div class="image-layer" id="imageLayer"></div><canvas class="edit-canvas" id="editCanvas" aria-label="Erase unwanted parts of your image"></canvas><div class="highlight-cut"></div><div class="depth-outline"></div>
             </div>
             <span class="floating-label tag-fore">foreground +42</span><span class="floating-label tag-mid">midground</span><span class="floating-label tag-bg">background −32</span>
+            <div class="cleanup-hud" id="cleanupHud"><span>Erase unwanted parts</span><input id="brushControl" type="range" min="12" max="120" value="46" aria-label="Eraser brush size"><button id="applyCleanup">Apply</button><button class="cancel-cleanup" id="cancelCleanup">Cancel</button></div>
             <div class="view-switch" role="group" aria-label="Preview type"><button data-view="flat">2D photo</button><button data-view="depth" class="active">3D render</button></div>
             <div class="zoom"><button aria-label="Zoom out" id="zoomOut">−</button><span id="zoomValue">100%</span><button aria-label="Zoom in" id="zoomIn">+</button></div>
           </div>
@@ -180,10 +192,11 @@
             <div class="mini-depth"><img src="assets/hero-sculpture.png" id="miniImage" alt="Depth map preview"></div><div class="depth-scale"><span>Near</span><span>Far</span></div>
             <div class="tool-section"><div class="tool-name"><span>Depth amount</span><b id="depthVal">59</b></div><input class="range depth-range" id="depthControl" type="range" min="0" max="100" value="59" aria-label="Depth amount"></div>
             <div class="tool-section"><div class="tool-name"><span>Focus falloff</span><b id="focusVal">66</b></div><input class="range" id="focusControl" type="range" min="0" max="100" value="66" aria-label="Focus falloff"></div>
+            <div class="tool-section"><div class="tool-name"><span>Camera turn</span><b id="cameraVal">0°</b></div><input class="range" id="cameraControl" type="range" min="0" max="360" value="0" aria-label="Rotate the model 360 degrees"></div>
             <div class="tool-section"><div class="tool-name"><span>Light direction</span><b>↗</b></div></div>
           </aside>
         </div>
-        <div class="studio-bottom"><span class="file-name" id="fileName">marble-study.jpg</span><button class="render-btn" id="createBtn">Create depth</button></div>
+        <div class="studio-bottom"><span class="file-name" id="fileName">marble-study.jpg</span><div class="studio-actions"><button class="tool-btn" id="eraseBtn">⌁ Erase parts</button><button class="tool-btn" id="spinBtn">↻ 360° spin</button><button class="tool-btn" id="exportBtn">↓ Download OBJ</button><button class="render-btn" id="createBtn">Create depth</button></div></div>
       </section>
     </section>
 
@@ -207,12 +220,23 @@
     const renderCard = $('#renderCard');
     const depthControl = $('#depthControl');
     const focusControl = $('#focusControl');
+    const cameraControl = $('#cameraControl');
     const modal = $('#uploadModal');
     const fileInput = $('#fileInput');
     const dropzone = $('#dropzone');
     const toast = $('#toast');
+    const editCanvas = $('#editCanvas');
+    const editCtx = editCanvas.getContext('2d', { willReadFrequently: true });
     let zoom = 100;
     let uploadedURL = null;
+    let currentImageSrc = 'assets/hero-sculpture.png';
+    let currentFileName = 'marble-study.jpg';
+    let editDirty = false;
+    let drawing = false;
+    let lastPoint = null;
+    let spinning = false;
+    let spinFrame = 0;
+    let spinLast = 0;
 
     function showToast(message) {
       toast.textContent = message;
@@ -220,30 +244,46 @@
       clearTimeout(window.toastTimer);
       window.toastTimer = setTimeout(() => toast.classList.remove('show'), 2700);
     }
+    function setView(isDepth) {
+      renderArea.classList.toggle('render-mode', isDepth);
+      $$('[data-view]').forEach(button => button.classList.toggle('active', (button.dataset.view === 'depth') === isDepth));
+    }
     function setImage(src, name) {
-      if (uploadedURL) URL.revokeObjectURL(uploadedURL);
+      if (uploadedURL && uploadedURL !== src) URL.revokeObjectURL(uploadedURL);
       uploadedURL = src.startsWith('blob:') ? src : null;
+      currentImageSrc = src;
+      currentFileName = name || 'your-depth-study.jpg';
       renderCard.style.setProperty('--image', `url("${src}")`);
       $('#miniImage').src = src;
-      $('#fileName').textContent = name || 'your-depth-study.jpg';
-      modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true');
-      renderArea.classList.remove('render-mode');
-      $$('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === 'flat'));
+      $('#fileName').textContent = currentFileName;
+      closeModal();
+      cancelCleanup(true);
+      stopSpin();
+      cameraControl.value = 0;
+      updateCamera();
+      setView(false);
       showToast('Photo added — make it dimensional.');
     }
     function acceptFile(file) {
       if (!file || !file.type.startsWith('image/')) { showToast('Please choose an image file.'); return; }
       if (file.size > 20 * 1024 * 1024) { showToast('That file is over 20 MB. Try a smaller image.'); return; }
-      const url = URL.createObjectURL(file);
-      setImage(url, file.name);
+      setImage(URL.createObjectURL(file), file.name);
     }
     function openModal() { modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false'); $('#closeModal').focus(); }
     function closeModal() { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); }
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('Unable to read this image.'));
+        image.src = src;
+      });
+    }
 
     $$('.open-upload').forEach(button => button.addEventListener('click', openModal));
     $('#closeModal').addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (renderArea.classList.contains('editing')) cancelCleanup(); else closeModal(); } });
     fileInput.addEventListener('change', () => acceptFile(fileInput.files[0]));
     ['dragenter','dragover'].forEach(event => dropzone.addEventListener(event, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
     ['dragleave','drop'].forEach(event => dropzone.addEventListener(event, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
@@ -259,41 +299,257 @@
       const value = +focusControl.value;
       $('#focusVal').textContent = value;
       focusControl.style.background = `linear-gradient(90deg, var(--lime) 0 ${value}%, #60605b ${value}%)`;
-      renderArea.style.filter = `saturate(${.8 + value/500})`;
+      renderArea.style.filter = `saturate(${.8 + value / 500})`;
     }
-    depthControl.addEventListener('input', updateDepth); focusControl.addEventListener('input', updateFocus); updateDepth(); updateFocus();
+    function updateCamera() {
+      const value = +cameraControl.value;
+      $('#cameraVal').textContent = `${Math.round(value)}°`;
+      cameraControl.style.background = `linear-gradient(90deg, var(--lime) 0 ${value / 3.6}%, #60605b ${value / 3.6}%)`;
+      renderCard.style.setProperty('--spin', `${value}deg`);
+    }
+    depthControl.addEventListener('input', updateDepth);
+    focusControl.addEventListener('input', updateFocus);
+    cameraControl.addEventListener('input', () => { stopSpin(); updateCamera(); });
+    updateDepth(); updateFocus(); updateCamera();
 
     $$('.view-switch button').forEach(button => button.addEventListener('click', () => {
+      if (renderArea.classList.contains('editing')) return;
       const isDepth = button.dataset.view === 'depth';
-      renderArea.classList.toggle('render-mode', isDepth);
-      $$('[data-view]').forEach(item => item.classList.toggle('active', item === button));
+      setView(isDepth);
       showToast(isDepth ? '3D preview enabled. Drag across the scene.' : 'Original 2D photo view.');
     }));
 
     renderArea.addEventListener('pointermove', (e) => {
-      if (!renderArea.classList.contains('render-mode')) return;
+      if (!renderArea.classList.contains('render-mode') || renderArea.classList.contains('editing') || spinning) return;
       const box = renderArea.getBoundingClientRect();
       const x = (e.clientX - box.left) / box.width - .5;
       const y = (e.clientY - box.top) / box.height - .5;
       renderCard.style.setProperty('--rx', `${-y * 8}deg`);
       renderCard.style.setProperty('--ry', `${x * 10}deg`);
     });
-    renderArea.addEventListener('pointerleave', () => { renderCard.style.setProperty('--rx', '0deg'); renderCard.style.setProperty('--ry', '0deg'); });
+    renderArea.addEventListener('pointerleave', () => {
+      if (!spinning) { renderCard.style.setProperty('--rx', '0deg'); renderCard.style.setProperty('--ry', '0deg'); }
+    });
 
-    function setZoom(next) { zoom = Math.max(75, Math.min(125, next)); $('#zoomValue').textContent = `${zoom}%`; renderCard.style.transform = `rotateX(var(--rx)) rotateY(var(--ry)) scale(${zoom / 100})`; }
-    $('#zoomIn').addEventListener('click', () => setZoom(zoom + 5)); $('#zoomOut').addEventListener('click', () => setZoom(zoom - 5));
+    function setZoom(next) {
+      zoom = Math.max(75, Math.min(125, next));
+      $('#zoomValue').textContent = `${zoom}%`;
+      renderCard.style.transform = `rotateX(var(--rx)) rotateY(calc(var(--ry) + var(--spin))) scale(${zoom / 100})`;
+    }
+    $('#zoomIn').addEventListener('click', () => setZoom(zoom + 5));
+    $('#zoomOut').addEventListener('click', () => setZoom(zoom - 5));
+
+    function stopSpin() {
+      if (!spinning) return;
+      spinning = false;
+      cancelAnimationFrame(spinFrame);
+      const button = $('#spinBtn');
+      button.classList.remove('active');
+      button.textContent = '↻ 360° spin';
+    }
+    function spinStep(now) {
+      if (!spinning) return;
+      const elapsed = Math.min(45, now - spinLast);
+      spinLast = now;
+      cameraControl.value = (+cameraControl.value + elapsed * .072) % 360;
+      updateCamera();
+      spinFrame = requestAnimationFrame(spinStep);
+    }
+    $('#spinBtn').addEventListener('click', () => {
+      if (spinning) { stopSpin(); return; }
+      if (renderArea.classList.contains('editing')) return;
+      setView(true);
+      spinning = true;
+      spinLast = performance.now();
+      const button = $('#spinBtn');
+      button.classList.add('active');
+      button.textContent = '■ Stop spin';
+      spinFrame = requestAnimationFrame(spinStep);
+      showToast('Auto-rotation is on. Use the camera turn slider for a precise angle.');
+    });
+
+    function drawImageCover(context, image, width, height) {
+      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+      const drawWidth = image.naturalWidth * scale;
+      const drawHeight = image.naturalHeight * scale;
+      context.clearRect(0, 0, width, height);
+      context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    }
+    async function startCleanup() {
+      if (renderArea.classList.contains('editing')) return;
+      const button = $('#eraseBtn');
+      button.textContent = 'Loading…';
+      button.disabled = true;
+      try {
+        stopSpin();
+        const image = await loadImage(currentImageSrc);
+        const box = renderArea.getBoundingClientRect();
+        const density = Math.min(2, window.devicePixelRatio || 1);
+        editCanvas.width = Math.max(1, Math.round(box.width * density));
+        editCanvas.height = Math.max(1, Math.round(box.height * density));
+        drawImageCover(editCtx, image, editCanvas.width, editCanvas.height);
+        editDirty = false;
+        renderCard.style.setProperty('--rx', '0deg');
+        renderCard.style.setProperty('--ry', '0deg');
+        renderArea.classList.add('editing');
+        button.classList.add('active');
+        button.textContent = 'Editing parts';
+        showToast('Paint over anything you want to remove, then choose Apply.');
+      } catch (error) {
+        showToast('We could not open that image for cleanup.');
+      } finally {
+        button.disabled = false;
+        if (!renderArea.classList.contains('editing')) button.textContent = '⌁ Erase parts';
+      }
+    }
+    function cancelCleanup(silent = false) {
+      drawing = false;
+      editCanvas.width = 1;
+      editCanvas.height = 1;
+      renderArea.classList.remove('editing');
+      const button = $('#eraseBtn');
+      button.classList.remove('active');
+      button.disabled = false;
+      button.textContent = '⌁ Erase parts';
+      if (!silent) showToast('Cleanup changes discarded.');
+    }
+    function canvasPoint(event) {
+      const box = editCanvas.getBoundingClientRect();
+      return { x: (event.clientX - box.left) * editCanvas.width / box.width, y: (event.clientY - box.top) * editCanvas.height / box.height };
+    }
+    function eraseSegment(from, to) {
+      const cssScale = editCanvas.width / editCanvas.getBoundingClientRect().width;
+      editCtx.save();
+      editCtx.globalCompositeOperation = 'destination-out';
+      editCtx.lineCap = 'round';
+      editCtx.lineJoin = 'round';
+      editCtx.lineWidth = +$('#brushControl').value * cssScale;
+      editCtx.beginPath();
+      editCtx.moveTo(from.x, from.y);
+      editCtx.lineTo(to.x, to.y);
+      editCtx.stroke();
+      editCtx.restore();
+    }
+    editCanvas.addEventListener('pointerdown', (event) => {
+      drawing = true;
+      lastPoint = canvasPoint(event);
+      editCanvas.setPointerCapture(event.pointerId);
+      eraseSegment(lastPoint, { x: lastPoint.x + .01, y: lastPoint.y + .01 });
+      editDirty = true;
+    });
+    editCanvas.addEventListener('pointermove', (event) => {
+      if (!drawing) return;
+      const point = canvasPoint(event);
+      eraseSegment(lastPoint, point);
+      lastPoint = point;
+      editDirty = true;
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(event => editCanvas.addEventListener(event, () => { drawing = false; lastPoint = null; }));
+    $('#eraseBtn').addEventListener('click', startCleanup);
+    $('#cancelCleanup').addEventListener('click', () => cancelCleanup());
+    $('#applyCleanup').addEventListener('click', () => {
+      if (!editDirty) { cancelCleanup(); return; }
+      const cleanedImage = editCanvas.toDataURL('image/png');
+      if (uploadedURL) URL.revokeObjectURL(uploadedURL);
+      uploadedURL = null;
+      currentImageSrc = cleanedImage;
+      currentFileName = currentFileName.replace(/\.[^.]+$/, '') + '-cleaned.png';
+      renderCard.style.setProperty('--image', `url("${cleanedImage}")`);
+      $('#miniImage').src = cleanedImage;
+      $('#fileName').textContent = currentFileName;
+      cancelCleanup(true);
+      setView(true);
+      showToast('Cleanup applied. The exported OBJ will respect the removed areas.');
+    });
+
+    function safeName(name) {
+      return (name.replace(/\.[^.]+$/, '') || 'dimly-depth-study').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'dimly-depth-study';
+    }
+    function downloadBlob(blob, filename) {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+    async function exportOBJ() {
+      const button = $('#exportBtn');
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = 'Building OBJ…';
+      try {
+        const image = await loadImage(currentImageSrc);
+        const cols = 52;
+        const rows = Math.max(28, Math.min(52, Math.round(cols * image.naturalHeight / image.naturalWidth)));
+        const sample = document.createElement('canvas');
+        sample.width = cols + 1;
+        sample.height = rows + 1;
+        const sampleCtx = sample.getContext('2d', { willReadFrequently: true });
+        drawImageCover(sampleCtx, image, sample.width, sample.height);
+        const pixels = sampleCtx.getImageData(0, 0, sample.width, sample.height).data;
+        const point = (x, y) => {
+          const index = (y * sample.width + x) * 4;
+          const luma = (pixels[index] * .2126 + pixels[index + 1] * .7152 + pixels[index + 2] * .0722) / 255;
+          return { alpha: pixels[index + 3], z: .035 + (1 - luma) * (.08 + (+depthControl.value / 100) * .34) };
+        };
+        const points = Array.from({ length: rows + 1 }, (_, y) => Array.from({ length: cols + 1 }, (_, x) => point(x, y)));
+        const index = (x, y) => y * (cols + 1) + x + 1;
+        const backIndex = (x, y) => (rows + 1) * (cols + 1) + index(x, y);
+        const active = (x, y) => x >= 0 && x < cols && y >= 0 && y < rows && points[y][x].alpha > 24 && points[y][x + 1].alpha > 24 && points[y + 1][x].alpha > 24 && points[y + 1][x + 1].alpha > 24;
+        const lines = [
+          '# dimly depth relief',
+          '# Generated from a single image. Removed / transparent areas are omitted.',
+          '# Import in Blender, Cinema 4D, or any OBJ-compatible 3D tool.',
+          `o ${safeName(currentFileName)}_depth_relief`
+        ];
+        for (let y = 0; y <= rows; y++) for (let x = 0; x <= cols; x++) {
+          const p = points[y][x];
+          const px = (x / cols - .5) * 2;
+          const py = (.5 - y / rows) * (2 * rows / cols);
+          lines.push(`v ${px.toFixed(5)} ${py.toFixed(5)} ${p.z.toFixed(5)}`);
+        }
+        for (let y = 0; y <= rows; y++) for (let x = 0; x <= cols; x++) {
+          const px = (x / cols - .5) * 2;
+          const py = (.5 - y / rows) * (2 * rows / cols);
+          lines.push(`v ${px.toFixed(5)} ${py.toFixed(5)} -0.05500`);
+        }
+        for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+          if (!active(x, y)) continue;
+          const a = index(x, y), b = index(x + 1, y), c = index(x + 1, y + 1), d = index(x, y + 1);
+          const A = backIndex(x, y), B = backIndex(x + 1, y), C = backIndex(x + 1, y + 1), D = backIndex(x, y + 1);
+          lines.push(`f ${a} ${b} ${c} ${d}`);
+          lines.push(`f ${D} ${C} ${B} ${A}`);
+          if (!active(x, y - 1)) lines.push(`f ${a} ${A} ${B} ${b}`);
+          if (!active(x + 1, y)) lines.push(`f ${b} ${B} ${C} ${c}`);
+          if (!active(x, y + 1)) lines.push(`f ${c} ${C} ${D} ${d}`);
+          if (!active(x - 1, y)) lines.push(`f ${d} ${D} ${A} ${a}`);
+        }
+        downloadBlob(new Blob([lines.join('\n') + '\n'], { type: 'text/plain' }), `${safeName(currentFileName)}-depth-relief.obj`);
+        showToast('OBJ depth model downloaded. Open it in your favorite 3D tool.');
+      } catch (error) {
+        showToast('We could not build an OBJ from that image.');
+      } finally {
+        button.disabled = false;
+        button.textContent = '↓ Download OBJ';
+      }
+    }
+    $('#exportBtn').addEventListener('click', exportOBJ);
 
     $('#createBtn').addEventListener('click', () => {
+      if (renderArea.classList.contains('editing')) return;
       const button = $('#createBtn');
       if (button.classList.contains('loading')) return;
-      button.classList.add('loading'); button.textContent = 'Mapping layers…';
-      renderArea.classList.remove('render-mode');
+      button.classList.add('loading');
+      button.textContent = 'Mapping layers…';
+      setView(false);
       setTimeout(() => { button.textContent = 'Separating depth…'; }, 650);
       setTimeout(() => {
-        button.classList.remove('loading'); button.textContent = 'Depth created ✓';
-        renderArea.classList.add('render-mode');
-        $$('[data-view]').forEach(item => item.classList.toggle('active', item.dataset.view === 'depth'));
-        showToast('Depth created. Move across the image to explore it.');
+        button.classList.remove('loading');
+        button.textContent = 'Depth created ✓';
+        setView(true);
+        showToast('Depth created. Rotate it 360°, edit the image, or download its OBJ relief.');
         setTimeout(() => { button.textContent = 'Create depth'; }, 1900);
       }, 1350);
     });
