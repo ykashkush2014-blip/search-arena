@@ -1,20 +1,28 @@
 """
-Web UI for your own programming AI (Python standard library only).
+Web server for the dimly 2D-to-3D photo studio and the optional code assistant.
 
     python server.py --port 8000
-    http://localhost:8000           -> chat (Arabic / English)
-    http://localhost:8000/complete  -> raw code completion
+    http://localhost:8000           -> dimly photo-to-3D studio
+    http://localhost:8000/code      -> programming chat (when PyTorch is installed)
+    http://localhost:8000/complete  -> raw code completion (when PyTorch is installed)
 """
 import argparse
 import json
 import os
 import threading
+import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import torch
-
-from chat import answer, load_chat
-from generate import complete, load
+try:
+    import torch
+    from chat import answer, load_chat
+    from generate import complete, load
+    MODEL_BACKEND_AVAILABLE = True
+except ModuleNotFoundError:
+    # The 2D-to-3D studio is dependency-free. Keep it available even when the
+    # optional PyTorch code-assistant dependencies have not been installed.
+    torch = None
+    MODEL_BACKEND_AVAILABLE = False
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CKPT = os.path.join(HERE, "checkpoints")
@@ -24,6 +32,8 @@ _cache = {}
 
 def get(kind):
     """Load (or hot-reload when the file changes, e.g. during training) a model."""
+    if not MODEL_BACKEND_AVAILABLE:
+        return None
     path = os.path.join(CKPT, "chat_model.pt" if kind == "chat" else "model.pt")
     if not os.path.exists(path):
         return None
@@ -59,10 +69,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0]
-        if path in ("/", "/index.html"):
+        if path in ("/", "/index.html", "/studio"):
             return self._page("index.html")
+        if path in ("/code", "/code.html"):
+            return self._page("code.html")
         if path in ("/complete", "/complete.html"):
             return self._page("complete.html")
+        if path.startswith("/assets/"):
+            asset_root = os.path.join(HERE, "web", "assets")
+            filename = os.path.normpath(path[len("/assets/"):])
+            asset_path = os.path.join(asset_root, filename)
+            if filename.startswith("..") or not os.path.isfile(asset_path):
+                return self._send(404, "not found", "text/plain")
+            with open(asset_path, "rb") as f:
+                return self._send(200, f.read(), mimetypes.guess_type(asset_path)[0] or "application/octet-stream")
         if path in ("/api/info", "/api/chat_info"):
             kind = "chat" if path == "/api/chat_info" else "base"
             with LOCK:
@@ -119,8 +139,9 @@ def main():
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--threads", type=int, default=os.cpu_count())
     args = ap.parse_args()
-    torch.set_num_threads(args.threads)
-    print(f"my_code_ai UI on http://{args.host}:{args.port}")
+    if torch is not None:
+        torch.set_num_threads(args.threads)
+    print(f"dimly studio on http://{args.host}:{args.port}")
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
 
