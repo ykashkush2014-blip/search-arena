@@ -63,7 +63,9 @@
     .traffic i { display: block; width: 7px; height: 7px; border-radius: 50%; background: #5f5f5a; }
     .traffic i:nth-child(1) { background: var(--coral); } .traffic i:nth-child(2) { background: #f5c65d; }
     .studio-workspace { min-height: 419px; display: grid; grid-template-columns: minmax(0, 1fr) 180px; overflow: hidden; background: #292927; border: 1px solid #41413d; border-radius: 15px; }
-    .render-area { position: relative; overflow: hidden; min-height: 419px; background: #d9d2d2; perspective: 1100px; isolation: isolate; }
+    .render-area { position: relative; overflow: hidden; min-height: 419px; background: #d9d2d2; perspective: 1100px; isolation: isolate; cursor: grab; touch-action: none; }
+    .render-area.orbiting { cursor: grabbing; }
+    .render-area.editing { cursor: crosshair; }
     .render-area::after { content: ""; pointer-events: none; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px); background-size: 35px 35px; opacity: 0; transition: opacity .35s ease; mix-blend-mode: soft-light; }
     .render-area.render-mode::after { opacity: .75; }
     .render-card { --rx: 0deg; --ry: 0deg; --spin: 0deg; --depth: 19px; position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .3s cubic-bezier(.2,.7,.2,1); transform: rotateX(var(--rx)) rotateY(calc(var(--ry) + var(--spin))) scale(1.02); }
@@ -89,6 +91,8 @@
     .view-switch button.active { color: #1c1c1a; background: var(--lime); }
     .zoom { position: absolute; z-index: 10; right: 14px; bottom: 14px; display: flex; align-items: center; gap: 10px; color: #fafaf5; font-size: 10px; }
     .zoom button { padding: 0; color: inherit; border: 0; background: transparent; font-size: 15px; }
+    .orbit-hint { position: absolute; z-index: 9; top: 14px; right: 14px; padding: 6px 8px; color: rgba(255,255,255,.88); border: 1px solid rgba(255,255,255,.2); border-radius: 5px; background: rgba(26,26,24,.63); font-size: 9px; font-weight: 700; pointer-events: none; backdrop-filter: blur(8px); }
+    .render-area.editing .orbit-hint { display: none; }
     .studio-side { padding: 15px 13px; background: #30302d; border-left: 1px solid #444440; }
     .side-title { display: flex; justify-content: space-between; align-items: center; color: #deded7; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
     .side-title span { color: #9c9c94; font-size: 9px; }
@@ -106,8 +110,9 @@
     .file-name { color: #b4b4ad; font-size: 10px; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .file-name::before { content:""; width: 6px; height: 6px; border-radius: 50%; background: var(--lime); }
     .studio-actions { display: flex; justify-content: flex-end; gap: 5px; flex-wrap: wrap; }
-    .tool-btn { min-height: 30px; padding: 0 9px; color: #d7d7d0; border: 1px solid #555550; border-radius: 6px; background: #3a3a37; font-size: 9px; font-weight: 750; white-space: nowrap; transition: background .2s ease, color .2s ease; }
-    .tool-btn:hover, .tool-btn.active { color: #1d1d1b; border-color: var(--lime); background: var(--lime); }
+    .tool-btn { min-height: 30px; padding: 0 9px; display: inline-flex; align-items: center; justify-content: center; color: #d7d7d0; border: 1px solid #555550; border-radius: 6px; background: #3a3a37; font-size: 9px; font-weight: 750; white-space: nowrap; text-decoration: none; transition: background .2s ease, color .2s ease; }
+    .tool-btn:hover, .tool-btn.active, .tool-btn.ready { color: #1d1d1b; border-color: var(--lime); background: var(--lime); }
+    .tool-btn[hidden] { display: none; }
     .render-btn { min-height: 30px; padding: 0 11px; color: #1d1d1b; border: 0; border-radius: 6px; background: var(--lime); font-size: 10px; font-weight: 800; white-space: nowrap; }
     .render-btn.loading { background: #e4e3d8; color: #4d4d47; }
 
@@ -184,6 +189,7 @@
             </div>
             <span class="floating-label tag-fore">foreground +42</span><span class="floating-label tag-mid">midground</span><span class="floating-label tag-bg">background −32</span>
             <div class="cleanup-hud" id="cleanupHud"><span>Erase unwanted parts</span><input id="brushControl" type="range" min="12" max="120" value="46" aria-label="Eraser brush size"><button id="applyCleanup">Apply</button><button class="cancel-cleanup" id="cancelCleanup">Cancel</button></div>
+            <div class="orbit-hint">↔ Drag to rotate freely</div>
             <div class="view-switch" role="group" aria-label="Preview type"><button data-view="flat">2D photo</button><button data-view="depth" class="active">3D render</button></div>
             <div class="zoom"><button aria-label="Zoom out" id="zoomOut">−</button><span id="zoomValue">100%</span><button aria-label="Zoom in" id="zoomIn">+</button></div>
           </div>
@@ -196,7 +202,7 @@
             <div class="tool-section"><div class="tool-name"><span>Light direction</span><b>↗</b></div></div>
           </aside>
         </div>
-        <div class="studio-bottom"><span class="file-name" id="fileName">marble-study.jpg</span><div class="studio-actions"><button class="tool-btn" id="eraseBtn">⌁ Erase parts</button><button class="tool-btn" id="spinBtn">↻ 360° spin</button><button class="tool-btn" id="exportBtn">↓ Download OBJ</button><button class="render-btn" id="createBtn">Create depth</button></div></div>
+        <div class="studio-bottom"><span class="file-name" id="fileName">marble-study.jpg</span><div class="studio-actions"><button class="tool-btn" id="eraseBtn">⌁ Erase parts</button><button class="tool-btn" id="resetView">↺ Reset view</button><button class="tool-btn" id="exportBtn">↓ Prepare OBJ</button><a class="tool-btn ready" id="exportLink" hidden aria-live="polite">Save OBJ ↓</a><button class="render-btn" id="createBtn">Create depth</button></div></div>
       </section>
     </section>
 
@@ -234,9 +240,11 @@
     let editDirty = false;
     let drawing = false;
     let lastPoint = null;
-    let spinning = false;
-    let spinFrame = 0;
-    let spinLast = 0;
+    let orbitX = 0;
+    let orbitY = 0;
+    let orbitDragging = false;
+    let orbitStart = null;
+    let exportURL = null;
 
     function showToast(message) {
       toast.textContent = message;
@@ -258,9 +266,8 @@
       $('#fileName').textContent = currentFileName;
       closeModal();
       cancelCleanup(true);
-      stopSpin();
-      cameraControl.value = 0;
-      updateCamera();
+      resetOrbit(true);
+      clearPreparedDownload();
       setView(false);
       showToast('Photo added — make it dimensional.');
     }
@@ -309,7 +316,7 @@
     }
     depthControl.addEventListener('input', updateDepth);
     focusControl.addEventListener('input', updateFocus);
-    cameraControl.addEventListener('input', () => { stopSpin(); updateCamera(); });
+    cameraControl.addEventListener('input', updateCamera);
     updateDepth(); updateFocus(); updateCamera();
 
     $$('.view-switch button').forEach(button => button.addEventListener('click', () => {
@@ -319,17 +326,43 @@
       showToast(isDepth ? '3D preview enabled. Drag across the scene.' : 'Original 2D photo view.');
     }));
 
-    renderArea.addEventListener('pointermove', (e) => {
-      if (!renderArea.classList.contains('render-mode') || renderArea.classList.contains('editing') || spinning) return;
-      const box = renderArea.getBoundingClientRect();
-      const x = (e.clientX - box.left) / box.width - .5;
-      const y = (e.clientY - box.top) / box.height - .5;
-      renderCard.style.setProperty('--rx', `${-y * 8}deg`);
-      renderCard.style.setProperty('--ry', `${x * 10}deg`);
+    function applyOrbit() {
+      renderCard.style.setProperty('--rx', `${orbitX}deg`);
+      renderCard.style.setProperty('--ry', `${orbitY}deg`);
+    }
+    function resetOrbit(silent = false) {
+      orbitX = 0;
+      orbitY = 0;
+      cameraControl.value = 0;
+      updateCamera();
+      applyOrbit();
+      if (!silent) showToast('View reset. Drag directly on the model to rotate it freely.');
+    }
+    function canStartOrbit(event) {
+      return !event.target.closest('button, input, a, label');
+    }
+    renderArea.addEventListener('pointerdown', (event) => {
+      if (renderArea.classList.contains('editing') || !canStartOrbit(event)) return;
+      setView(true);
+      orbitDragging = true;
+      orbitStart = { x: event.clientX, y: event.clientY };
+      renderArea.setPointerCapture(event.pointerId);
+      renderArea.classList.add('orbiting');
     });
-    renderArea.addEventListener('pointerleave', () => {
-      if (!spinning) { renderCard.style.setProperty('--rx', '0deg'); renderCard.style.setProperty('--ry', '0deg'); }
+    renderArea.addEventListener('pointermove', (event) => {
+      if (!orbitDragging || !orbitStart) return;
+      const deltaX = event.clientX - orbitStart.x;
+      const deltaY = event.clientY - orbitStart.y;
+      orbitY += deltaX * .52;
+      orbitX = Math.max(-82, Math.min(82, orbitX - deltaY * .36));
+      orbitStart = { x: event.clientX, y: event.clientY };
+      applyOrbit();
     });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(event => renderArea.addEventListener(event, () => {
+      orbitDragging = false;
+      orbitStart = null;
+      renderArea.classList.remove('orbiting');
+    }));
 
     function setZoom(next) {
       zoom = Math.max(75, Math.min(125, next));
@@ -338,34 +371,10 @@
     }
     $('#zoomIn').addEventListener('click', () => setZoom(zoom + 5));
     $('#zoomOut').addEventListener('click', () => setZoom(zoom - 5));
-
-    function stopSpin() {
-      if (!spinning) return;
-      spinning = false;
-      cancelAnimationFrame(spinFrame);
-      const button = $('#spinBtn');
-      button.classList.remove('active');
-      button.textContent = '↻ 360° spin';
-    }
-    function spinStep(now) {
-      if (!spinning) return;
-      const elapsed = Math.min(45, now - spinLast);
-      spinLast = now;
-      cameraControl.value = (+cameraControl.value + elapsed * .072) % 360;
-      updateCamera();
-      spinFrame = requestAnimationFrame(spinStep);
-    }
-    $('#spinBtn').addEventListener('click', () => {
-      if (spinning) { stopSpin(); return; }
+    $('#resetView').addEventListener('click', () => {
       if (renderArea.classList.contains('editing')) return;
       setView(true);
-      spinning = true;
-      spinLast = performance.now();
-      const button = $('#spinBtn');
-      button.classList.add('active');
-      button.textContent = '■ Stop spin';
-      spinFrame = requestAnimationFrame(spinStep);
-      showToast('Auto-rotation is on. Use the camera turn slider for a precise angle.');
+      resetOrbit();
     });
 
     function drawImageCover(context, image, width, height) {
@@ -381,7 +390,6 @@
       button.textContent = 'Loading…';
       button.disabled = true;
       try {
-        stopSpin();
         const image = await loadImage(currentImageSrc);
         const box = renderArea.getBoundingClientRect();
         const density = Math.min(2, window.devicePixelRatio || 1);
@@ -457,6 +465,7 @@
       renderCard.style.setProperty('--image', `url("${cleanedImage}")`);
       $('#miniImage').src = cleanedImage;
       $('#fileName').textContent = currentFileName;
+      clearPreparedDownload();
       cancelCleanup(true);
       setView(true);
       showToast('Cleanup applied. The exported OBJ will respect the removed areas.');
@@ -465,18 +474,29 @@
     function safeName(name) {
       return (name.replace(/\.[^.]+$/, '') || 'dimly-depth-study').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'dimly-depth-study';
     }
-    function downloadBlob(blob, filename) {
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
+    function clearPreparedDownload() {
+      const link = $('#exportLink');
+      if (exportURL) URL.revokeObjectURL(exportURL);
+      exportURL = null;
+      link.hidden = true;
+      link.removeAttribute('href');
+      link.removeAttribute('download');
+      link.textContent = 'Save OBJ ↓';
+    }
+    function offerDownload(blob, filename) {
+      clearPreparedDownload();
+      exportURL = URL.createObjectURL(blob);
+      const link = $('#exportLink');
+      link.href = exportURL;
       link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      link.hidden = false;
+      link.textContent = 'Save OBJ ↓';
+      link.focus({ preventScroll: true });
     }
     async function exportOBJ() {
       const button = $('#exportBtn');
       if (button.disabled) return;
+      clearPreparedDownload();
       button.disabled = true;
       button.textContent = 'Building OBJ…';
       try {
@@ -526,13 +546,13 @@
           if (!active(x, y + 1)) lines.push(`f ${c} ${C} ${D} ${d}`);
           if (!active(x - 1, y)) lines.push(`f ${d} ${D} ${A} ${a}`);
         }
-        downloadBlob(new Blob([lines.join('\n') + '\n'], { type: 'text/plain' }), `${safeName(currentFileName)}-depth-relief.obj`);
-        showToast('OBJ depth model downloaded. Open it in your favorite 3D tool.');
+        offerDownload(new Blob([lines.join('\n') + '\n'], { type: 'text/plain' }), `${safeName(currentFileName)}-depth-relief.obj`);
+        showToast('Your OBJ is ready — tap Save OBJ to download it.');
       } catch (error) {
         showToast('We could not build an OBJ from that image.');
       } finally {
         button.disabled = false;
-        button.textContent = '↓ Download OBJ';
+        button.textContent = $('#exportLink').hidden ? '↓ Prepare OBJ' : '↻ Rebuild OBJ';
       }
     }
     $('#exportBtn').addEventListener('click', exportOBJ);
@@ -549,7 +569,7 @@
         button.classList.remove('loading');
         button.textContent = 'Depth created ✓';
         setView(true);
-        showToast('Depth created. Rotate it 360°, edit the image, or download its OBJ relief.');
+        showToast('Depth created. Drag on the model to rotate freely, edit it, or prepare its OBJ.');
         setTimeout(() => { button.textContent = 'Create depth'; }, 1900);
       }, 1350);
     });
