@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ykashkush2014-blip.github.io/search-arena/sitemap.xml
