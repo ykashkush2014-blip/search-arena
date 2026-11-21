@@ -185,7 +185,33 @@ fi
 URL="https://$APP.fly.dev"
 say "تم النشر ✅"
 echo "  اللعبة + الأونلاين: $URL"
-echo "  فحص الصحة:        $URL/health"
+
+# ------------------------------------------------------- 5) verify (تحقّق) ---
+say "التحقّق من أن الموقع يستجيب فعلًا…"
+OK=0
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  body="$(curl -fsS -m 10 "$URL/health" 2>/dev/null || true)"
+  case "$body" in
+    *'"ok":true'*) OK=1; echo "  ✓ /health يرجّع: $body"; break ;;
+  esac
+  printf "  … جارٍ الانتظار (%s/10، شهادة HTTPS قد تتأخر دقيقة)\n" "$i"
+  sleep 6
+done
+
+if [ "$OK" = "1" ]; then
+  page="$(curl -fsS -m 10 "$URL/" 2>/dev/null | head -c 4000 || true)"
+  case "$page" in
+    *"كونكوست"*|*"CONQUEST"*) echo "  ✓ الصفحة تُحمَّل وتحتوي عنوان اللعبة" ;;
+    *) echo "  ⚠ الصفحة استجابت لكن بدون العنوان المتوقع — افتحها في المتصفح للتأكد" ;;
+  esac
+  echo
+  echo "  🎮 العب الآن: $URL"
+  echo "  👥 الأونلاين: اضغط «أونلاين» داخل اللعبة ← أنشئ غرفة ← شارك الكود"
+else
+  echo "  ⚠ لم يستجب الموقع بعد من هذا الجهاز."
+  echo "    جرّب: $FLY status     ثم: $FLY logs"
+  echo "    وافتح الرابط في المتصفح: $URL"
+fi
 echo
 echo "  لمتابعة الغرف:    $FLY logs"
 echo "  لحالة الماشين:    $FLY status"
