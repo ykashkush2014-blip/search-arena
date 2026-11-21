@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#05070f" />
+    <meta
+      name="description"
+      content="Boostball Arena — a neon 3D car-soccer game in the browser: boost, jump, flip and score against AI bots in 1v1 or 2v2."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070d1a'/%3E%3Ccircle cx='32' cy='32' r='15' fill='none' stroke='%2357d6ff' stroke-width='4'/%3E%3Cpath d='M32 17v30M17 32h30' stroke='%2357d6ff' stroke-width='3' opacity='.65'/%3E%3C/svg%3E"
+    />
+    <title>Boostball Arena — Neon Car Soccer</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <!-- ============ HUD ============ -->
+      <div id="hud" class="hidden">
+        <div id="topbar">
+          <div class="team-score blue">
+            <span class="team-name">BLUE</span>
+            <span id="score-blue" class="score">0</span>
+          </div>
+          <div id="clock-wrap">
+            <div id="timer">3:00</div>
+            <div id="clock-label">KICKOFF</div>
+          </div>
+          <div class="team-score orange">
+            <span id="score-orange" class="score">0</span>
+            <span class="team-name">ORANGE</span>
+          </div>
+        </div>
+
+        <div id="center-msg"></div>
+        <div id="banner"></div>
+        <div id="flash"></div>
+
+        <div id="boost-widget">
+          <div id="boost-ring" style="--boost: 34">
+            <div id="boost-inner"><span id="boost-value">34</span></div>
+          </div>
+          <div id="boost-label">BOOST</div>
+        </div>
+
+        <div id="speed-widget"><span id="speed-value">0</span><span class="unit">KM/H</span></div>
+        <div id="cam-flag" class="hidden">BALL CAM</div>
+
+        <div id="hint">
+          <b>WASD</b> drive · <b>SPACE</b> jump / flip · <b>SHIFT</b> drift · <b>LMB</b> boost ·
+          <b>C</b> ball cam · <b>TAB</b> scores · <b>ESC</b> pause
+        </div>
+
+        <div id="scoreboard" class="hidden">
+          <div class="sb-title">SCOREBOARD</div>
+          <div id="sb-body"></div>
+        </div>
+      </div>
+
+      <!-- ============ MENU ============ -->
+      <div id="menu" class="screen">
+        <div class="menu-card">
+          <div class="logo">BOOST<span>BALL</span><small>ARENA</small></div>
+          <p class="tagline">Neon car soccer · 1v1 &amp; 2v2 &nbsp;·&nbsp; كرة قدم بالسيارات</p>
+
+          <div class="row">
+            <span class="row-label">MODE</span>
+            <div class="seg" id="mode-seg">
+              <button data-mode="1v1" class="active">1 v 1</button>
+              <button data-mode="2v2">2 v 2</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <span class="row-label">BOTS</span>
+            <div class="seg" id="diff-seg">
+              <button data-diff="rookie">ROOKIE</button>
+              <button data-diff="pro" class="active">PRO</button>
+              <button data-diff="allstar">ALL-STAR</button>
+            </div>
+          </div>
+
+          <button id="btn-play" class="cta">PLAY</button>
+
+          <div class="keys">
+            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>drive</span></div>
+            <div><kbd>SPACE</kbd><span>jump · double jump / flip</span></div>
+            <div><kbd>SHIFT</kbd><span>drift · air roll</span></div>
+            <div><kbd>LMB</kbd><span>boost</span></div>
+            <div><kbd>C</kbd><span>toggle ball camera</span></div>
+          </div>
+          <p class="credits">Built with three.js · single-player vs bots · runs fully offline</p>
+        </div>
+      </div>
+
+      <!-- ============ PAUSE ============ -->
+      <div id="pause" class="screen hidden">
+        <div class="menu-card small">
+          <h2>PAUSED</h2>
+          <button id="btn-resume" class="cta">RESUME</button>
+          <button id="btn-quit" class="ghost">QUIT TO MENU</button>
+        </div>
+      </div>
+
+      <!-- ============ RESULT ============ -->
+      <div id="result" class="screen hidden">
+        <div class="menu-card small">
+          <div id="result-kicker">FULL TIME</div>
+          <h2 id="result-title">VICTORY</h2>
+          <div id="result-score">0 — 0</div>
+          <button id="btn-again" class="cta">PLAY AGAIN</button>
+          <button id="btn-menu" class="ghost">MAIN MENU</button>
+        </div>
+      </div>
+
+      <!-- ============ TOUCH ============ -->
+      <div id="touch" class="hidden">
+        <div id="touch-top">
+          <button class="touch-mini" data-touch-action="pause" aria-label="Pause">❚❚</button>
+          <button class="touch-mini" data-touch-action="cam" aria-label="Ball camera">CAM</button>
+        </div>
+        <div id="stick"><div id="stick-knob"></div></div>
+        <div class="touch-buttons">
+          <button data-touch="drift" class="tb drift">DRIFT</button>
+          <button data-touch="jump" class="tb jump">JUMP</button>
+          <button data-touch="boost" class="tb boost">BOOST</button>
+        </div>
+      </div>
+
+      <div id="rotate" class="hidden">
+        <div>↻</div>
+        <p>Rotate your device to landscape</p>
+      </div>
+    </div>
+
+    <script type="module" src="src/game.js"></script>
+  </body>
+</html>
