@@ -176,8 +176,15 @@ if exists; then
   "$FLY" deploy --yes || die "فشل النشر (افتح: $FLY logs)"
 else
   say "إنشاء التطبيق أول مرة في منطقة $REGION…"
-  "$FLY" launch --copy-config --no-deploy --name "$APP" --region "$REGION" </dev/null \
-    || die "فشل إنشاء التطبيق — جرّب اسمًا آخر بالإنجليزية: APP=conquest-khalil bash publish.sh"
+  if "$FLY" launch --copy-config --no-deploy --name "$APP" --region "$REGION" </dev/null; then
+    :
+  elif "$FLY" apps create "$APP" 2>/dev/null; then
+    # launch فشل (مثلًا تحذير اسم أو سؤال غير متوقع) لكن التطبيق أُنشئ بأمر مبسّط
+    say "أُنشئ التطبيق بأمر بديل — نكمل النشر…"
+    "$FLY" regions set "$REGION" -a "$APP" --yes >/dev/null 2>&1 || true
+  else
+    die "فشل إنشاء التطبيق — جرّب اسمًا آخر: APP=conquest-kashkush bash pub.sh   (أو REGION=cdg إن كان السبب سعة)"
+  fi
   say "بناء الصورة ونشرها…"
   "$FLY" deploy --yes || die "فشل النشر (افتح: $FLY logs)"
 fi
