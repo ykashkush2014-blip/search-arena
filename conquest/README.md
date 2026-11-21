@@ -212,22 +212,32 @@ npx netlify deploy --prod --dir conquest/deploy
 تطبيق واحد على Fly يشغّل `conquest/server.js` بنفسه، فيقدّم الصفحة **و** WebSocket
 `/ws` معًا — أي أن الغرف والأونلاين يعملان لجميع اللاعبين في العالم.
 
-**المرة الأولى فقط:**
+**الطريقة الأسهل — أمر واحد من أي مكان على جهازك (لا تحتاج المستودع):**
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ykashkush2014-blip/search-arena/arena/07357b19-search-arena/conquest/publish.sh)
+```
+
+هذا السكربت ينزّل مجلد `conquest`، ويضبط اسم تطبيق فريد، وينشئ التطبيق، وينشره،
+ويطبع الرابط. لاختيار الاسم بنفسك: `APP=conquest-khalil bash <(curl -fsSL …publish.sh)`
+(الاسم إنجليزي بأحرف صغيرة فقط).
+
+**أو يدويًا — المرة الأولى فقط:**
 
 ```bash
 # 1) ثبّت أداة Fly (مرة واحدة على جهازك)
-curl -L https://fly.io/install.sh | sh
+curl -fsSL https://fly.io/install.sh | bash
+export PATH="$HOME/.fly/bin:$PATH"     # أضفها للمسار (المثبّت يطبع هذا السطر أيضًا)
 
 # 2) سجّل الدخول
 fly auth login
 
-# 3) من داخل مجلد اللعبة — الإعداد جاهز في fly.toml، فننسخه كما هو
-cd conquest
+# 3) احصل على مجلد اللعبة (المستودع كبير، لذا نأخذ المجلد فقط)
+git clone --depth 1 --filter=blob:none --sparse -b arena/07357b19-search-arena \
+  https://github.com/ykashkush2014-blip/search-arena.git
+cd search-arena && git sparse-checkout set conquest && cd conquest
 fly launch --copy-config --no-deploy --name conquest-online
 ```
-
-> إن قال Fly إن اسم `conquest-online` محجوز، غيّر سطر `app = "..."` في `fly.toml`
-> إلى اسم آخر فريد (مثل `conquest-اسمك`). هذا هو الحقل الوحيد الذي قد يحتاج تعديلًا.
 
 **النشر / التحديث:**
 
