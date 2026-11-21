@@ -79,3 +79,22 @@ Install all necessary dependencies: ``pip3 install -r requirements.txt``
       url={https://openreview.net/forum?id=MMGRlDnhtI}
 }
 ```
+
+---
+
+## ⚔️ Conquest — a browser world-conquest game
+
+This repository also contains **CONQUEST**, a complete Arabic-first, pixel-art
+real-time world-conquest strategy game (inspired by *Conquest.io*) built on top
+of a real Natural Earth map: 236 countries with their true borders, 5 eras, 8
+building types, frontline combat, naval invasions, missiles, diplomacy, 7
+historical campaigns and a daily challenge.
+
+```bash
+cd conquest
+node server.js        # → http://localhost:5173
+```
+
+No dependencies, no build step — plain ES modules + Canvas. See
+[`conquest/README.md`](conquest/README.md) for gameplay, controls and
+architecture details.
