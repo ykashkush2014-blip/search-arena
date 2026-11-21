@@ -170,3 +170,38 @@ js/online.js  →  js/net.js  →  WebSocket /ws  →  server.js (Room + 4 Hz lo
 - اللعب الفردي والحملات والتحدي اليومي لا تتأثر: نفس المحرك يعمل محليًا بدون خادم.
 - الغرف الخاملة (بلا اتصالات) تُحذف تلقائيًا بعد دقائق.
 - لفحص الصحة: `GET /health` يعيد `{ok, rooms, clients}`.
+
+## النشر (Make it live)
+
+### أ) تشغيل محلي على شبكتك (كامل المزايا، بما فيه الأونلاين)
+
+```bash
+cd conquest
+./start.sh            # أو: npm start
+```
+
+- يفتح صفحة اللعبة على `http://localhost:5173`.
+- نفس الخادم يفتح WebSocket على `/ws` — الأونلاين يعمل بين أي متصفحين يستطيعان الوصول للخادم.
+- على شبكة محلية: `http://<IP-الحاسبة>:5173` من الجوال أو اللابتوب الآخر.
+
+### ب) استضافة ثابتة (Vercel / GitHub Pages / Netlify / أي هوست)
+
+المجلد `conquest/deploy/` فيه صفحة `index.html` واحدة تقوم بتحميل اللعبة من نسخة
+مثبّتة (pinned commit) من المستودع عبر CDN. انشر هذا المجلد كما هو:
+
+```bash
+# Vercel
+npx vercel deploy --prod conquest/deploy
+
+# Netlify
+npx netlify deploy --prod --dir conquest/deploy
+
+# GitHub Pages: ارفع محتويات conquest/deploy إلى فرع gh-pages
+```
+
+> الاستضافة الثابتة تكفي للعب الفردي والحملات والتحدي اليومي.
+> **اللعب الجماعي يحتاج خادم Node يعمل** (`conquest/server.js`) لأن الخادم هو الذي يحسب المباراة.
+
+- نطاق Vercel المنشور: <https://conquest-ykashkush2014-1271.vercel.app/> (إصدار ثابت).
+- لتحديث النسخة الثابتة بعد تعديل اللعبة: بدّل `REF` في `conquest/deploy/index.html`
+  إلى الـ commit الجديد ثم أعد النشر.

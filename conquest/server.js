@@ -864,9 +864,12 @@ server.on("upgrade", (req, socket) => {
   if (client) setupClient(client);
 });
 
+export default server;
+
 corePromise
   .then((core) => {
     coreSync = core;
+    if (process.env.VERCEL) return; // serverless: the platform owns the listener
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`CONQUEST server → http://0.0.0.0:${PORT}  (websocket: /ws)`);
     });
