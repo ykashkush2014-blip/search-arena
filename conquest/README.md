@@ -202,6 +202,7 @@ npx netlify deploy --prod --dir conquest/deploy
 > الاستضافة الثابتة تكفي للعب الفردي والحملات والتحدي اليومي.
 > **اللعب الجماعي يحتاج خادم Node يعمل** (`conquest/server.js`) لأن الخادم هو الذي يحسب المباراة.
 
-- نطاق Vercel المنشور: <https://conquest-ykashkush2014-1271.vercel.app/> (إصدار ثابت).
+- **الرابط العام الشغّال:** <https://conquest-opal.vercel.app/> — تم فتحه والتحقق منه (القائمة،
+  اختيار الدول، شاشة الأونلاين كلها تعمل). البديل: <https://conquest-ykashkush2014-1271.vercel.app/>.
 - لتحديث النسخة الثابتة بعد تعديل اللعبة: بدّل `REF` في `conquest/deploy/index.html`
   إلى الـ commit الجديد ثم أعد النشر.
