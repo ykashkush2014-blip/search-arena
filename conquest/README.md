@@ -221,9 +221,9 @@ curl -L https://fly.io/install.sh | sh
 # 2) سجّل الدخول
 fly auth login
 
-# 3) من داخل مجلد اللعبة — التطبيق موجود مسبقًا في fly.toml
+# 3) من داخل مجلد اللعبة — الإعداد جاهز في fly.toml، فننسخه كما هو
 cd conquest
-fly launch --copy-config --no-deploy
+fly launch --copy-config --no-deploy --name conquest-online
 ```
 
 > إن قال Fly إن اسم `conquest-online` محجوز، غيّر سطر `app = "..."` في `fly.toml`
