@@ -232,10 +232,10 @@ export PATH="$HOME/.fly/bin:$PATH"     # أضفها للمسار (المثبّت
 # 2) سجّل الدخول
 fly auth login
 
-# 3) احصل على مجلد اللعبة (المستودع كبير، لذا نأخذ المجلد فقط)
-git clone --depth 1 --filter=blob:none --sparse -b arena/07357b19-search-arena \
+# 3) احصل على مجلد اللعبة (المستودع كبير 33MB، فنأخذ المجلد فقط — 2.3MB)
+git clone --depth 1 --no-checkout --filter=blob:none -b arena/07357b19-search-arena \
   https://github.com/ykashkush2014-blip/search-arena.git
-cd search-arena && git sparse-checkout set conquest && cd conquest
+cd search-arena && git checkout HEAD -- conquest && cd conquest
 fly launch --copy-config --no-deploy --name conquest-online
 ```
 
