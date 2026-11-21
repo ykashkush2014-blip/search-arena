@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#0a1220" />
+<title>كونكوست — فتح العالم</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ============================ MAIN MENU ============================ -->
+  <section class="screen" id="screen-menu">
+    <div class="bg-map"></div>
+    <div class="menu-wrap">
+      <header class="brand">
+        <div class="brand-mark">
+          <span class="crown">♛</span>
+        </div>
+        <h1 class="title">كونكوست<span class="io">.io</span></h1>
+        <p class="tagline">ابدأ من حدود دولة حقيقية… واحتلّ العالم</p>
+      </header>
+
+      <div class="mode-grid" id="mode-grid"></div>
+
+      <div class="menu-actions">
+        <button class="btn ghost" id="btn-continue" hidden>
+          <span class="k">متابعة</span><small>استئناف آخر معركة</small>
+        </button>
+        <button class="btn" id="btn-play">ابدأ اللعب</button>
+        <button class="btn ghost" id="btn-medals">
+          <span class="k">الأوسمة</span>
+          <small id="medal-count">0 / 19</small>
+        </button>
+        <button class="btn ghost" id="btn-howto">كيف تلعب</button>
+      </div>
+
+      <footer class="menu-foot">
+        <span>خريطة حقيقية • 236 دولة • 5 عصور • وضع الدبلوماسية</span>
+      </footer>
+    </div>
+  </section>
+
+  <!-- ========================= COUNTRY SELECT ========================= -->
+  <section class="screen" id="screen-country" hidden>
+    <div class="select-head">
+      <button class="icon-btn" id="btn-back-menu">→</button>
+      <div>
+        <h2 id="select-title">اختر دولتك</h2>
+        <p id="select-sub">كل دولة لها حدودها الحقيقية وصعوبتها الخاصة</p>
+      </div>
+      <div class="spacer"></div>
+      <div class="filters">
+        <select id="era-select" class="select"></select>
+        <select id="map-select" class="select"></select>
+        <select id="ai-select" class="select"></select>
+        <select id="goal-select" class="select"></select>
+      </div>
+    </div>
+
+    <div class="select-body">
+      <aside class="country-list">
+        <div class="search-row">
+          <input id="country-search" class="search" placeholder="ابحث عن دولة…" />
+          <button class="icon-btn" id="btn-random" title="اختيار عشوائي">🎲</button>
+        </div>
+        <div class="list" id="country-list"></div>
+      </aside>
+      <div class="map-pick">
+        <canvas id="pick-canvas"></canvas>
+        <div class="pick-hint">اضغط أي دولة على الخريطة لاختيارها</div>
+      </div>
+      <aside class="country-card" id="country-card">
+        <div class="card-empty">لم تختر دولة بعد</div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================== GAME ============================== -->
+  <section class="screen game" id="screen-game" hidden>
+    <canvas id="map"></canvas>
+
+    <!-- top bar -->
+    <header class="hud-top">
+      <div class="nation-chip" id="nation-chip">
+        <span class="flag" id="flag">—</span>
+        <div class="nc-text">
+          <b id="nation-name">—</b>
+          <small id="rank-name">مجنّد</small>
+        </div>
+      </div>
+      <div class="res" id="res-gold"><i class="ri">◈</i><b>0</b><small>+0/ث</small></div>
+      <div class="res" id="res-army"><i class="ri">⚔</i><b>0</b><small>0%</small></div>
+      <div class="res" id="res-research"><i class="ri">✦</i><b>0</b><small>بحث</small></div>
+      <div class="goal-chip">
+        <div class="gc-row"><span id="goal-label">الهدف: 50% من الأرض</span><b id="goal-pct">0%</b></div>
+        <div class="bar"><i id="goal-bar"></i></div>
+      </div>
+      <div class="spacer"></div>
+      <div class="clock" id="clock">00:00</div>
+      <button class="icon-btn" id="btn-speed" title="السرعة (Space للإيقاف)">▶</button>
+      <button class="icon-btn" id="btn-research" title="البحث (R)">✦</button>
+      <button class="icon-btn" id="btn-diplo" title="الدبلوماسية">🤝</button>
+      <button class="icon-btn" id="btn-menu" title="القائمة">☰</button>
+    </header>
+
+    <!-- objectives -->
+    <div class="panel objectives" id="objectives">
+      <div class="panel-title"><span>الأهداف</span><b id="ceasefire-badge">هدنة</b></div>
+      <div class="obj" id="obj-main">
+        <div class="obj-row"><span id="obj-text">سيطر على 50% من الأرض</span><b id="obj-val">0%</b></div>
+        <div class="bar"><i id="obj-bar"></i></div>
+      </div>
+      <div class="obj-sub" id="obj-sub">أرضك: 0 خلية • جيران: 0</div>
+      <div class="obj-extra" id="obj-extra"></div>
+    </div>
+
+    <!-- feed -->
+    <div class="panel feed" id="feed"></div>
+
+    <!-- minimap -->
+    <div class="minimap-wrap">
+      <canvas id="minimap"></canvas>
+      <div class="mm-view" id="mm-view"></div>
+    </div>
+
+    <!-- event panel: ongoing attacks -->
+    <div class="panel events" id="events"></div>
+
+    <!-- bottom bar -->
+    <footer class="hud-bottom">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="empire">الإمبراطورية</button>
+        <button class="tab" data-tab="economy">الاقتصاد</button>
+        <button class="tab" data-tab="military">الجيش</button>
+        <button class="tab" data-tab="navy">الأسطول</button>
+        <button class="tab" data-tab="strikes">الضربات</button>
+      </div>
+      <div class="tab-body" id="tab-body"></div>
+      <div class="force-row">
+        <label>قوة الهجوم <b id="force-val">50%</b></label>
+        <input type="range" id="force-slider" min="10" max="100" value="50" step="5" />
+        <div class="force-btns">
+          <button class="mini" id="force-down">Q −</button>
+          <button class="mini" id="force-up">E +</button>
+        </div>
+      </div>
+    </footer>
+
+    <!-- country tooltip -->
+    <div class="tooltip" id="tooltip" hidden></div>
+
+    <!-- toast -->
+    <div class="toasts" id="toasts"></div>
+  </section>
+
+  <!-- ============================ DIALOGS ============================ -->
+  <div class="modal" id="modal-research" hidden>
+    <div class="modal-card">
+      <header><h3>البحث</h3><span class="pts" id="research-pts">0 نقطة</span>
+        <button class="icon-btn" data-close>✕</button>
+      </header>
+      <div class="tech-grid" id="tech-grid"></div>
+      <p class="hint">نقاط البحث تُنتجها مختبرات الأبحاث. كل مسار حتى 5 مستويات.</p>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-diplo" hidden>
+    <div class="modal-card wide">
+      <header><h3>الدبلوماسية</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="offers" id="offers"></div>
+      <div class="diplo-list" id="diplo-list"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-menu" hidden>
+    <div class="modal-card narrow">
+      <header><h3>القائمة</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="menu-list">
+        <button class="btn" id="btn-resume">استئناف</button>
+        <button class="btn ghost" id="btn-save">حفظ اللعبة</button>
+        <button class="btn ghost" id="btn-settings">إعدادات</button>
+        <button class="btn ghost" id="btn-abandon">الخروج للقائمة</button>
+      </div>
+      <div class="settings" id="settings" hidden>
+        <label class="row"><span>المؤثرات الصوتية</span><input type="checkbox" id="set-sound" checked /></label>
+        <label class="row"><span>أسماء الدول على الخريطة</span><input type="checkbox" id="set-labels" checked /></label>
+        <label class="row"><span>سرعة المحاكاة</span>
+          <select id="set-speed" class="select">
+            <option value="1">عادي</option>
+            <option value="1.5">سريع</option>
+            <option value="2.5">سريع جدًا</option>
+          </select>
+        </label>
+        <label class="row"><span>الحركة عند السحب</span><input type="checkbox" id="set-drag" checked /></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-end" hidden>
+    <div class="modal-card narrow end">
+      <h2 id="end-title">النصر!</h2>
+      <p id="end-sub"></p>
+      <div class="end-stats" id="end-stats"></div>
+      <div class="menu-list">
+        <button class="btn" id="btn-again">حملة جديدة</button>
+        <button class="btn ghost" id="btn-to-menu">القائمة الرئيسية</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-medals" hidden>
+    <div class="modal-card wide">
+      <header><h3>الأوسمة</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="medal-grid" id="medal-grid"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-howto" hidden>
+    <div class="modal-card wide">
+      <header><h3>كيف تلعب</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="howto" id="howto-body"></div>
+    </div>
+  </div>
+
+</div>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
