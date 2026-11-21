@@ -1,0 +1,11 @@
+# ملفات لا تدخل الصورة — الصورة تحتاج اللعبة فقط.
+.git
+.gitignore
+__harness_*
+deploy
+scripts
+vercel.json
+README.md
+Dockerfile
+.dockerignore
+fly.toml

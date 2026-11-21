@@ -1,0 +1,47 @@
+# CONQUEST — إعداد Fly.io
+#
+# النشر:  cd conquest && fly launch --copy-config --no-deploy   ثم  fly deploy
+# (أو fly deploy مباشرة إذا كان التطبيق موجودًا)
+#
+# تطبيق واحد يقدّم الصفحة + ملفات اللعبة + WebSocket على نفس المنفذ،
+# لذلك الأونلاين (غرف بكود) يعمل بلا أي إعداد إضافي.
+#
+# ملاحظة: اسم التطبيق يجب أن يكون فريدًا على مستوى Fly كلّه.
+# إن كان "conquest-online" محجوزًا، غيّر السطر أدناه إلى اسم آخر.
+
+app = "conquest-online"
+primary_region = "fra" # fra / cdg / ams / iad — أقرب منطقة لك
+
+[build]
+
+[env]
+  PORT = "8080"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # لا تُوقف الماشين أبدًا: الغرف تعيش في ذاكرة الخادم، وإيقافه يمسح المباريات.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 250
+    soft_limit = 200
+
+  # فحص الصحة — نفس المسار الذي يوفّره الخادم.
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/health"
+
+# قياس فعلي: الخادم الخامل ~56MB، وكل غرفة مباراة ~50MB إضافية.
+# 512MB تكفي 6-8 غرف في نفس الوقت بأريحية. للتقليل إلى 256MB:
+#   fly scale memory 256   (تكفي غرفتين-ثلاث)
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
