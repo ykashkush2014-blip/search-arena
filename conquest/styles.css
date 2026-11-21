@@ -739,3 +739,176 @@ input, select { font-family: inherit; }
 .rematch-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
 .rematch-row .btn { min-width: 130px; }
 .icon-btn.danger { color: var(--red); }
+
+/* ===================================================== TOUCH CONTROLS === */
+/* Floating thumb-reach cluster. Hidden on desktop until hovered, always
+   visible on touch devices where there is no keyboard and no mouse wheel. */
+.touch-pad {
+  position: fixed;
+  left: 10px;
+  bottom: calc(var(--hud-bottom-h, 190px) + 10px);
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 40;
+  padding: 6px;
+  border-radius: 16px;
+  background: rgba(8, 13, 21, 0.55);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.tbtn {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  font-size: 19px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.tbtn:active { transform: scale(0.92); background: rgba(244, 210, 122, 0.22); }
+#touch-attack { color: #ff9d8a; border-color: rgba(255,157,138,0.35); }
+#touch-home { color: #f4d27a; border-color: rgba(244,210,122,0.3); }
+
+/* show on any coarse pointer (phones/tablets) */
+@media (pointer: coarse) {
+  .touch-pad { display: flex; }
+}
+@media (hover: none) {
+  .touch-pad { display: flex; }
+}
+
+/* Phones: compact HUD, bigger touch targets, room for the tab body */
+@media (max-width: 720px) {
+  .touch-pad { bottom: calc(var(--hud-bottom-h, 176px) + 8px); }
+  .icon-btn { min-width: 40px; min-height: 40px; }
+  .tab { min-height: 38px; padding: 8px 10px; font-size: 12px; }
+  .bcard { min-height: 56px; }
+  .mini { min-height: 34px; padding: 6px 10px; }
+  /* the slider is hard to grab on a phone: make the track thicker */
+  input[type="range"] { height: 30px; }
+  input[type="range"]::-webkit-slider-thumb { width: 26px; height: 26px; }
+}
+
+/* Landscape phones: the bottom HUD eats the map, so trim it down */
+@media (max-height: 500px) and (orientation: landscape) {
+  .hud-top { padding: 4px 6px; }
+  .tab-body { min-height: 44px; max-height: 44px; }
+  .force-row { display: none; }
+  .touch-pad { bottom: calc(var(--hud-bottom-h, 120px) + 6px); }
+  .tbtn { width: 40px; height: 40px; font-size: 17px; }
+}
+
+/* Never let a double-tap zoom the page under the canvas */
+#map, #pick-canvas { touch-action: none; }
+
+/* ================================================ PUBLIC WORLD BROWSER === */
+.online-card.wide-card { grid-column: 1 / -1; }
+.quick-row { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+.quick-row .btn { flex: 1 1 auto; min-width: 140px; }
+.room-list {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 210px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: rgba(0,0,0,0.22); padding: 6px;
+}
+.room-empty { padding: 16px 10px; text-align: center; font-size: 12.5px; color: var(--muted); }
+.room-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  text-align: right;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.14s ease, border-color 0.14s ease, transform 0.08s ease;
+}
+.room-row:hover { background: rgba(244,210,122,0.1); border-color: rgba(244,210,122,0.28); }
+.room-row:active { transform: scale(0.99); }
+.room-code-sm {
+  font-family: var(--ff-pixel, monospace);
+  letter-spacing: 2px;
+  font-size: 13px;
+  color: #f4d27a;
+  background: rgba(244,210,122,0.12);
+  border: 1px solid rgba(244,210,122,0.25);
+  border-radius: 7px;
+  padding: 3px 7px;
+}
+.room-meta { font-size: 12px; color: var(--muted); }
+.room-host { font-size: 11.5px; color: #9fb3c8; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-go { font-size: 12.5px; color: #f4d27a; }
+
+@media (max-width: 720px) {
+  .room-list { max-height: 168px; }
+  .room-row { grid-template-columns: auto 1fr auto; padding: 11px 10px; min-height: 48px; }
+  .room-host { display: none; }
+  .quick-row .btn { min-width: 0; flex: 1 1 46%; padding: 12px 8px; }
+}
+
+/* tactical read-out in the objectives panel */
+.obj-tactics { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
+.obj-tactics:empty { display: none; }
+.tac {
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  white-space: nowrap;
+}
+.tac.pincer { color: #ffb27a; border-color: rgba(255,178,122,0.34); background: rgba(255,178,122,0.1); }
+.tac.coord { color: #9fe1b4; border-color: rgba(159,225,180,0.3); background: rgba(159,225,180,0.09); }
+.tac.ally { color: #a9c9ff; border-color: rgba(169,201,255,0.3); background: rgba(169,201,255,0.09); }
+
+/* secondary HUD actions collapse into a popover on phones */
+.hud-more { display: contents; }
+#btn-more { display: none; }
+@media (max-width: 900px) {
+  #btn-more { display: inline-flex; }
+  .hud-more {
+    display: flex;
+    gap: 6px;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 8px;
+    z-index: 30;
+    padding: 7px;
+    border-radius: 12px;
+    background: rgba(8, 13, 21, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+  }
+  .hud-more[hidden] { display: none; }
+  .hud-more .icon-btn { min-width: 42px; min-height: 42px; font-size: 17px; }
+  #btn-more.on { background: rgba(244, 210, 122, 0.2); border-color: rgba(244, 210, 122, 0.4); }
+}
+
+/* short tab labels on phones — full words only where they fit */
+.tab-short { display: none; }
+@media (max-width: 640px) {
+  .tabs { gap: 3px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 1 1 0; min-width: 0; padding: 8px 6px; font-size: 12px; }
+  .tab-long { display: none; }
+  .tab-short { display: inline; }
+  .hud-top .res small { display: none; }
+  .hud-top .goal-chip { display: none; }
+  .nation-chip .nc-text small { display: none; }
+}
+.warn-txt { color: #ffb27a; }
+.good-txt { color: #9fe1b4; }

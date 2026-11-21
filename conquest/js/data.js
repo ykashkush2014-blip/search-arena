@@ -239,14 +239,18 @@ export const BALANCE = {
   capPerCell: 1.2,
   capPerCity: 5200,
   baseTroopRate: 760,
+  reinforceCapTime: 10, // seconds for an offensive to absorb battlefield reinforcements
   troopRatePerBase: 90,
   troopRateFrac: 0.008,
   popGrowth: 3.2, // per second fraction of (cap - army) handled separately below
 
   // --- combat ---
   // advances: cells/sec = frontWidthFactor * fronts^0.75 * ratio^0.7 (capped)
-  frontWidthFactor: 0.085,
-  haltRatio: 0.33, // attacker/defender engagement ratio below which a front stalls
+  frontWidthFactor: 0.2, // how fast a winning front physically advances
+  maxBuildings: 40, // hard cap per nation (grows slightly with land)
+  frontSpeedCap: 18, // max cells/sec one offensive can take (hard ceiling)
+  capitulation: 0.45, // a nation that loses this share of its land surrenders at once
+  haltRatio: 0.24, // attacker/defender engagement ratio below which a front stalls
   attackerAttrition: 0.0085,
   defenderAttrition: 0.022,
   retreatLoss: 0.25,

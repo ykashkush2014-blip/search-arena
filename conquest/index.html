@@ -95,8 +95,20 @@
       </header>
 
       <div class="online-cards">
+        <div class="online-card wide-card">
+          <h3>عوالم مفتوحة — بلا كود</h3>
+          <p>اختر عالمًا من القائمة والعب فورًا، أو اضغط «العب الآن» لندخلك أنت وأصدقاؤك في أول عالم متاح.</p>
+          <div class="quick-row">
+            <button class="btn gold" id="btn-quick-play">⚡ العب الآن</button>
+            <button class="btn" id="btn-refresh-rooms">↻ تحديث القائمة</button>
+          </div>
+          <div class="room-list" id="room-list">
+            <div class="room-empty">…جارٍ البحث عن عوالم</div>
+          </div>
+        </div>
+
         <div class="online-card">
-          <h3>إنشاء غرفة</h3>
+          <h3>إنشاء غرفة خاصة</h3>
           <p>ستحصل على كود من 4 أحرف تشاركه مع أصدقائك.</p>
           <label class="field"><span>اسمك</span><input id="online-name" class="search" maxlength="18" placeholder="قائد" /></label>
           <div class="field-row">
@@ -137,8 +149,8 @@
         </div>
 
         <div class="online-card">
-          <h3>الانضمام لغرفة</h3>
-          <p>اكتب الكود الذي وصلك من صاحب الغرفة.</p>
+          <h3>الانضمام بكود</h3>
+          <p>لو وصلك كود من صاحب الغرفة، اكتبه هنا.</p>
           <label class="field"><span>كود الغرفة</span><input id="online-code" class="search code-input" maxlength="4" placeholder="A1B2" /></label>
           <button class="btn" id="btn-join-room">انضم</button>
           <div class="online-status" id="online-status">غير متصل</div>
@@ -190,6 +202,14 @@
   <section class="screen game" id="screen-game" hidden>
     <canvas id="map"></canvas>
 
+    <!-- floating mobile controls: zoom + quick actions (thumb reach) -->
+    <div class="touch-pad" id="touch-pad">
+      <button class="tbtn" id="zoom-in" aria-label="تكبير">＋</button>
+      <button class="tbtn" id="zoom-out" aria-label="تصغير">－</button>
+      <button class="tbtn" id="touch-attack" aria-label="هجوم">⚔</button>
+      <button class="tbtn" id="touch-home" aria-label="عاصمتي">⌂</button>
+    </div>
+
     <!-- top bar -->
     <header class="hud-top">
       <div class="nation-chip" id="nation-chip">
@@ -209,11 +229,14 @@
       <div class="spacer"></div>
       <div class="clock" id="clock">00:00</div>
       <button class="icon-btn" id="btn-speed" title="السرعة (Space للإيقاف)">▶</button>
-      <button class="icon-btn" id="btn-research" title="البحث (R)">✦</button>
       <button class="icon-btn" id="btn-diplo" title="الدبلوماسية">🤝</button>
-      <button class="icon-btn" id="btn-fs" title="ملء الشاشة">⛶</button>
-      <button class="icon-btn danger" id="btn-surrender" title="الاستسلام (أونلاين)" hidden>🏳️</button>
       <button class="icon-btn" id="btn-menu" title="القائمة">☰</button>
+      <button class="icon-btn" id="btn-more" title="المزيد" aria-expanded="false">⋯</button>
+      <div class="hud-more" id="hud-more" hidden>
+        <button class="icon-btn" id="btn-research" title="البحث (R)">✦</button>
+        <button class="icon-btn" id="btn-fs" title="ملء الشاشة">⛶</button>
+        <button class="icon-btn danger" id="btn-surrender" title="الاستسلام (أونلاين)" hidden>🏳️</button>
+      </div>
     </header>
 
     <!-- objectives -->
@@ -224,6 +247,7 @@
         <div class="bar"><i id="obj-bar"></i></div>
       </div>
       <div class="obj-sub" id="obj-sub">أرضك: 0 خلية • جيران: 0</div>
+      <div class="obj-tactics" id="obj-tactics"></div>
       <div class="obj-extra" id="obj-extra"></div>
     </div>
 
@@ -242,11 +266,11 @@
     <!-- bottom bar -->
     <footer class="hud-bottom">
       <div class="tabs" id="tabs">
-        <button class="tab active" data-tab="empire">الإمبراطورية</button>
-        <button class="tab" data-tab="economy">الاقتصاد</button>
-        <button class="tab" data-tab="military">الجيش</button>
-        <button class="tab" data-tab="navy">الأسطول</button>
-        <button class="tab" data-tab="strikes">الضربات</button>
+        <button class="tab active" data-tab="empire" data-short="الدولة"><span class="tab-long">الإمبراطورية</span><span class="tab-short">الدولة</span></button>
+        <button class="tab" data-tab="economy" data-short="اقتصاد"><span class="tab-long">الاقتصاد</span><span class="tab-short">اقتصاد</span></button>
+        <button class="tab" data-tab="military" data-short="الجيش"><span class="tab-long">الجيش</span><span class="tab-short">الجيش</span></button>
+        <button class="tab" data-tab="navy" data-short="الأسطول"><span class="tab-long">الأسطول</span><span class="tab-short">الأسطول</span></button>
+        <button class="tab" data-tab="strikes" data-short="ضربات"><span class="tab-long">الضربات</span><span class="tab-short">ضربات</span></button>
       </div>
       <div class="tab-body" id="tab-body"></div>
       <div class="force-row">

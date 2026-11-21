@@ -139,6 +139,16 @@ export class NetClient {
     this.send({ t: "join", room: code, name: this.name });
   }
 
+  // Public worlds: list joinable lobbies (no codes), and "play now" which
+  // either joins the fullest lobby or opens a fresh one.
+  listRooms() {
+    this.send({ t: "rooms" });
+  }
+
+  quickJoin(opts = {}) {
+    this.send({ t: "quickjoin", name: this.name, ...opts });
+  }
+
   pick(nationId) {
     this.send({ t: "pick", nationId });
   }
@@ -177,6 +187,13 @@ export class NetClient {
         this.name = msg.name;
         this.seat = null;
         this.emit("hello", msg);
+        break;
+      case "roomlist":
+        this.roomList = msg.rooms || [];
+        this.emit("roomlist", this.roomList);
+        break;
+      case "joined":
+        this.emit("joined", msg);
         break;
       case "lobby":
         this.room = msg.room;

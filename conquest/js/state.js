@@ -74,6 +74,9 @@ class Attack {
     this.defender = defender;
     this.troops = Math.max(1, Math.floor(troops));
     this.startTroops = this.troops;
+    // Force the player explicitly ordered to this front (reinforcements add to
+    // it; the automatic supply drip does not).
+    this.ordered = this.troops;
     this.progress = 0;
     this.naval = !!opts.naval;
     this.landingAt = opts.landingAt ?? -1;
@@ -148,7 +151,7 @@ export class Game {
     if (opts.startBuildings && opts.playerId != null) {
       const p = this.nations.get(opts.playerId);
       if (p) {
-        for (const key of opts.startBuildings) this.freeBuild(p, key);
+        for (const key of opts.startBuildings) this.freeBuild(p, key, { paid: false });
       }
     }
     this.log("بدء المباراة: " + (this.nations.get(opts.playerId)?.ar || "—"), "info");
@@ -348,6 +351,8 @@ export class Game {
   defenseMult(n, cell) {
     const era = (ERAS[this.era] || ERAS.modern).armyMult;
     let m = (1 + n.tech.defense * 0.09) * era;
+    // Alliances are a defensive pact: +18% defence per living ally (max 2).
+    m *= 1 + Math.min(2, this.allyCount(n)) * 0.18;
     if (cell != null && this.bunkerCover(n, cell)) m *= 1.35;
     if ((n.fortifyUntil || 0) > this.time) m *= 1.3;
     return m;
@@ -493,10 +498,24 @@ export class Game {
     return null;
   }
 
-  freeBuild(n, key) {
+  freeBuild(n, key, opts = {}) {
     // Place a level-1 building on an owned cell. Prefer cells near the capital
     // and next to existing buildings so AI empires look organic.
+    // NOTE: this *charges* the building cost unless opts.paid === false
+    // (setup/starting buildings are the only free ones). Before this, the AI
+    // built dozens of cities per minute for free, which made land worthless.
     const { world, owners } = this;
+    const cost = this.buildingCost(key, 1);
+    if (opts.paid !== false) {
+      if (!n.alive) return false;
+      if (n.gold < cost) return false;
+    }
+    // Hard cap: past this the empire is maxed out, so conquest — not building
+    // spam — is the only way to keep growing. Without it, a big AI snowballs
+    // into 5x the gold of a human who is busy taking land and wins by economy.
+    const cap = B.maxBuildings ?? 40;
+    const scaled = cap + Math.floor(Math.min(40, Math.max(0, n.cells - n.originalCells / 2) / 900));
+    if (n.buildings.length >= Math.min(cap * 2, scaled)) return false;
     const free = (i) => owners[i] === n.id && !n.buildings.some((b) => b.cell === i);
     let tries = 0;
     if (n.buildings.length) {
@@ -507,6 +526,7 @@ export class Game {
         if (x < 0 || y < 0 || x >= world.w || y >= world.h) continue;
         const i = y * world.w + x;
         if (!free(i)) continue;
+        if (opts.paid !== false) n.gold -= cost;
         n.buildings.push({ key, cell: i, level: 1, cd: 0 });
         this.refreshAgg(n);
         return true;
@@ -520,6 +540,7 @@ export class Game {
       if (x < 0 || y < 0 || x >= world.w || y >= world.h) continue;
       const i = y * world.w + x;
       if (!free(i)) continue;
+      if (opts.paid !== false) n.gold -= cost;
       n.buildings.push({ key, cell: i, level: 1, cd: 0 });
       this.refreshAgg(n);
       return true;
@@ -549,6 +570,19 @@ export class Game {
 
   declareWar(a, b, silent = false) {
     if (!this.canDeclare(a, b)) return false;
+    // Alliance pact: attacking an ally's ally drags you into war with it too.
+    // This is what makes alliances mean something (and makes betrayals costly).
+    for (const allyId of [...b.ally]) {
+      const ally = this.byId[allyId];
+      if (ally && ally.alive && ally.id !== a.id && !ally.ally.has(a.id) && !ally.war.has(a.id)) {
+        ally.war.add(a.id);
+        a.war.add(ally.id);
+        this.warVersion = (this.warVersion || 0) + 1;
+        if (a.isPlayer || ally.isPlayer) {
+          this.log(`${ally.ar} تدخلت في الحرب إلى جانب حليفها ${b.ar}`, a.isPlayer ? "bad" : "info", { nation: ally.id });
+        }
+      }
+    }
     if (a.ally.has(b.id)) {
       a.ally.delete(b.id);
       b.ally.delete(a.id);
@@ -582,6 +616,27 @@ export class Game {
     return false;
   }
 
+  // Naval reach: from any neighbour's coast, plus that neighbour's neighbours
+  // (one extra "hop" across the water). Before this, holding a single port
+  // meant every country on the planet was a legal target, so the whole world
+  // declared war on the player at once and buried them in 100+ fronts.
+  navalReach(n) {
+    const set = new Set();
+    for (const id of n.def.neighbors) {
+      set.add(id);
+      const other = this.byId[id];
+      if (other) for (const id2 of other.def.neighbors) set.add(id2);
+    }
+    set.delete(n.id);
+    return set;
+  }
+
+  canReach(n, target) {
+    if (this.adjacent(n, target)) return true;
+    if (!this.hasPort(n)) return false;
+    return this.navalReach(n).has(target.id);
+  }
+
   hasPort(n) {
     return !!(n.agg && n.agg.port);
   }
@@ -593,19 +648,31 @@ export class Game {
     if (this.ceasefireLeft > 0) return `الهدنة سارية — تبقى ${Math.ceil(this.ceasefireLeft)} ثانية`;
     const naval = !this.adjacent(attacker, defender);
     if (naval && !this.hasPort(attacker)) return "تحتاج ميناء للغزو البحري";
+    if (naval && !this.canReach(attacker, defender)) return "هذه الدولة بعيدة عن موانئك";
+    // Never let a nation commit its last soldiers: keep a garrison floor, so a
+    // single over-committed offensive can't leave the homeland defenceless.
+    const cap = this.capacityOf ? this.capacityOf(attacker) : attacker.cap || attacker.army;
+    const garrison = Math.max(600, cap * (attacker.isPlayer ? 0.18 : 0.25));
+    const available = Math.floor(attacker.army - garrison);
+    if (available < 200) {
+      return attacker.isPlayer
+        ? "احتياطيك منخفض — انتظر تجنيداً أو اسحب قواتك"
+        : "لا يوجد احتياطي كافٍ";
+    }
     const existing = this.attacks.find((a) => a.attacker === attacker && a.defender === defender && a.active);
     if (existing) {
       // reinforce the running offensive instead of issuing a duplicate order
-      const extra = Math.floor(attacker.army * fraction);
+      const extra = Math.min(available, Math.floor(attacker.army * fraction));
       attacker.army -= extra;
       existing.troops += extra;
       existing.startTroops += extra;
+      existing.ordered = (existing.ordered || 0) + extra;
       if (existing.fronts.length === 0 && !existing.naval) existing.frontTimer = 0;
       return null;
     }
     if (!attacker.war.has(defender.id)) this.declareWar(attacker, defender);
     if (!attacker.isPlayer && this.attacks.length > 150) return "الحد الأقصى للهجمات";
-    const troops = Math.floor(attacker.army * fraction);
+    const troops = Math.min(available, Math.floor(attacker.army * fraction));
     if (troops < 100) return "جيشك صغير جدًا";
     attacker.army -= troops;
     const atk = new Attack(attacker, defender, troops, { naval });
@@ -751,6 +818,47 @@ export class Game {
     a.frontTimer = 0.5 + this.rng.float() * 0.3;
   }
 
+  // TACTICS ---------------------------------------------------------------
+  // An offensive that pushes from several directions at once splits the
+  // defender's attention (a pincer). Coordinated multi-nation offensives get a
+  // bigger bonus, which is what makes alliances and timing matter.
+  // Returns {directions, pincer, coordinated} where pincer is a 0.85..1.45 mult.
+  tacticalRead(a) {
+    const defender = a.defender;
+    const fronts = a.fronts;
+    if (!fronts.length) return { directions: 0, pincer: 1, coordinated: 1 };
+    const { world } = this;
+    // count how many distinct sides of the defender we are entering from
+    const cx = world.countries[defender.id] ? world.countries[defender.id].x : 0;
+    const cy = world.countries[defender.id] ? world.countries[defender.id].y : 0;
+    const dirs = new Set();
+    let sumX = 0, sumY = 0, n = 0;
+    for (const [ac] of fronts) {
+      const x = ac % world.w;
+      const y = (ac / world.w) | 0;
+      sumX += x; sumY += y; n++;
+      const dx = x - cx, dy = y - cy;
+      // 4-way compass with a diagonal band
+      const ang = Math.atan2(dy, dx);
+      dirs.add(Math.round(((ang + Math.PI) / (Math.PI / 2))) % 4);
+    }
+    const directions = dirs.size;
+    const pincer = Math.min(1.45, 0.85 + (directions - 1) * 0.22);
+    // multiple allied nations hitting the same defender at the same time
+    let attackers = 0;
+    for (const other of this.attacks) {
+      if (!other.active) continue;
+      if (other.defender !== defender) continue;
+      if (other.attacker === a.attacker) continue;
+      const atk = other.attacker;
+      if (atk.ally.has(a.attacker.id) || a.attacker.ally.has(atk.id)) attackers++;
+    }
+    const coordinated = 1 + Math.min(2, attackers) * 0.12;
+    a.directions = directions;
+    void sumX; void sumY; void n;
+    return { directions, pincer, coordinated };
+  }
+
   defenderLocalStrength(a) {
     // The defender cannot put its whole army on one border: only the share of
     // its border that this offensive touches fights here (with a floor so a
@@ -761,6 +869,24 @@ export class Game {
     const total = Math.max(1, def.totalFront || pairs);
     const share = Math.min(1, Math.max(0.14, pairs / total));
     return Math.max(150, def.army * share);
+  }
+
+  // Troops still standing when an offensive ends are not lost: they march back
+  // into the nation's reserve army (or, if the nation has fallen, they simply
+  // disband). Without this, every halted offensive silently vaporised tens of
+  // thousands of soldiers, which is why big attacks looked like a death spiral.
+  endAttack(a, why) {
+    if (!a.active) return;
+    a.active = false;
+    const atk = a.attacker;
+    const left = Math.max(0, Math.floor(a.troops));
+    a.troops = 0;
+    if (left <= 0) return;
+    if (atk && atk.alive) {
+      const cap = this.capacityOf ? this.capacityOf(atk) : atk.cap || Infinity;
+      atk.army = Math.min(cap, (atk.army || 0) + left);
+      if (atk.isPlayer && why) this.log(`${why} — عاد ${left.toLocaleString("ar-EG")} جندي إلى الاحتياط`, "info");
+    }
   }
 
   stepAttack(a, dt) {
@@ -814,14 +940,16 @@ export class Game {
     if (!a.fronts.length) {
       if (!a.naval) {
         // The shared border is gone: the offensive has nothing left to attack.
-        a.active = false;
+        this.endAttack(a, null);
       }
       return;
     }
 
     const pairs = a.fronts.length;
     const defLocal = this.defenderLocalStrength(a);
-    const mult = this.attackMult(attacker) / Math.max(0.25, this.defenseMult(defender, a.fronts[0][1]));
+    const tac = this.tacticalRead(a);
+    const mult = (this.attackMult(attacker) * tac.pincer * tac.coordinated) /
+      Math.max(0.25, this.defenseMult(defender, a.fronts[0][1]));
     const ratio = (a.troops * mult) / Math.max(1, defLocal);
     a.ratio = ratio;
     const force = Math.min(a.troops * mult, defLocal * 3);
@@ -838,12 +966,44 @@ export class Game {
     }
     this.damageArmy(defender, force * B.defenderAttrition * dt, attacker);
 
+    // Reinforcements: a nation keeps feeding an active offensive with fresh
+    // troops (up to 1/(reinforceCapTime) of its army per second). Without this,
+    // the ~20k committed force decayed to nothing while the enemy rebuilt,
+    // which made attacking a bigger neighbour a guaranteed loss.
+    // Keep the front supplied, but only up to ~2x the local defence: a stalled
+    // or hopeless push must not drain the whole reserve army (that turned a
+    // single bad attack into a death spiral). The reserve also keeps a floor,
+    // so losing a front never leaves the homeland undefended.
+    // Also cap by what one front can physically absorb (~a third of the army),
+    // otherwise a long war piles 100k+ soldiers onto a single stalled border
+    // instead of keeping them in the national reserve.
+    // Absorb at most a fixed slice of the *reserve* (never the troops already
+    // committed), so the fed force converges instead of overshooting.
+    // How many troops this front may hold: enough to keep pushing against a
+    // comparable defence, but bounded by the initial order so a long war never
+    // turns one border into a bottomless troop sink.
+    // `ordered` is the force the player explicitly put on this front; it only
+    // grows when they reinforce, never from the automatic drip feed.
+    const ordered = a.ordered || a.startTroops || a.troops;
+    const supplyLine = Math.min(defLocal * 2.5, Math.max(ordered * 1.6, defLocal * 1.2));
+    const reserve = attacker.cap ? Math.max(attacker.cap * 0.25, 4000) : 4000;
+    if (attacker.alive && attacker.army > reserve && a.troops < supplyLine && ratio >= B.haltRatio * 0.85) {
+      const feed = Math.min(attacker.army - reserve, Math.min(supplyLine - a.troops, attacker.army * dt / (B.reinforceCapTime ?? 10)));
+      if (feed > 0) {
+        attacker.army -= feed;
+        a.troops += feed;
+        // NOTE: startTroops is the *ordered* force (plus explicit reinforcement
+        // orders). Growing it with the drip feed made the "we've lost 65% of
+        // the attack" abort test unreachable, so stalled fronts ran forever.
+      }
+    }
+
     if (ratio < B.haltRatio) {
       // Stalled front: the attacker burns supplies and slowly loses ground.
       a.progress = Math.max(0, a.progress - dt * 0.1);
       a.stalled = (a.stalled || 0) + dt;
-      if (a.troops < a.startTroops * 0.35 || a.stalled > 18) {
-        a.active = false;
+      if (a.troops < (a.ordered || a.startTroops) * 0.35 || a.stalled > 18) {
+        this.endAttack(a, `توقف الهجوم على ${defender.ar}`);
         if (attacker.isPlayer) this.log(`توقف الهجوم على ${defender.ar} — أرسل تعزيزات أو انسحب`, "warn");
         else if (defender.isPlayer) this.log(`صدّيت هجوم ${attacker.ar}!`, "good");
       }
@@ -852,9 +1012,9 @@ export class Game {
     a.stalled = 0;
 
     const pressure = Math.min(3.4, Math.pow(Math.max(0, ratio - B.haltRatio) / (1 - B.haltRatio), 1.25));
-    const adv = Math.min(0.75,
+    const adv = Math.min(B.frontSpeedCap ?? 0.75,
       B.frontWidthFactor * Math.pow(pairs, 0.75) * pressure *
-      (1 - this.bunkerSlow(defender, a)) * (attacker.ai ? 0.85 + attacker.ai.skill * 0.18 : 1));
+      (1 - this.bunkerSlow(defender, a)) * (attacker.ai ? 0.95 + attacker.ai.skill * 0.1 : 1));
     a.progress += adv * dt;
 
     let guard = 0;
@@ -880,10 +1040,15 @@ export class Game {
         guard += 1;
         continue;
       }
-      // Taking ground costs troops in proportion to the local defence.
-      const cellCost = Math.min(2600, Math.max(45, (defLocal / Math.max(1, pairs)) * 0.55));
+      // Taking ground costs troops in proportion to the local defence, but a
+      // single cell must never cost more than a small slice of the offensive:
+      // with 130 borders the old (defLocal/pairs)*0.55 formula charged ~2,600
+      // per cell, which is more than the whole committed force — that is why
+      // advances froze right after a breakthrough.
+      const perCell = Math.min(defLocal / Math.max(1, pairs), a.troops * 0.02);
+      const cellCost = Math.max(30, Math.min(1200, perCell * 0.55));
       if (a.troops < cellCost) {
-        a.active = false;
+        this.endAttack(a, `نفدت قوات الهجوم على ${defender.ar}`);
         break;
       }
       a.troops -= cellCost;
@@ -899,11 +1064,15 @@ export class Game {
       if (a.progress < 1) break;
     }
 
-    if (defender.alive && defender.cells > 0 && guard < 30) {
+    if (defender.alive && defender.cells > 0) {
+      // Capitulation: losing the capital is decisive, and so is losing half your
+      // land — otherwise a big country bleeds for minutes after the outcome is
+      // already decided. This is what makes conquest feel fast.
       const capitalLost = defender.capital < 0 || this.owners[defender.capital] !== defender.id;
-      if (capitalLost && (defender.cells < defender.originalCells * B.capitulateFraction || defender.cells < 12)) {
-        this.capitulate(defender, attacker);
-      }
+      const lostShare = 1 - defender.cells / Math.max(1, defender.originalCells);
+      const crushed = lostShare >= (B.capitulation ?? 0.5);
+      const collapsing = (capitalLost && defender.cells < defender.originalCells * B.capitulateFraction) || defender.cells < 12;
+      if (crushed || collapsing) this.capitulate(defender, attacker);
     }
   }
 
@@ -1129,8 +1298,82 @@ export class Game {
     b.ally.add(a.id);
     a.war.delete(b.id);
     b.war.delete(a.id);
-    this.log(`تحالف بين ${a.ar} و${b.ar}`, "good");
+    a.peace.delete(b.id);
+    b.peace.delete(a.id);
+    a.allySince = a.allySince || {};
+    b.allySince = b.allySince || {};
+    a.allySince[b.id] = this.time;
+    b.allySince[a.id] = this.time;
+    // An alliance is a defensive pact: defensive strength and troop growth get
+    // a real boost, so an ally is worth keeping instead of a free liability.
+    this.refreshAgg(a);
+    this.refreshAgg(b);
+    this.log(`تحالف بين ${a.ar} و${b.ar} — دفاع مشترك`, "good");
     if (a.isPlayer || b.isPlayer) this.checkMedal("alliance");
+  }
+
+  // Count of living allies (alliance value scales with this).
+  allyCount(n) {
+    let c = 0;
+    for (const id of n.ally) {
+      const o = this.byId[id];
+      if (o && o.alive) c++;
+    }
+    return c;
+  }
+
+  // Called on the player's behalf: ask allies to join the war on a target.
+  callAllies(target) {
+    const p = this.player();
+    if (!p || !p.alive || !target || !target.alive) return "لا يوجد هدف";
+    let joined = 0;
+    let strikes = 0;
+    for (const id of [...p.ally]) {
+      const ally = this.byId[id];
+      if (!ally || !ally.alive || ally.war.has(target.id)) continue;
+      // A pact is a pact: the ally always enters the war (that alone splits the
+      // enemy's front and drags its reserves). Only the *offensive* needs a
+      // land border or a reachable port.
+      this.declareWar(ally, target, true);
+      joined++;
+      const reachable = this.canReach(ally, target);
+      if (reachable) {
+        const ratio = (ally.army * this.attackMult(ally)) / Math.max(1, target.army * this.defenseMult(target));
+        if (ratio > 0.55) {
+          if (!this.launchAttack(ally, target, 0.45)) strikes++;
+        }
+      } else {
+        // Too far to open a front: a real ally sends materiel instead. The
+        // expeditionary corps joins the player's capital garrison and the war
+        // chest, so even a distant pact is worth signing.
+        const corps = Math.floor(ally.army * 0.12);
+        const gold = Math.floor(ally.gold * 0.1);
+        if (corps > 200) {
+          ally.army -= corps;
+          p.army = Math.min(this.capacityOf(p), p.army + corps);
+          strikes++;
+        }
+        if (gold > 50) {
+          ally.gold -= gold;
+          p.gold += gold;
+        }
+        if (corps > 200 || gold > 50) {
+          this.log(`${ally.ar} أرسلت لك ${corps > 200 ? Math.round(corps).toLocaleString("ar-EG") + " جندي" : ""}${corps > 200 && gold > 50 ? " و" : ""}${gold > 50 ? Math.round(gold).toLocaleString("ar-EG") + " ذهب" : ""} دعماً`, "good");
+        }
+      }
+      this.log(
+        reachable
+          ? `${ally.ar} انضمت إلى حربك ضد ${target.ar} وفتحت جبهة`
+          : `${ally.ar} أعلنت الحرب على ${target.ar} دعماً لك`,
+        "good",
+        { nation: ally.id }
+      );
+    }
+    if (!joined) return "لم ينضم أي حليف — لا تملك تحالفات حيّة";
+    if (!strikes) return null;
+    // Silence is bad UX: report that they joined but are far from the front.
+    this.log(`حلفاؤك في الحرب، لكن ${strikes} منهم بعيدون عن جبهة ${target.ar}`, "info");
+    return null;
   }
 
   makePeace(a, b) {
@@ -1551,7 +1794,7 @@ export class Game {
       if (!enemy || !enemy.alive) continue;
       const running = this.attacks.some((a) => a.attacker === n && a.defender === enemy && a.active);
       if (running) continue;
-      if (!this.adjacent(n, enemy) && !this.hasPort(n)) continue;
+      if (!this.canReach(n, enemy)) continue;
       const ratio = n.army / Math.max(1, enemy.army);
       if (ratio > 0.55 * (1.4 - n.ai.aggression * 0.4) || n.army > this.capacityOf(n) * 0.8) {
         if (this.rng.chance(0.55 + n.ai.aggression * 0.2)) {
@@ -1569,7 +1812,10 @@ export class Game {
     if (n.war.size >= 2 && n.ai.aggression < 1.1) return;
     const candidates = [];
     const targets = [...n.def.neighbors];
-    if (this.hasPort(n) && this.rng.chance(0.45)) targets.push(...n.def.sea);
+    if (this.hasPort(n) && this.rng.chance(0.45)) {
+      const reach = this.navalReach(n);
+      for (const id of n.def.sea) if (reach.has(id)) targets.push(id);
+    }
     for (const id of targets) {
       const other = this.byId[id];
       if (!other || !other.alive) continue;

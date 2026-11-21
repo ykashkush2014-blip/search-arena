@@ -1262,6 +1262,60 @@ function handleRightClick(cell) {
   openDiplo(n.id);
 }
 
+// Center the camera on the player's capital (the "home" touch button).
+function centerOnCapital() {
+  const R = app.renderer;
+  const game = app.game;
+  if (!R || !game) return;
+  const p = game.player();
+  if (!p) return;
+  const world = game.world;
+  const c = world.countries[p.id];
+  const cell = p.capital >= 0 ? p.capital : null;
+  const x = cell != null ? cell % world.w : c && c.x;
+  const y = cell != null ? (cell / world.w) | 0 : c && c.y;
+  if (x == null || y == null) return;
+  R.centerOn(x, y);
+  R.cam.zoom = Math.max(R.cam.zoom, 3);
+  R.clampCam();
+  R.renderBase();
+  R.render();
+}
+
+// One-tap attack sheet: every reachable enemy with a rough strength read, so a
+// phone player never has to hunt for a border cell to tap.
+function openAttackSheet() {
+  const game = app.game;
+  const p = game && game.player();
+  if (!p || !p.alive) return;
+  const list = [];
+  const seen = new Set();
+  const consider = (n) => {
+    if (!n || !n.alive || n.id === p.id || seen.has(n.id)) return;
+    if (p.ally.has(n.id)) return;
+    seen.add(n.id);
+    const reach = game.adjacent(p, n);
+    if (!reach && !(game.hasPort(p) && game.canReach(p, n))) return;
+    const ratio = (p.army * game.attackMult(p)) / Math.max(1, n.army * game.defenseMult(n));
+    list.push({ n, naval: !reach, ratio });
+  };
+  for (const id of p.def.neighbors) consider(game.byId[id]);
+  if (game.hasPort(p)) {
+    for (const id of game.navalReach(p)) consider(game.byId[id]);
+  }
+  if (!list.length) return toast("لا يوجد هدف على حدودك", "warn");
+  list.sort((a, b) => b.ratio - a.ratio);
+  const target =
+    app.selected != null && list.find((x) => x.n.id === app.selected)
+      ? list.find((x) => x.n.id === app.selected)
+      : list[0];
+  app.selected = target.n.id;
+  app.renderer.selected = target.n.id;
+  if (app.renderer.cam && target.n.def.x != null) app.renderer.centerOn(target.n.def.x, target.n.def.y);
+  openDiplo(target.n.id);
+  return target;
+}
+
 function orderAttack(id) {
   const game = app.game;
   const p = game.player();
@@ -1409,6 +1463,22 @@ function menuPulse() {
 
 function togglePause() {
   app.paused = !app.paused;
+  // Keep the floating touch pad just above the real bottom HUD height, which
+  // varies with the mobile tab body. Without this it overlaps the build cards.
+  const syncHudHeight = () => {
+    const hud = document.querySelector(".hud-bottom");
+    const pad = document.getElementById("touch-pad");
+    if (!hud || !pad) return;
+    const h = Math.round(hud.getBoundingClientRect().height);
+    if (h > 0) document.documentElement.style.setProperty("--hud-bottom-h", h + "px");
+  };
+  syncHudHeight();
+  window.addEventListener("resize", syncHudHeight);
+  if (typeof ResizeObserver !== "undefined") {
+    const hud = document.querySelector(".hud-bottom");
+    if (hud) new ResizeObserver(syncHudHeight).observe(hud);
+  }
+
   syncSpeedButtons();
 }
 
@@ -1491,6 +1561,25 @@ function updateHud(force) {
     <div class="oe"><span>الترتيب</span><b>${arNum(rankOfNation(game, p))} / ${arNum(game.nations.size)}</b></div>
     ${game.remote ? `<div class="oe"><span>لاعبون</span><b>${arNum((game.seats || []).filter((s) => s.alive).length)} / ${arNum((game.seats || []).length)}</b></div>` : ""}
     <div class="oe tip"><span>💡</span><b style="font-weight:500;color:var(--muted);text-align:left">${currentTip()}</b></div>`;
+  // ---- tactical read-out: pincers and allied coordination, live ----
+  const tac = $("#obj-tactics");
+  if (tac) {
+    const mine = (game.attacks || []).filter((a) => a.active && a.attacker === p);
+    let best = null;
+    let coord = false;
+    for (const a of mine) {
+      const r = game.tacticalRead(a);
+      if (r.directions >= 2 && (!best || r.pincer > best.pincer)) {
+        best = { t: a.defender, ...r };
+      }
+      if (r.coordinated > 1) coord = true;
+    }
+    const bits = [];
+    if (best) bits.push(`<span class="tac pincer">🗡 كمّاشة على ${best.t.ar} ×${best.pincer.toFixed(2)}</span>`);
+    if (coord) bits.push(`<span class="tac coord">🤝 هجوم منسّق مع حلفاء</span>`);
+    if (allies.length) bits.push(`<span class="tac ally">🛡 ${arNum(allies.length)} حليف يقوّي دفاعك</span>`);
+    tac.innerHTML = bits.join("");
+  }
   const cez = game.ceasefireLeft;
   const badge = $("#ceasefire-badge");
   if (cez > 0) {
@@ -1605,7 +1694,7 @@ function updateEvents() {
         <b>${mine ? "➤ هجومك على " + other.ar : "⚠ " + other.ar + " تهجم عليك"}</b>
         <button class="mini" data-retreat="${a.id}">${mine ? "انسحاب" : "تحصين"}</button>
       </div>
-      <div class="ev-sub">${fmt(a.troops)} جندي • ${a.naval ? "بحري" : "برّي"} ${a.landingTimer > 0 ? "• إنزال…" : ""}</div>
+      <div class="ev-sub">${fmt(a.troops)} جندي • ${a.naval ? "بحري" : "برّي"} ${a.landingTimer > 0 ? "• إنزال…" : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">الجبهة متعثرة</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">كمّاشة</b>` : ""}</div>
       <div class="bar ${mine ? "adv" : ""}"><i style="width:${pct2}%"></i></div>
     </div>`);
   }
@@ -2003,7 +2092,7 @@ function renderDiplo() {
         <span class="actions">
           ${rel === "war" ? `<button data-cease="${n.id}">هدنة</button>` : ""}
           ${rel !== "war" && rel !== "ally" ? `<button data-alliance="${n.id}">تحالف</button>` : ""}
-          ${rel !== "war" ? `<button data-dow="${n.id}">حرب</button>` : ""}
+          ${rel !== "war" ? `<button data-dow="${n.id}">حرب</button>` : `<button data-call="${n.id}" title="ادعُ حلفاءك للانضمام">⚔ ادعُ الحلفاء</button>`}
           <button data-gift="${n.id}">هدية</button>
         </span>
       </div>`;
@@ -2027,6 +2116,16 @@ function renderDiplo() {
   list.querySelectorAll("[data-cease]").forEach((b) => (b.onclick = () => doDiplo("ceasefire", +b.dataset.cease)));
   list.querySelectorAll("[data-alliance]").forEach((b) => (b.onclick = () => doDiplo("alliance", +b.dataset.alliance)));
   list.querySelectorAll("[data-gift]").forEach((b) => (b.onclick = () => doDiplo("gift", +b.dataset.gift)));
+  list.querySelectorAll("[data-call]").forEach((b) => (b.onclick = () => {
+    const n = game.byId[+b.dataset.call];
+    if (netAct("callallies", { target: n.id })) {
+      setTimeout(renderDiplo, 400);
+      return;
+    }
+    const err = game.callAllies(n);
+    toast(err || `حلفاؤك انضموا إلى الحرب ضد ${n.ar}`, err ? "bad" : "good");
+    renderDiplo();
+  }));
   list.querySelectorAll("[data-dow]").forEach((b) => (b.onclick = () => {
     const n = game.byId[+b.dataset.dow];
     if (netAct("declaw", { target: n.id })) {
@@ -2270,6 +2369,28 @@ async function boot() {
   };
   $("#btn-diplo").onclick = () => openDiplo(null);
   $("#btn-menu").onclick = () => ($("#modal-menu").hidden = false);
+  // Secondary HUD actions live behind a "more" button on narrow screens so the
+  // top bar stops overflowing on phones. On desktop CSS keeps them inline.
+  const moreBtn = $("#btn-more");
+  const moreBox = $("#hud-more");
+  if (moreBtn && moreBox) {
+    const setMore = (open) => {
+      moreBox.hidden = !open;
+      moreBtn.setAttribute("aria-expanded", String(open));
+      moreBtn.classList.toggle("on", open);
+    };
+    moreBtn.onclick = (e) => {
+      e.stopPropagation();
+      setMore(moreBox.hidden);
+    };
+    document.addEventListener("click", (e) => {
+      if (!moreBox.hidden && !moreBox.contains(e.target) && e.target !== moreBtn) setMore(false);
+    });
+    // Anything inside closes the popover after use.
+    moreBox.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => setMore(false))
+    );
+  }
   // ---------------------------------------------------------------- online
   $("#btn-online-back").onclick = () => {
     net.leave();
@@ -2289,6 +2410,55 @@ async function boot() {
       aiLevel: $("#online-ai").value,
     });
   };
+  // ---- public worlds: no codes to type ----
+  const renderRoomList = (list) => {
+    const box = $("#room-list");
+    if (!box) return;
+    if (!list || !list.length) {
+      box.innerHTML = `<div class="room-empty">لا توجد عوالم مفتوحة الآن — اضغط «العب الآن» لتفتح عالمًا</div>`;
+      return;
+    }
+    const modeAr = { normal: "كل لاعب لنفسه", coop: "تحالف", ffa: "آخر صامد" };
+    box.innerHTML = list
+      .map(
+        (r) => `<button class="room-row" data-join="${r.code}">
+          <b class="room-code-sm">${r.code}</b>
+          <span class="room-meta">${r.players}/${r.max} لاعبين · ${modeAr[r.mode] || r.mode} · ${Math.round(r.goal * 100)}%</span>
+          <span class="room-host">${r.host}</span>
+          <span class="room-go">انضم ›</span>
+        </button>`
+      )
+      .join("");
+    box.querySelectorAll("[data-join]").forEach((b) => {
+      b.onclick = async () => {
+        const ok = await net.connect(onlineName());
+        if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+        net.joinRoom(b.dataset.join);
+      };
+    });
+  };
+
+  const refreshRooms = async () => {
+    const ok = await net.connect(onlineName());
+    if (!ok) {
+      renderRoomList([]);
+      setOnlineStatus("الخادم غير متاح — الأونلاين يحتاج تشغيل node server.js", "bad");
+      return false;
+    }
+    net.listRooms();
+    return true;
+  };
+
+  if ($("#btn-refresh-rooms")) $("#btn-refresh-rooms").onclick = () => refreshRooms();
+  if ($("#btn-quick-play"))
+    $("#btn-quick-play").onclick = async () => {
+      const ok = await net.connect(onlineName());
+      if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+      net.quickJoin();
+    };
+  net.on("roomlist", renderRoomList);
+  net.on("hello", () => net.listRooms());
+
   $("#btn-join-room").onclick = async () => {
     const name = onlineName();
     const code = ($("#online-code").value || "").trim().toUpperCase();
@@ -2488,6 +2658,38 @@ async function boot() {
   $("#force-slider").oninput = (e) => setForce(e.target.value / 100);
   $("#force-up").onclick = () => setForce(app.game.attackFraction + 0.1);
   $("#force-down").onclick = () => setForce(app.game.attackFraction - 0.1);
+
+  // ---- floating touch controls (phones/tablets, also handy with a mouse) ----
+  const zoomStep = (factor) => {
+    const R = app.renderer;
+    if (!R || !app.game) return;
+    R.zoomAt(R.viewW / 2, R.viewH / 2, factor);
+    R.renderBase();
+    R.render();
+  };
+  const tZoomIn = $("#zoom-in");
+  const tZoomOut = $("#zoom-out");
+  if (tZoomIn) tZoomIn.onclick = () => zoomStep(1.35);
+  if (tZoomOut) tZoomOut.onclick = () => zoomStep(0.74);
+  // Long-press friendly: fire repeatedly while held.
+  for (const [btn, factor] of [[tZoomIn, 1.35], [tZoomOut, 0.74]]) {
+    if (!btn) continue;
+    let hold = null;
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      hold = setTimeout(() => {
+        hold = setInterval(() => zoomStep(factor), 110);
+      }, 380);
+    });
+    const stop = () => { clearTimeout(hold); clearInterval(hold); hold = null; };
+    btn.addEventListener("pointerup", stop);
+    btn.addEventListener("pointerleave", stop);
+    btn.addEventListener("pointercancel", stop);
+  }
+  const tHome = $("#touch-home");
+  if (tHome) tHome.onclick = () => centerOnCapital();
+  const tAttack = $("#touch-attack");
+  if (tAttack) tAttack.onclick = () => openAttackSheet();
   $$(".modal").forEach((m) => {
     m.addEventListener("pointerdown", (e) => {
       if (e.target === m) m.hidden = true;

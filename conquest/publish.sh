@@ -14,7 +14,7 @@
 #   REGION=fra            المنطقة (fra أمستردام… افتراضي fra)
 #   BRANCH=arena/...      الفرع (افتراضي: الفرع الذي بنى فيه هذا الملف)
 set -uo pipefail
-VERSION="2026-11-21.5"   # اطبع هذا في أول سطر لتعرف أنك على النسخة الحديثة
+VERSION="2026-11-21.6"   # اطبع هذا في أول سطر لتعرف أنك على النسخة الحديثة
 
 REPO_SLUG="${REPO_SLUG:-ykashkush2014-blip/search-arena}"
 BRANCH="${BRANCH:-arena/07357b19-search-arena}"

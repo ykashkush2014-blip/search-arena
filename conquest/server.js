@@ -213,6 +213,7 @@ class Room {
     this.goal = 0.5;
     this.aiLevel = "normal";
     this.mode = "normal"; // normal | coop | ffa
+    this.public = true; // listed in the room browser (no code typing needed)
   }
 
   get hostSeat() {
@@ -654,6 +655,65 @@ function setupClient(client) {
         r.broadcastLobby();
         break;
       }
+      case "rooms": {
+        // Public room browser: no codes to type, just tap a world and join.
+        // Only rooms that are still in the lobby (joinable) are listed.
+        const now = Date.now();
+        const list = [];
+        for (const r of rooms.values()) {
+          if (r.phase !== "lobby") continue;
+          if (r.players.length >= 8) continue;
+          const live = r.players.filter((p) => p.connected).length;
+          if (!live) continue;
+          list.push({
+            code: r.code,
+            host: r.players[0] ? r.players[0].name : "—",
+            players: live,
+            max: 8,
+            map: r.map,
+            mode: r.mode,
+            goal: r.goal,
+            aiLevel: r.aiLevel,
+            age: Math.round((now - r.createdAt) / 1000),
+          });
+        }
+        list.sort((a, b) => b.players - a.players || a.age - b.age);
+        sendJSON(client, { t: "roomlist", rooms: list.slice(0, 40), at: now });
+        break;
+      }
+      case "quickjoin": {
+        // "Play now": drop the player into the fullest joinable lobby, or open
+        // a fresh one if the world is empty. No code, no ceremony.
+        if (room) return sendJSON(client, { t: "error", text: "أنت في غرفة بالفعل" });
+        let best = null;
+        for (const r of rooms.values()) {
+          if (r.phase !== "lobby") continue;
+          if (r.players.filter((p) => p.connected).length >= 8) continue;
+          if (!r.players.some((p) => p.connected)) continue;
+          if (!best || r.players.length > best.players.length) best = r;
+        }
+        if (best) {
+          best.addPlayer(client.session.name || msg.name || "لاعب", client);
+          if (msg.nationId != null) client.player.nationId = Number(msg.nationId);
+          best.lastAt = Date.now();
+          best.broadcast({ seat: -1, name: "غرفة", text: `${client.player.name} انضم`, at: Date.now(), t: "chat" });
+          best.broadcastLobby();
+          sendJSON(client, { t: "joined", room: best.code, quick: true });
+          break;
+        }
+        let code;
+        do {
+          code = makeCode(Math.random);
+        } while (rooms.has(code));
+        const fresh = new Room(code);
+        fresh.public = true;
+        rooms.set(code, fresh);
+        fresh.addPlayer(client.session.name || msg.name || "لاعب", client);
+        if (msg.nationId != null) client.player.nationId = Number(msg.nationId);
+        fresh.broadcastLobby();
+        sendJSON(client, { t: "joined", room: code, quick: true, created: true });
+        break;
+      }
       case "join": {
         if (room) return sendJSON(client, { t: "error", text: "أنت في غرفة بالفعل" });
         const code = String(msg.room || "").toUpperCase().trim();
@@ -829,6 +889,11 @@ function applyAction(game, n, msg) {
       const type = ["ceasefire", "alliance", "gift"].includes(msg.kind) ? msg.kind : null;
       if (!type) return "عرض غير معروف";
       return game.propose({ type, from: n.id, to: Number(msg.target) });
+    }
+    case "callallies": {
+      const target = game.byId[Number(msg.target)];
+      if (!target || !target.alive) return "هدف غير صالح";
+      return game.callAllies(target);
     }
     case "answer": {
       const offer = game.offers.find((o) => o.id === Number(msg.id));
