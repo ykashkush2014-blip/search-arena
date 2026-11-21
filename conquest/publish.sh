@@ -14,6 +14,7 @@
 #   REGION=fra            المنطقة (fra أمستردام… افتراضي fra)
 #   BRANCH=arena/...      الفرع (افتراضي: الفرع الذي بنى فيه هذا الملف)
 set -uo pipefail
+VERSION="2026-11-21.4"   # اطبع هذا في أول سطر لتعرف أنك على النسخة الحديثة
 
 REPO_SLUG="${REPO_SLUG:-ykashkush2014-blip/search-arena}"
 BRANCH="${BRANCH:-arena/07357b19-search-arena}"
@@ -26,6 +27,7 @@ case "$APP" in
     exit 1 ;;
 esac
 say() { printf '\n\033[1;33m%s\033[0m\n' "$*"; }
+printf 'ناشر CONQUEST — إصدار %s\n' "$VERSION"
 die() { printf '\n\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
 # ------------------------------------------------------------------ 1) fly ---
@@ -81,9 +83,9 @@ ok_src() {
 
 # (1) git مع partial clone — ينزّل مجلد conquest فقط (2.3MB)
 if command -v git >/dev/null 2>&1 && [ "${NO_GIT:-0}" != "1" ]; then
-  if git clone --depth 1 --no-checkout --filter=blob:none -b "$BRANCH" \
-       "https://github.com/$REPO_SLUG.git" "$WORK/git" >/dev/null 2>&1 \
-     && git -C "$WORK/git" checkout HEAD -- conquest >/dev/null 2>&1 \
+  if GIT_TERMINAL_PROMPT=0 git clone --depth 1 --no-checkout --filter=blob:none -b "$BRANCH" \
+       "https://github.com/$REPO_SLUG.git" "$WORK/git" >"$WORK/git.log" 2>&1 \
+     && git -C "$WORK/git" checkout HEAD -- conquest >>"$WORK/git.log" 2>&1 \
      && ok_src "$WORK/git/conquest"; then
     SRC="$WORK/git/conquest"
     echo "  ✓ عبر git (partial clone)"
