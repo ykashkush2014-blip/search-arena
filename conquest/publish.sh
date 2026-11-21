@@ -40,7 +40,13 @@ find_fly() {
 
 if ! FLY="$(find_fly)"; then
   say "تثبيت أداة fly تلقائيًا (مرة واحدة، ~40MB)…"
-  curl -fsSL https://fly.io/install.sh | bash || die "فشل تثبيت fly — جرّب يدويًا: curl -fsSL https://fly.io/install.sh | bash"
+  INSTALLED=0
+  for attempt in 1 2 3; do
+    if curl -fsSL "${FLY_INSTALL_URL:-https://fly.io/install.sh}" | bash; then INSTALLED=1; break; fi
+    echo "  ⚠ محاولة التثبيت $attempt لم تكتمل — نعيد المحاولة…"
+    sleep 2
+  done
+  [ "$INSTALLED" = "1" ] || die "فشل تثبيت fly بعد 3 محاولات. جرّب يدويًا: curl -fsSL https://fly.io/install.sh | bash  ثم  export PATH=\$HOME/.fly/bin:\$PATH"
   export FLYCTL_INSTALL="${FLYCTL_INSTALL:-$HOME/.fly}"
   export PATH="$FLYCTL_INSTALL/bin:$PATH"
   FLY="$(find_fly)" || die "تم التثبيت لكن الأمر fly غير موجود. نفّذ: export PATH=\"$HOME/.fly/bin:$PATH\""
@@ -61,24 +67,97 @@ WORK="$(mktemp -d 2>/dev/null || mktemp -d -t conquest)"
 trap 'rm -rf "$WORK"' EXIT
 say "تنزيل مجلد conquest (فرع $BRANCH)…"
 
-if command -v git >/dev/null 2>&1; then
-  git clone --depth 1 --filter=blob:none --sparse -b "$BRANCH" "https://github.com/$REPO_SLUG.git" "$WORK/repo" -q \
-    && git -C "$WORK/repo" sparse-checkout set conquest -q \
-    && SRC="$WORK/repo/conquest"
-else
-  base="https://raw.githubusercontent.com/$REPO_SLUG/$BRANCH/conquest"
-  mkdir -p "$WORK/repo/conquest"
-  for f in index.html styles.css server.js package.json fly.toml Dockerfile start.sh; do
-    curl -fsSL "$base/$f" -o "$WORK/repo/conquest/$f" || die "فشل تنزيل $f"
+SRC=""
+# نجرّب أكثر من طريقة: git الحديث، ثم git العادي، ثم أرشيف tar، ثم ملفات raw.
+ok_src() {
+  [ -n "$1" ] || return 1
+  for f in server.js fly.toml index.html styles.css js/main.js js/core.js js/state.js js/net.js \
+           js/render.js js/world.js js/data.js js/rng.js js/audio.js js/campaigns.js \
+           data/world.json data/world-data.js media/hero.jpg; do
+    [ -s "$1/$f" ] || return 1
   done
-  for d in js data media; do
-    (cd "$WORK/repo/conquest" && curl -fsSL "https://github.com/$REPO_SLUG/archive/refs/heads/$BRANCH.tar.gz" \
-      | tar xz --strip-components=3 --include='*/conquest/'"$d"'/*' 2>/dev/null) || true
-  done
-  SRC="$WORK/repo/conquest"
+  return 0
+}
+
+# (1) git مع partial clone — ينزّل مجلد conquest فقط (2.3MB)
+if command -v git >/dev/null 2>&1 && [ "${NO_GIT:-0}" != "1" ]; then
+  if git clone --depth 1 --no-checkout --filter=blob:none -b "$BRANCH" \
+       "https://github.com/$REPO_SLUG.git" "$WORK/git" >/dev/null 2>&1 \
+     && git -C "$WORK/git" checkout HEAD -- conquest >/dev/null 2>&1 \
+     && ok_src "$WORK/git/conquest"; then
+    SRC="$WORK/git/conquest"
+    echo "  ✓ عبر git (partial clone)"
+  fi
 fi
-[ -f "$SRC/server.js" ] && [ -f "$SRC/fly.toml" ] || die "لم يكتمل التنزيل"
-echo "✓ الملفات جاهزة: $(du -sh "$SRC" | cut -f1)"
+
+# (2) أرشيف tar من GitHub — لا يعتمد على إعدادات git المحلية إطلاقًا
+if [ -z "$SRC" ]; then
+  mkdir -p "$WORK/tar"
+  if curl -fsSL "https://codeload.github.com/$REPO_SLUG/tar.gz/refs/heads/$BRANCH" \
+       | tar xz -C "$WORK/tar" --strip-components=1 2>/dev/null \
+     && ok_src "$WORK/tar/conquest"; then
+    SRC="$WORK/tar/conquest"
+    echo "  ✓ عبر أرشيف tar"
+  fi
+fi
+
+# (3) آخر حل: واجهة GitHub API (لا تعتمد على raw.githubusercontent أبدًا).
+#     نأخذ شجرة الملفات ثم ننزّل كل ملف كـ blob (base64) ونفكّه.
+if [ -z "$SRC" ]; then
+  mkdir -p "$WORK/api/conquest"
+  TREE="$WORK/tree.json"
+  if curl -fsSL "https://api.github.com/repos/$REPO_SLUG/git/trees/$BRANCH?recursive=1" -o "$TREE" 2>/dev/null \
+     || curl -fsSL "https://api.github.com/repos/$REPO_SLUG/git/trees/$BRANCH?recursive=1" \
+        -H "Authorization: Bearer ${GITHUB_TOKEN:-}" -o "$TREE" 2>/dev/null; then
+    # قائمة "مسار|رابط الـblob" لكل ملفات conquest
+    python3 - "$TREE" "$WORK/listing.txt" <<'PYEOF' 2>/dev/null || true
+import json, sys
+tree = json.load(open(sys.argv[1]))
+with open(sys.argv[2], "w") as out:
+    for e in tree.get("tree", []):
+        p = e.get("path", "")
+        if e.get("type") == "blob" and p.startswith("conquest/") \
+           and not p.startswith(("conquest/deploy/", "conquest/scripts/")):
+            if e.get("size", 0) > 40 * 1024 * 1024:   # حماية من أي ملف ضخم
+                continue
+            out.write(p[len("conquest/"):] + "|" + e.get("url", "") + "\n")
+PYEOF
+    if [ -s "$WORK/listing.txt" ]; then
+      while IFS='|' read -r rel url; do
+        [ -n "$rel" ] || continue
+        mkdir -p "$WORK/api/conquest/$(dirname "$rel")"
+        curl -fsSL "$url" -H "Accept: application/vnd.github.raw" \
+             -H "Authorization: Bearer ${GITHUB_TOKEN:-}" \
+             -o "$WORK/api/conquest/$rel" 2>/dev/null || true
+      done < "$WORK/listing.txt"
+    fi
+  fi
+  if ok_src "$WORK/api/conquest"; then
+    SRC="$WORK/api/conquest"
+    echo "  ✓ عبر GitHub API ($(find "$SRC" -type f | wc -l | tr -d ' ') ملف)"
+  fi
+fi
+
+# (4) وأخيرًا: raw.githubusercontent (قد يكون محجوبًا في بعض الشبكات)
+if [ -z "$SRC" ]; then
+  base="https://raw.githubusercontent.com/$REPO_SLUG/$BRANCH/conquest"
+  mkdir -p "$WORK/raw/conquest"
+  for f in index.html styles.css server.js package.json fly.toml Dockerfile start.sh .dockerignore media/hero.jpg; do
+    mkdir -p "$WORK/raw/conquest/$(dirname "$f")"
+    curl -fsSL "$base/$f" -o "$WORK/raw/conquest/$f" 2>/dev/null || true
+  done
+  for f in js/main.js js/core.js js/state.js js/net.js js/data.js js/audio.js js/campaigns.js js/rng.js js/render.js js/world.js data/world.json; do
+    mkdir -p "$WORK/raw/conquest/$(dirname "$f")"
+    curl -fsSL "$base/$f" -o "$WORK/raw/conquest/$f" 2>/dev/null || true
+  done
+  if ok_src "$WORK/raw/conquest"; then
+    SRC="$WORK/raw/conquest"
+    echo "  ✓ عبر raw.githubusercontent"
+  fi
+fi
+
+[ -n "$SRC" ] || die "تعذّر تنزيل الملفات — تحقّق من الإنترنت ثم أعد المحاولة"
+echo "✓ الملفات جاهزة: $(du -sh "$SRC" | cut -f1) — $(find "$SRC" -type f | wc -l | tr -d ' ') ملف"
 
 # ------------------------------------------------------------ 3) app name ---
 say "اسم التطبيق: $APP"
