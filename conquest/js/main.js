@@ -319,7 +319,9 @@ function renderCountryCard(id) {
   const neigh = c.neighbors.map((n) => w.countries[n]).filter(Boolean);
   const sea = c.sea.map((n) => w.countries[n]).filter(Boolean);
   const daily = app.mode === "daily";
+  card.classList.remove("collapsed");
   card.innerHTML = `
+    <button class="card-close" id="card-close">✕</button>
     <div class="cc-head">
       <div class="cc-flag" style="background:rgb(${col.r},${col.g},${col.b})"></div>
       <div><h3>${c.ar}</h3><small>${c.name} • ${c.iso || "—"}</small></div>
@@ -342,12 +344,14 @@ function renderCountryCard(id) {
       <button class="btn ghost" id="btn-pick-random">دولة أخرى 🎲</button>
     </div>
   `;
+  card.querySelector("#card-close").onclick = () => card.classList.add("collapsed");
   card.querySelector("#btn-start-game").onclick = () => startGame(id);
   card.querySelector("#btn-pick-random").onclick = daily ? () => pickDailyNation(true) : randomCountry;
 }
 
 function selectCountry(id) {
   app.selectedId = id;
+  $("#country-card").classList.remove("collapsed");
   $("#country-list").querySelectorAll(".list-item").forEach((el) => {
     el.classList.toggle("active", +el.dataset.id === id);
   });
@@ -505,7 +509,9 @@ function chooseCampaign(id) {
   app.goal = camp.goal;
   highlightCampaign(camp);
   const card = $("#country-card");
+  card.classList.remove("collapsed");
   card.innerHTML = `
+    <button class="card-close" id="card-close">✕</button>
     <h3 style="margin:0 0 4px">${camp.ar}</h3>
     <small style="color:var(--muted)">${camp.en} • ${camp.year} • ${ERAS[camp.era].ar}</small>
     <p style="font-size:12.5px;line-height:1.7;color:var(--muted)">${camp.arBlurb}</p>
@@ -517,6 +523,7 @@ function chooseCampaign(id) {
       <button class="btn gold" id="btn-start-campaign">ابدأ ${camp.ar}</button>
       <button class="btn ghost" id="btn-camp-back">→ كل الحملات</button>
     </div>`;
+  card.querySelector("#card-close").onclick = () => card.classList.add("collapsed");
   card.querySelector("#btn-start-campaign").onclick = () => startCampaign(camp);
   card.querySelector("#btn-camp-back").onclick = () => openCampaignList();
   const focus = app.pickWorld.countries.find((c) => c.name === camp.country);
@@ -1038,7 +1045,13 @@ function loop(ts) {
     idleTick();
     return;
   }
-  if (!app.paused) app.game.update(dt);
+  if (!app.paused) {
+    app.game.update(dt);
+    // adaptive simulation speed so weak devices stay above ~30fps
+    app.frameMs = app.frameMs * 0.92 + dt * 1000 * 0.08;
+    if (app.frameMs > 42) app.game.speed = Math.min(app.speed, 0.65);
+    else if (app.frameMs < 26 && app.game.speed < app.speed) app.game.speed = Math.min(app.speed, app.game.speed + 0.02);
+  }
   if (app.game.explosions.length) {
     const big = app.game.explosions.some((e) => e.kind === "nuke");
     if (big) sfx.nuke();
@@ -1397,8 +1410,29 @@ function updateTab() {
     };
     body.querySelector("#btn-war").onclick = () => {
       if (!wars.length) return toast("لا حروب مفتوحة");
-      toast("الحروب: " + wars.map((w) => w.ar).join("، "));
+      app.tab = "wars";
+      updateTab();
     };
+    const warChips = wars
+      .map((wn) => `<button class="btn ghost" data-focus="${wn.id}">⚔ ${wn.ar} · ${fmt(wn.army)}</button>`)
+      .join("");
+    body.insertAdjacentHTML(
+      "beforeend",
+      `<div class="mil-actions" style="margin-top:6px">${warChips || '<span class="hint">لا حروب مفتوحة حاليًا</span>'}</div>`
+    );
+    body.querySelectorAll("[data-focus]").forEach((b) => {
+      b.onclick = () => {
+        const n = game.byId[+b.dataset.focus];
+        if (n && n.capital >= 0) {
+          const c = n.capital % game.world.w;
+          const yy = (n.capital / game.world.w) | 0;
+          app.renderer.cam.zoom = Math.max(app.renderer.cam.zoom, 4);
+          app.renderer.centerOn(c, yy);
+          app.renderer.selected = n.id;
+          app.renderer.renderBase(true);
+        }
+      };
+    });
   } else if (app.tab === "navy") {
     const ports = p.agg?.port || 0;
     const targets = p.def.sea.map((id) => game.byId[id]).filter((n) => n?.alive);
@@ -1596,21 +1630,26 @@ function renderDiplo() {
   }));
 
   const list = $("#diplo-list");
-  const near = [...new Set([...p.def.neighbors, ...p.def.sea])]
-    .map((id) => game.byId[id])
-    .filter((n) => n && n.alive)
+  const q = (app.diploQuery || "").trim();
+  const all = [...game.nations.values()].filter((n) => n.alive && n.id !== p.id);
+  const near = all
+    .filter((n) => !q || n.ar.includes(q) || n.name.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => {
-      const wa = p.war.has(a.id) ? 0 : 1;
-      const wb = p.war.has(b.id) ? 0 : 1;
-      return wa - wb || b.army - a.army;
-    });
+      const wa = p.war.has(a.id) ? 0 : p.ally.has(a.id) ? 1 : 2;
+      const wb = p.war.has(b.id) ? 0 : p.ally.has(b.id) ? 1 : 2;
+      const na = p.def.neighbors.includes(a.id) ? 0 : 1;
+      const nb = p.def.neighbors.includes(b.id) ? 0 : 1;
+      return wa - wb || na - nb || b.cells - a.cells;
+    })
+    .slice(0, 40);
   list.innerHTML = near
     .map((n) => {
       const rel = game.rel(p, n);
       const relTxt = { war: "حرب", ally: "حليف", peace: "هدنة", neutral: "محايد" }[rel];
+      const adjacent = p.def.neighbors.includes(n.id);
       return `<div class="diplo-row">
         <i class="swatch" style="background:rgb(${n.def.color.r},${n.def.color.g},${n.def.color.b})"></i>
-        <span class="nm">${n.ar}<br><small style="color:var(--muted)">${fmt(n.army)} جندي • ${relTxt}</small></span>
+        <span class="nm">${n.ar} ${adjacent ? "" : "⛵"}<br><small style="color:var(--muted)">${fmt(n.army)} جندي • ${relTxt}</small></span>
         <span class="actions">
           ${rel === "war" ? `<button data-cease="${n.id}">هدنة</button>` : ""}
           ${rel !== "war" && rel !== "ally" ? `<button data-alliance="${n.id}">تحالف</button>` : ""}
@@ -1620,6 +1659,21 @@ function renderDiplo() {
       </div>`;
     })
     .join("");
+  const search = document.createElement("input");
+  search.className = "search";
+  search.placeholder = "ابحث عن دولة…";
+  search.value = q;
+  search.style.marginBottom = "8px";
+  search.oninput = () => {
+    app.diploQuery = search.value;
+    renderDiplo();
+    const again = $("#diplo-list .search");
+    if (again) {
+      again.focus();
+      again.setSelectionRange(again.value.length, again.value.length);
+    }
+  };
+  list.prepend(search);
   list.querySelectorAll("[data-cease]").forEach((b) => (b.onclick = () => doDiplo("ceasefire", +b.dataset.cease)));
   list.querySelectorAll("[data-alliance]").forEach((b) => (b.onclick = () => doDiplo("alliance", +b.dataset.alliance)));
   list.querySelectorAll("[data-gift]").forEach((b) => (b.onclick = () => doDiplo("gift", +b.dataset.gift)));
@@ -1772,6 +1826,14 @@ function boot() {
   };
   $("#btn-diplo").onclick = () => openDiplo(null);
   $("#btn-menu").onclick = () => ($("#modal-menu").hidden = false);
+  $("#btn-fs").onclick = () => {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) {
+      (el.requestFullscreen ? el.requestFullscreen() : Promise.resolve()).catch(() => {});
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
   $("#btn-speed").onclick = () => {
     if (!app.paused && app.speed === 1) cycleSpeed(1);
     else if (!app.paused && app.speed > 1) togglePause();

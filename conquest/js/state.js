@@ -196,38 +196,7 @@ export class Game {
     for (const n of this.nations.values()) n.totalFront = n.frontier.size;
   }
 
-  hasHostileNeighbor(i) {
-    const { world, owners } = this;
-    const x = i % world.w;
-    const y = (i / world.w) | 0;
-    const me = owners[i];
-    if (x > 0) {
-      const o = owners[i - 1];
-      if (o >= 0 && o !== me) return true;
-    }
-    if (x < world.w - 1) {
-      const o = owners[i + 1];
-      if (o >= 0 && o !== me) return true;
-    }
-    if (y > 0) {
-      const o = owners[i - world.w];
-      if (o >= 0 && o !== me) return true;
-    }
-    if (y < world.h - 1) {
-      const o = owners[i + world.w];
-      if (o >= 0 && o !== me) return true;
-    }
-    return false;
-  }
 
-  refreshFrontierCell(i) {
-    const o = this.owners[i];
-    if (o < 0) return;
-    const n = this.byId[o];
-    if (!n) return;
-    if (this.hasHostileNeighbor(i)) n.frontier.add(i);
-    else n.frontier.delete(i);
-  }
 
   // ------------------------------------------------------------- helpers ---
 
@@ -352,6 +321,9 @@ export class Game {
       }
     }
     owners[cell] = newOwner;
+    if (!this.ruins) this.ruins = new Set();
+    if (newOwner === RUIN) this.ruins.add(cell);
+    else this.ruins.delete(cell);
     this.ownerVersion = (this.ownerVersion || 0) + 1;
     if (!this.dirtyCells) this.dirtyCells = [];
     this.dirtyCells.push(cell);
@@ -573,13 +545,12 @@ export class Game {
       }
     }
     this.attacks.push(atk);
-    attacker.stats.naval += naval ? 1 : 0;
+    void naval;
     if (attacker.isPlayer) {
       this.stats.attacks++;
       this.log(`هجوم على ${defender.ar} بـ ${troops.toLocaleString("en-US")} جندي`, "info", {
         nation: defender.id,
       });
-      if (naval) this.checkMedal("naval");
     }
     if (defender.isPlayer) {
       this.log(`${attacker.ar} تهجم عليك!`, "bad", { nation: attacker.id });
@@ -670,7 +641,7 @@ export class Game {
       (x > 0 && test(owners[cell - 1], cell - 1)) ||
       (x < w - 1 && test(owners[cell + 1], cell + 1)) ||
       (y > 0 && test(owners[cell - w], cell - w)) ||
-      (y < h2(world) - 1 && test(owners[cell + w], cell + w));
+      (y < world.h - 1 && test(owners[cell + w], cell + w));
     if (!ok) n.frontier.delete(cell);
   }
 
@@ -725,9 +696,44 @@ export class Game {
       a.active = false;
       return;
     }
-    if (a.naval) {
+    if (a.naval && !a.landed) {
       a.landingTimer -= dt;
       if (a.landingTimer > 0) return;
+      // Establish the beachhead: the landing cell and its neighbourhood go to
+      // the attacker (paid for in troops), then the invasion becomes a normal
+      // land offensive from that foothold.
+      const { world, owners } = this;
+      if (a.landingAt < 0 || owners[a.landingAt] !== defender.id) return;
+      const w = world.w;
+      const x = a.landingAt % w;
+      const y = (a.landingAt / w) | 0;
+      let taken = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          const yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= w || yy >= world.h) continue;
+          const i = yy * w + xx;
+          if (owners[i] !== defender.id) continue;
+          this.setOwner(i, attacker.id);
+          taken++;
+        }
+      }
+      a.landed = true;
+      a.naval = false;
+      a.troops = Math.max(1, a.troops - taken * 160);
+      a.fronts = [];
+      a.frontTimer = 0;
+      this.log(
+        attacker.isPlayer
+          ? `نجح الإنزال البحري على سواحل ${defender.ar}!`
+          : `إنزال بحري من ${attacker.ar} على سواحلك!`,
+        attacker.isPlayer ? "good" : "bad",
+        { nation: defender.id }
+      );
+      attacker.stats.naval = (attacker.stats.naval || 0) + 1;
+      if (attacker.isPlayer) this.checkMedal("naval");
+      return;
     }
     a.frontTimer -= dt;
     if (a.frontTimer <= 0 || a.fronts.length === 0) this.rebuildFronts(a);
@@ -1292,6 +1298,35 @@ export class Game {
       if (a.active) this.stepAttack(a, dt);
     }
 
+    // AI nations reclaim their ruined land quickly (the human has to click).
+    if (this.ruins && this.ruins.size && this.time % 0.5 < dt) {
+      let budget = 6;
+      for (const cell of this.ruins) {
+        if (budget-- <= 0) break;
+        const { world, owners } = this;
+        const x = cell % world.w;
+        const y = (cell / world.w) | 0;
+        let owner = -1;
+        let landing = -1;
+        if (x > 0 && owners[cell - 1] >= 0) {
+          owner = owners[cell - 1];
+          landing = cell - 1;
+        } else if (x < world.w - 1 && owners[cell + 1] >= 0) {
+          owner = owners[cell + 1];
+          landing = cell + 1;
+        } else if (y > 0 && owners[cell - world.w] >= 0) {
+          owner = owners[cell - world.w];
+          landing = cell - world.w;
+        } else if (y < world.h - 1 && owners[cell + world.w] >= 0) {
+          owner = owners[cell + world.w];
+          landing = cell + world.w;
+        }
+        if (owner < 0 || this.rng.chance(0.35)) continue;
+        this.setOwner(cell, owner);
+        void landing;
+      }
+    }
+
     // missiles
     for (const s of this.strikes) {
       s.t += dt;
@@ -1629,12 +1664,4 @@ export class Game {
     game.result = save.result || null;
     return game;
   }
-}
-
-function h2(world) {
-  return world.h;
-}
-
-function share_ge(game, v) {
-  return game.playerShare() >= v;
 }
