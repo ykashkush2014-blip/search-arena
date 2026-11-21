@@ -1,7 +1,26 @@
 // World loading: decodes the rasterised world from data/world-data.js, builds
 // grid helpers, country palettes, presets and per-cell terrain shading.
-import { WORLD } from "../data/world-data.js";
-import { fbm, Rng } from "./rng.js";
+import { fbm } from "./rng.js";
+
+// The map data is injected so the exact same module can run in the browser
+// (dynamic import of data/world-data.js) and on the Node server (readFile).
+let WORLD = null;
+
+export async function initWorld() {
+  if (WORLD) return WORLD;
+  const mod = await import("../data/world-data.js");
+  WORLD = mod.WORLD || mod.default;
+  return WORLD;
+}
+
+export function setWorldData(data) {
+  WORLD = data;
+  return WORLD;
+}
+
+export function getWorldData() {
+  return WORLD;
+}
 
 export const DIRS = [
   [1, 0],
@@ -105,6 +124,7 @@ export function countryColor(index, era = "modern") {
 
 export class World {
   constructor(preset = "world", era = "modern") {
+    if (!WORLD) throw new Error("World data not loaded — call initWorld() or setWorldData() first");
     const meta = WORLD.meta;
     this.meta = meta;
     this.w = meta.w;

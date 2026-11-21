@@ -2,6 +2,28 @@
 // victory conditions and serialisation. No DOM access in this file.
 import { BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MAX_TECH, RANKS, RESEARCH } from "./data.js";
 import { gridToRle, rleToGrid } from "./world.js";
+
+// Relative strength of every nation, used by the online lobby screen.
+export function powerSnapshot(game) {
+  const rows = [];
+  for (const n of game.nations.values()) {
+    if (!n.alive) continue;
+    rows.push({
+      id: n.id,
+      seat: n.seat,
+      ar: n.ar,
+      cells: n.cells,
+      army: Math.round(n.army),
+      cap: Math.round(n.cap || 0),
+      gold: Math.round(n.gold),
+      share: n.cells / Math.max(1, game.totalCells),
+      buildings: n.buildings.length,
+      wars: n.war.size,
+    });
+  }
+  rows.sort((a, b) => (a.seat != null ? -1 : 1) - (b.seat != null ? -1 : 1) || b.share - a.share);
+  return { time: game.time, rows, result: game.result };
+}
 import { Rng } from "./rng.js";
 
 const B = BALANCE;
@@ -86,6 +108,18 @@ export class Game {
     this.startedAt = Date.now();
     this.attackFraction = 0.5; // player attack force slider (0.1..1)
     this.daily = opts.daily || null;
+    // --- online lobby (multiplayer) ---
+    this.onlineMode = opts.onlineMode || "normal"; // normal | coop | ffa
+    this.lobby = opts.lobby || null;
+    if (this.lobby && !this.lobby.owner) this.lobby.owner = null;
+    this.onlinePhase = this.lobby ? "lobby" : "playing";
+    this.seatOf = new Map(); // player id -> seat index (online only)
+    this.mySeat = null; // local seat (client mirror / server host view)
+    this.seatByNation = new Map(); // nation id -> seat index
+    this.humanCount = opts.humanCount || 0;
+    this.disconnected = new Set(); // seats whose client dropped (AI takes over)
+    this.surrendered = new Set();
+    this.eliminatedSeats = new Map(); // seat -> {by, at}
     this.melt = false; // player "army -> gold" toggle
     this.ceasefireUntil = 0;
     this.openedAt = 0;
@@ -118,6 +152,9 @@ export class Game {
       }
     }
     this.log("بدء المباراة: " + (this.nations.get(opts.playerId)?.ar || "—"), "info");
+    if (this.lobby) {
+      this.log(`مباراة أونلاين — ${this.lobby.seats.length} لاعبين`, "good");
+    }
   }
 
   // ------------------------------------------------------------ set-up ---
@@ -161,6 +198,23 @@ export class Game {
         n.ai.aggression *= 0.4;
         n.ai.buildRate *= 0.4;
       }
+      if (this.lobby) {
+        const seat = this.lobby.seats.find((s2) => s2.nationId === n.id);
+        if (seat) {
+          n.seat = seat.id;
+          n.isPlayer = true;
+          n.ai = null;
+          this.humanCount++;
+          this.seatByNation.set(n.id, seat.id);
+        } else {
+          n.seat = null;
+          n.isPlayer = false;
+        }
+      } else if (n.isPlayer) {
+        n.seat = 0;
+        this.seatByNation.set(n.id, 0);
+        this.humanCount = 1;
+      }
       this.nations.set(n.id, n);
       this.byId[n.id] = n;
     }
@@ -202,6 +256,15 @@ export class Game {
 
   player() {
     return [...this.nations.values()].find((n) => n.isPlayer) || null;
+  }
+
+  // Online: the nation owned by a given seat (null if knocked out).
+  nationOfSeat(seat) {
+    return [...this.nations.values()].find((n) => n.seat === seat) || null;
+  }
+
+  isHuman(n) {
+    return !!(n && n.isPlayer);
   }
 
   get nationList() {
@@ -273,12 +336,13 @@ export class Game {
     const fill = Math.max(0, 1 - n.army / Math.max(1, cap));
     const eraMult = (ERAS[this.era] || ERAS.modern).armyMult;
     const base = (B.baseTroopRate + (agg.base || 0) * B.troopRatePerBase) * (0.35 + 0.85 * fill);
-    return base * (1 + n.tech.population * 0.1) * eraMult * (n.isPlayer ? 1 : 0.92 + n.ai.skill * 0.18);
+    const skill = n.ai ? n.ai.skill : 1;
+    return base * (1 + n.tech.population * 0.1) * eraMult * (n.isPlayer ? 1 : 0.92 + skill * 0.18);
   }
 
   attackMult(n) {
     const era = (ERAS[this.era] || ERAS.modern).armyMult;
-    return (1 + n.tech.weapons * 0.1) * era * (n.isPlayer ? 1.02 : 0.94 + n.ai.skill * 0.1);
+    return (1 + n.tech.weapons * 0.1) * era * (n.isPlayer ? 1.02 : 0.94 + (n.ai ? n.ai.skill : 1) * 0.1);
   }
 
   defenseMult(n, cell) {
@@ -378,6 +442,14 @@ export class Game {
       other.ally.delete(id);
     }
     this.attacks = this.attacks.filter((a) => a.attacker !== n && a.defender !== n);
+    if (n.seat != null) {
+      this.surrendered.add(n.seat);
+      n.isPlayer = false;
+      n.ai = null;
+      this.log(`تم احتلال ${n.ar} — خرج صاحبها من اللعبة`, "bad", { seat: n.seat });
+      if (this.lobby) this.checkOnlineEnd();
+      return;
+    }
     if (n.isPlayer) {
       this.finish("lose");
       this.log("سقطت دولتك… انتهت الحملة", "bad");
@@ -471,6 +543,7 @@ export class Game {
     if (!a || !b || !a.alive || !b.alive) return false;
     if (a.id === b.id) return false;
     if (a.ally.has(b.id)) return false;
+    if (this.ceasefireLeft > 0) return false; // opening truce is sacred
     return true;
   }
 
@@ -517,6 +590,7 @@ export class Game {
     if (!attacker.alive || !defender.alive) return "دولة غير موجودة";
     if (attacker.ally.has(defender.id)) return "لا يمكنك مهاجمة حليفك";
     if (attacker.army < 200) return "جيشك صغير جدًا";
+    if (this.ceasefireLeft > 0) return `الهدنة سارية — تبقى ${Math.ceil(this.ceasefireLeft)} ثانية`;
     const naval = !this.adjacent(attacker, defender);
     if (naval && !this.hasPort(attacker)) return "تحتاج ميناء للغزو البحري";
     const existing = this.attacks.find((a) => a.attacker === attacker && a.defender === defender && a.active);
@@ -1155,26 +1229,73 @@ export class Game {
 
   checkGoal() {
     if (this.result) return;
+    if (this.lobby) {
+      this.checkOnlineEnd();
+      return;
+    }
     const p = this.player();
     if (!p) return;
     const share = this.playerShare();
     if (share >= this.goal) this.finish("win");
   }
 
-  finish(result) {
+  // Online victory: reach the land goal (normal/coop), own the whole arena
+  // (coop with several humans), or be the last human standing (FFA).
+  humanCells() {
+    let cells = 0;
+    for (const n of this.nations.values()) if (n.isPlayer && n.alive) cells += n.cells;
+    return cells;
+  }
+
+  checkOnlineEnd() {
+    if (this.result || !this.lobby) return;
+    const total = Math.max(1, this.totalCells);
+    // An AI nation reaching the land goal ends the match against the humans.
+    for (const n of this.nations.values()) {
+      if (n.isPlayer || !n.alive) continue;
+      if (n.cells / total >= this.goal) return this.finish("lose", { reason: "ai", by: n.id });
+    }
+    const alive = [...this.nations.values()].filter((n) => n.isPlayer && n.alive);
+    if (this.onlineMode === "coop" && alive.length) {
+      if (this.humanCells() / total >= this.goal) return this.finish("win", { winners: alive.map((n) => n.seat) });
+    }
+    if (this.onlineMode === "ffa") {
+      for (const n of alive) if (n.cells / total >= this.goal) return this.finish("win", { winners: [n.seat] });
+      if (alive.length <= 1) return this.finish("win", { winners: alive.map((n) => n.seat) });
+      return;
+    }
+    for (const n of alive) {
+      if (n.cells / Math.max(1, this.totalCells) >= this.goal) {
+        return this.finish("win", { winners: [n.seat] });
+      }
+    }
+    if (!alive.length) {
+      // everyone is out: the last seat standing (even if now eliminated) takes it
+      const winners = this.winners && this.winners.length ? this.winners : [];
+      return this.finish(winners.length ? "win" : "lose", { winners });
+    }
+  }
+
+  finish(result, extra = {}) {
     if (this.result) return;
+    if (this.mySeat == null && this.lobby) this.mySeat = this.lobby.you != null ? this.lobby.you : null;
     const p = this.player();
     this.result = result;
+    this.winners = extra.winners || null;
     if (result === "win" && p) {
       this.awardXP(500 * this.goal, p);
       if (this.playerShare() >= 0.5) this.unlockMedal("world_ruler");
       if ((this.lostHalfAt || Infinity) < (this.wonAt || Infinity)) this.unlockMedal("comeback");
     }
+    const me = this.lobby ? this.nationOfSeat(this.mySeat) || this.player() : p;
     const stats = {
       result,
+      reason: extra.reason || null,
+      by: extra.by != null ? extra.by : null,
+      seat: this.mySeat != null ? this.mySeat : null,
       time: this.time,
-      share: this.playerShare(),
-      cells: p ? p.cells : 0,
+      share: me ? me.cells / Math.max(1, this.totalCells) : 0,
+      cells: me ? me.cells : 0,
       conquered: this.stats.conquered,
       attacks: this.stats.attacks,
       built: this.stats.built,
@@ -1228,9 +1349,8 @@ export class Game {
 
   // Grace period at the start of a match (the classic 25s ceasefire).
   startCeasefire(seconds) {
-    this.time += seconds;
-    this.ceasefireEndsAt = this.time;
-    this.openedAt = this.time;
+    this.ceasefireEndsAt = this.time + Math.max(0, seconds);
+    this.openedAt = this.ceasefireEndsAt;
   }
 
   get ceasefireLeft() {
@@ -1242,6 +1362,7 @@ export class Game {
 
   update(dt) {
     if (this.paused || this.result) return;
+    if (this.onlinePhase === "lobby") return; // frozen until the host starts
     const scaled = dt * this.speed;
     if (scaled <= 0) return;
     this.time += scaled;
@@ -1267,7 +1388,8 @@ export class Game {
       if (!n.alive) continue;
       if (!n.agg) this.refreshAgg(n);
       const rate = this.resourceRate(n);
-      n.gold += rate.gold * dt * (n.isPlayer ? 1 : 0.6 + n.ai.skill * 0.5);
+      const skill = n.ai ? n.ai.skill : 0.5;
+      n.gold += rate.gold * dt * (n.isPlayer ? 1 : 0.6 + skill * 0.5);
       n.research += rate.research * dt * (n.isPlayer ? 1 : 0.7);
       n.cap = this.capacityOf(n);
 
@@ -1290,7 +1412,7 @@ export class Game {
         if (b.cd > 0) b.cd = Math.max(0, b.cd - dt);
       }
       // passive small-scale AI economy handled in ai module
-      if (!n.isPlayer && n.ai && !n.ai.lite) this.stepAI(n, dt);
+      if (!n.isPlayer && n.ai && !n.ai.lite && !this.lobby) this.stepAI(n, dt);
     }
 
     // combat
@@ -1539,6 +1661,209 @@ export class Game {
     if (!enemy.capital || this.owners[enemy.capital] !== enemy.id) return;
     if (n.gold < B.missileCost || !n.buildings.some((b) => b.key === "silo" && b.cd <= 0)) return;
     this.launchStrike(n, enemy.capital);
+  }
+
+  // ------------------------------------------------------------- online jobs ---
+
+  onlineLobby() {
+    if (!this.lobby) return null;
+    const hostId = this.lobby.owner;
+    const hostNation = hostId != null ? this.nationOfSeat(hostId) : null;
+    const ready = this.lobby.seats.every((st) => st.ready || st.disconnected);
+    return {
+      map: this.lobby.map || "world",
+      era: this.era,
+      goal: this.goal,
+      mode: this.onlineMode,
+      aiLevel: this.aiLevel,
+      hostSeat: hostId,
+      hostNation: hostNation ? { ar: hostNation.ar, x: hostNation.def.x, y: hostNation.def.y } : null,
+      ready,
+      seats: this.lobby.seats.map((st) => {
+        const n = this.nationOfSeat(st.id);
+        return {
+          id: st.id,
+          name: st.name,
+          ready: !!st.ready,
+          disconnected: !!st.disconnected,
+          nationId: st.nationId,
+          nation: n ? n.ar : null,
+          iso: n && n.def ? n.def.iso : "",
+          color: n && n.def ? n.def.color : null,
+          difficulty: n && n.def ? n.def.difficulty : 1,
+          cells: n ? n.cells : 0,
+          start: n && n.def ? { x: n.def.x, y: n.def.y } : null,
+          eliminated: st.eliminated || false,
+        };
+      }),
+      chat: this.lobby.chat || [],
+    };
+  }
+
+  setSeatReady(seat, ready) {
+    const st = this.lobby && this.lobby.seats.find((x) => x.id === seat);
+    if (!st) return "مقعد غير موجود";
+    st.ready = !!ready;
+    return null;
+  }
+
+  setSeatNation(seat, nationId) {
+    const st = this.lobby && this.lobby.seats.find((x) => x.id === seat);
+    if (!st) return "مقعد غير موجود";
+    if (this.onlinePhase !== "lobby") return "المباراة بدأت";
+    const nation = this.byId[nationId];
+    if (!nation || !nation.def) return "دولة غير صالحة";
+    if (this.lobby.seats.some((x) => x.id !== seat && x.nationId === nationId)) return "الدولة محجوزة";
+    const old = this.byId[st.nationId];
+    st.nationId = nationId;
+    st.ready = false;
+    if (old) {
+      old.isPlayer = false;
+      old.seat = null;
+      old.ai = this.makeAI(old);
+      this.seatByNation.delete(old.id);
+    }
+    nation.isPlayer = true;
+    nation.seat = seat;
+    nation.ai = null;
+    if (nation.capital < 0) nation.capital = this.world.capitalCandidate(nation.id);
+    this.seatByNation.set(nationId, seat);
+    this.log(`${st.name} اختار ${nation.ar}`, "info");
+    return null;
+  }
+
+  makeAI(n) {
+    const level = this.aiLevel;
+    const defaults = {
+      aggression: { easy: 0.5, normal: 0.78, hard: 1.05, brutal: 1.35 }[level] || 0.78,
+      skill: { easy: 0.55, normal: 0.8, hard: 1.0, brutal: 1.22 }[level] || 0.8,
+      buildRate: level === "easy" ? 0.6 : level === "normal" ? 1 : level === "hard" ? 1.35 : 1.7,
+      sizeFactor: Math.min(1.5, Math.max(0.55, Math.log10(n.cells + 10) / 2.2)),
+      nextThink: 1,
+      nextBuild: 2,
+      nextWar: 40,
+      nextPeace: 60,
+      nextDiplo: 40,
+      strikes: 0,
+      target: -1,
+      personality: "opportunist",
+      lite: n.cells < 6,
+    };
+    if (!n.agg) this.refreshAgg(n);
+    return defaults;
+  }
+
+  setSeatDisconnected(seat, on) {
+    const st = this.lobby && this.lobby.seats.find((x) => x.id === seat);
+    if (!st) return;
+    st.disconnected = !!on;
+    if (on) {
+      this.disconnected.add(seat);
+      const n = this.nationOfSeat(seat);
+      // the AI takes over until the player comes back
+      if (n && n.alive) n.ai = n.ai || this.makeAI(n);
+    } else {
+      this.disconnected.delete(seat);
+      const n = this.nationOfSeat(seat);
+      if (n && n.alive && st.ready) n.ai = null;
+    }
+  }
+
+  startOnline() {
+    if (this.onlinePhase !== "lobby") return "المباراة بدأت بالفعل";
+    if (this.lobby.seats.some((st) => !st.ready && !st.disconnected)) return "ليس كل اللاعبين جاهزين";
+    this.onlinePhase = "playing";
+    this.startCeasefire(this.lobby.ceasefire ?? 25);
+    for (const st of this.lobby.seats) {
+      const n = this.nationOfSeat(st.id);
+      if (n && n.ai) n.ai = null;
+      st.ready = true;
+    }
+    this.log("بدأت المباراة!", "good");
+    return null;
+  }
+
+  onlineRematch() {
+    if (!this.lobby) return "لا توجد مباراة أونلاين";
+    this.result = null;
+    this.winners = null;
+    this.attacks = [];
+    this.strikes = [];
+    this.explosions = [];
+    this.feed = [];
+    this.offers = [];
+    this.time = 0;
+    this.openedAt = 0;
+    this.xpTotal = 0;
+    this.surrendered.clear();
+    this.disconnected.clear();
+    this.onlinePhase = "lobby";
+    for (const n of this.nations.values()) {
+      n.alive = true;
+      n.cells = 0;
+      n.war.clear();
+      n.ally.clear();
+      n.peace.clear();
+      n.buildings = [];
+      n.stats = { kills: 0, losses: 0, captures: 0, capitals: 0, strikes: 0, naval: 0 };
+      n.fortifyUntil = 0;
+      this.refreshAgg(n);
+    }
+    for (const st of this.lobby.seats) {
+      const n = this.nationOfSeat(st.id);
+      if (n) n.isPlayer = true;
+    }
+    this.restoreInitialOwnership();
+    for (const n of this.nations.values()) {
+      n.originalCells = n.cells;
+      this.refreshAgg(n);
+      const cap = this.capacityOf(n);
+      n.army = Math.floor(cap * (n.isPlayer ? 0.45 : 0.5));
+      n.gold = n.isPlayer ? 1400 : 600;
+    }
+    this.computeAllFrontiers();
+    this.ownerVersion++;
+    this.log("مباراة جديدة — الجميع جاهز؟", "info");
+    return null;
+  }
+
+  addChat(seat, text) {
+    if (!this.lobby) return "لا توجد غرفة";
+    const st = this.lobby.seats.find((x) => x.id === seat);
+    if (!st) return "مقعد غير موجود";
+    const clean = String(text || "").slice(0, 240).replace(/[<>]/g, "");
+    if (!clean.trim()) return "رسالة فارغة";
+    this.lobby.chat = this.lobby.chat || [];
+    this.lobby.chat.push({ seat, name: st.name, text: clean, t: Math.round(this.time) });
+    if (this.lobby.chat.length > 60) this.lobby.chat.shift();
+    return null;
+  }
+
+  // Snapshot used for rematches in online lobbies.
+  snapshotOwnership() {
+    return Int16Array.from(this.owners);
+  }
+
+  restoreInitialOwnership() {
+    const snap = this.lobby && this.lobby.initialOwners;
+    if (!snap || snap.length !== this.owners.length) return;
+    this.owners.set(snap);
+    this.dirtyCells = this.dirtyCells || [];
+    this.dirtyCells.length = 0;
+    this.fullRepaint = (this.fullRepaint || 0) + 1;
+    this.ownerVersion = (this.ownerVersion || 0) + 1;
+    this.ruins = new Set();
+    for (let i = 0; i < this.owners.length; i++) {
+      if (this.owners[i] === -2) this.ruins.add(i);
+    }
+    for (const n of this.nations.values()) n.cells = 0;
+    for (let i = 0; i < this.owners.length; i++) {
+      const o = this.owners[i];
+      if (o >= 0) {
+        const n = this.byId[o];
+        if (n) n.cells++;
+      }
+    }
   }
 
   // ---------------------------------------------------------------- saving ---

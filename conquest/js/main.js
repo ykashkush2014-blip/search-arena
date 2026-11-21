@@ -1,7 +1,7 @@
 // CONQUEST — Arabic-first pixel world-conquest strategy game.
 // Wires the menus, the map picker, the in-game HUD and input handling to the
 // simulation in state.js and the canvas renderer in render.js.
-import { World, PRESETS, countryColor } from "./world.js";
+import { World, PRESETS, initWorld } from "./world.js";
 import { Game } from "./state.js";
 import { Renderer } from "./render.js";
 import {
@@ -11,6 +11,7 @@ import {
 import { CAMPAIGNS, dailyChallenge } from "./campaigns.js";
 import { Rng } from "./rng.js";
 import { sfx } from "./audio.js";
+import { net, NetMirror } from "./net.js";
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -142,6 +143,12 @@ function buildMenu() {
       ico: "⭐",
       desc: "دولة واحدة للجميع كل يوم، ومعها تعديل خاص. الفوز يبني سلسلتك.",
     },
+    {
+      id: "online",
+      ar: "أونلاين",
+      ico: "🌐",
+      desc: "العب مع أصدقائك: غرفة بكود، كل لاعب يدير دولة حقيقية على نفس الخريطة.",
+    },
   ];
   for (const m of cards) {
     const el = document.createElement("button");
@@ -165,6 +172,10 @@ function buildMenu() {
 }
 
 function startFlow() {
+  if (app.mode === "online") {
+    openOnlineHome();
+    return;
+  }
   if (app.mode === "daily") {
     const key = new Date().toISOString().slice(0, 10);
     app.daily = dailyChallenge(key);
@@ -182,6 +193,279 @@ function startFlow() {
   }
   app.campaign = null;
   openCountrySelect(false);
+}
+
+// ----------------------------------------------------------------- online ---
+
+const online = {
+  open: false,
+  lobby: null,
+  lastState: null,
+  ready: false,
+  picked: null,
+  lobbyRenderer: null,
+  chatOpen: true,
+};
+
+function onlineName() {
+  let name = ($("#online-name").value || "").trim();
+  if (!name) name = profile.settings.name || `قائد-${Math.floor(Math.random() * 900 + 100)}`;
+  profile.settings.name = name;
+  saveSettings();
+  return name;
+}
+
+async function openOnlineHome() {
+  app.pickEra = "modern";
+  online.lobby = null;
+  online.ready = false;
+  show("online");
+  $("#online-home").hidden = false;
+  $("#online-lobby").hidden = true;
+  $("#online-name").value = profile.settings.name || "";
+  setOnlineStatus(net.status === "online" ? "متصل بالخادم" : "جاري الاتصال…", net.status === "online" ? "ok" : "");
+  const ok = await net.connect(profile.settings.name || "");
+  if (!ok) {
+    setOnlineStatus("تعذر الاتصال — شغّل الخادم: node server.js", "bad");
+    return;
+  }
+  setOnlineStatus(`متصل بالخادم • ${net.name}`, "ok");
+  if (!app.pickWorld) {
+    app.pickWorld = new World("world", app.era);
+    app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
+    attachPickInput();
+  }
+}
+
+function setOnlineStatus(text, cls) {
+  const el = $("#online-status");
+  if (!el) return;
+  el.textContent = text;
+  el.className = "online-status " + (cls || "");
+}
+
+function lobbyCanvas() {
+  return $("#lobby-canvas");
+}
+
+function setupLobbyRenderer(view) {
+  const canvas = lobbyCanvas();
+  if (!canvas) return;
+  if (!online.lobbyRenderer || online.lobbyRenderer.canvas !== canvas) {
+    // The lobby map reuses the picker renderer, just on another canvas.
+    online.lobbyRenderer = new Renderer(canvas, app.pickWorld, pickStubGame(app.pickWorld));
+    online.lobbyRenderer.labels = true;
+    canvas.dataset.bound = "";
+    bindLobbyCanvas(canvas);
+  }
+  online.lobbyRenderer.resize();
+  fitLobbyMap();
+  void view;
+}
+
+function fitLobbyMap() {
+  const r = online.lobbyRenderer;
+  if (!r) return;
+  const w = r.world;
+  const pts = (online.lobby ? online.lobby.seats : [])
+    .map((s) => w.countries[s.nationId])
+    .filter((c) => c && c.cells > 0);
+  if (!pts.length) {
+    r.fitTo({ x0: 0, y0: 0, x1: w.w - 1, y1: w.h - 1 }, 0.98);
+  } else {
+    let x0 = 1e9;
+    let y0 = 1e9;
+    let x1 = -1e9;
+    let y1 = -1e9;
+    for (const c of pts) {
+      x0 = Math.min(x0, c.x);
+      x1 = Math.max(x1, c.x);
+      y0 = Math.min(y0, c.y);
+      y1 = Math.max(y1, c.y);
+    }
+    r.fitTo({ x0: x0 - 40, y0: y0 - 30, x1: x1 + 40, y1: y1 + 30 }, 0.92);
+  }
+  r.renderBase(true);
+  r.render();
+}
+
+function bindLobbyCanvas(canvas) {
+  if (canvas.dataset.bound === "1") return;
+  canvas.dataset.bound = "1";
+  let down = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    down = { x: e.clientX, y: e.clientY, cx: online.lobbyRenderer.cam.x, cy: online.lobbyRenderer.cam.y };
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!down) return;
+    const dx = e.clientX - down.x;
+    const dy = e.clientY - down.y;
+    if (Math.abs(dx) + Math.abs(dy) > 4) {
+      const r = online.lobbyRenderer;
+      r.cam.x = down.cx - dx / r.cam.zoom;
+      r.cam.y = down.cy - dy / r.cam.zoom;
+      r.clampCam();
+      r.renderBase();
+      r.render();
+    }
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    const dx = Math.abs(e.clientX - down.x);
+    const dy = Math.abs(e.clientY - down.y);
+    down = null;
+    if (dx + dy > 5) return;
+    const rect = canvas.getBoundingClientRect();
+    const cell = online.lobbyRenderer.screenToCell(e.clientX - rect.left, e.clientY - rect.top);
+    if (cell < 0) return;
+    const owner = app.pickWorld.owner[cell];
+    if (owner >= 0) pickLobbyNation(owner);
+  });
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const r = online.lobbyRenderer;
+      r.zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.18 : 0.85);
+      r.renderBase();
+      r.render();
+    },
+    { passive: false }
+  );
+}
+
+function pickLobbyNation(nationId) {
+  if (!net.room) return;
+  if (net.lobby && net.lobby.phase !== "lobby") {
+    toast("المباراة بدأت — لا يمكن تغيير الدولة");
+    return;
+  }
+  sfx.click();
+  net.pick(nationId);
+}
+
+function renderLobby(view) {
+  online.lobby = view;
+  $("#online-home").hidden = true;
+  $("#online-lobby").hidden = false;
+  $("#room-code").textContent = view.room;
+  $("#dock-room").textContent = view.room;
+  const isHost = view.hostSeat === net.seat;
+  const everyone = view.seats.length >= 2 && view.seats.every((s) => s.ready || !s.connected);
+  $("#btn-ready").textContent = online.ready ? "إلغاء الجاهزية" : "جاهز ✓";
+  $("#btn-ready").className = "btn " + (online.ready ? "green" : "ghost");
+  $("#btn-start-online").hidden = !isHost;
+  $("#btn-start-online").disabled = !everyone || view.seats.length < 2;
+  $("#lobby-sub").textContent =
+    view.seats.length < 2
+      ? "شارك الكود مع صديق للبدء"
+      : everyone
+        ? "الجميع جاهز — يمكن البدء"
+        : "بانتظار جاهزية اللاعبين…";
+  $("#lobby-note").textContent = isHost
+    ? "أنت المضيف — تبدأ المباراة عندما يكون الجميع جاهزًا."
+    : "انتظر المضيف لبدء المباراة.";
+
+  $("#lobby-chips").innerHTML = [
+    `الخريطة: ${PRESETS.find((p) => p.id === view.map)?.ar || view.map}`,
+    `العصر: ${ERAS[view.era]?.ar || view.era}`,
+    `الهدف: ${Math.round(view.goal * 100)}%`,
+    `الوضع: ${{ normal: "كل لاعب لنفسه", coop: "تحالف", ffa: "آخر صامد" }[view.mode] || view.mode}`,
+  ]
+    .map((t) => `<span class="chip">${t}</span>`)
+    .join("");
+
+  const seatsEl = $("#lobby-seats");
+  seatsEl.innerHTML = view.seats
+    .map((s) => {
+      const st = s.eliminated ? "خرج" : s.ready ? "جاهز" : "بانتظار";
+      return `<div class="seat-row ${s.seat === net.seat ? "you" : ""} ${s.connected ? "" : "off"}">
+        <i class="swatch" style="background:${s.color ? `rgb(${s.color.r},${s.color.g},${s.color.b})` : "#333"}"></i>
+        <span class="nm">${escapeHtml(s.name)}${s.seat === net.seat ? " (أنت)" : ""}<br>
+          <small style="color:var(--muted)">${s.nation || "لم يختر دولة"}${s.iso ? " · " + s.iso : ""}</small></span>
+        ${s.seat === view.hostSeat ? '<span class="st host">مضيف</span>' : ""}
+        <span class="st ${s.ready ? "ready" : ""}">${st}</span>
+      </div>`;
+    })
+    .join("");
+
+  renderChatLog($("#lobby-chat"), view.chat);
+  setupLobbyRenderer(view);
+  const mine = view.seats.find((s) => s.seat === net.seat);
+  online.ready = !!(mine && mine.ready);
+}
+
+function renderChatLog(el, chat) {
+  if (!el) return;
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  el.innerHTML = (chat || [])
+    .map((c) =>
+      c.seat === -1
+        ? `<div class="msg sys">${escapeHtml(c.text)}</div>`
+        : `<div class="msg"><b>${escapeHtml(c.name)}:</b> ${escapeHtml(c.text)}</div>`
+    )
+    .join("");
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+// Live state -> local mirror game (rendered by the normal in-game code).
+let mirrorPromise = null;
+async function applyNetState(state) {
+  online.lastState = state;
+  if (state.phase === "lobby") return; // still in the lobby
+  if (!app.game || app.game.remote !== true || app.game.result) {
+    const stateAtBoot = state;
+    if (!mirrorPromise) {
+      mirrorPromise = (async () => {
+        const { getWorldData } = await import("./world.js");
+        return new NetMirror(stateAtBoot, {
+          worldData: getWorldData(),
+          era: state.era || app.pickEra || app.era,
+          mode: online.lobby ? online.lobby.mode : "normal",
+          seat: net.seat,
+        });
+      })().catch((err) => {
+        console.error("[online] mirror failed", err);
+        toast("تعذر تحميل حالة المباراة", "bad");
+        return null;
+      });
+    }
+    const mirror = await mirrorPromise;
+    if (!mirror) return;
+    if (!app.game || app.game !== mirror.game) {
+      bootGame(mirror.game, mirror.world);
+      app.game.remote = true;
+      mirror.apply(stateAtBoot);
+      $("#btn-surrender").hidden = false;
+      app.netMirror = mirror;
+      $("#chat-dock").hidden = false;
+      $("#chat-dock").classList.toggle("collapsed", !online.chatOpen);
+      sfx.resume();
+    }
+    return;
+  }
+  if (app.netMirror) {
+    app.netMirror.apply(state);
+    // knocked out of a match that is still running: this player is done
+    if (state.phase === "playing" && state.nation && (state.nation.out || state.nation.alive === false) && !app.netMirror.shownOut) {
+      app.netMirror.shownOut = true;
+      showOnlineOut(state);
+    }
+    if (state.phase === "ended" && !app.netMirror.appliedEnd) {
+      app.netMirror.appliedEnd = true;
+      updateHud(true);
+    }
+  }
+}
+
+// Intents ---------------------------------------------------------------
+function netAct(a, payload) {
+  if (app.game && app.game.remote) {
+    net.act(a, payload);
+    return true;
+  }
+  return false;
 }
 
 // --------------------------------------------------------- country select ---
@@ -677,7 +961,9 @@ function bootGame(game, prebuiltWorld) {
     if (m) toast(`🏅 وسام جديد: ${m.ar}`, "good");
     renderMedals();
   };
-  game.onEnd = (summary) => showEnd(summary);
+  game.onEnd = (summary) => {
+    if (!game.remote) showEnd(summary);
+  };
   show("game");
   requestAnimationFrame(() => {
     app.renderer.resize();
@@ -696,7 +982,7 @@ function bootGame(game, prebuiltWorld) {
     if (game.ceasefireLeft > 0) toast("الهدنة سارية — ابنِ قبل أن تبدأ الحرب");
   });
   if (!app.raf) loop();
-  store.del(STORE_KEY);
+  if (!game.remote) store.del(STORE_KEY);
 }
 
 function fitPickBounds(n) {
@@ -849,6 +1135,14 @@ function handleClick(cell, e) {
   if (!p) return;
 
   if (app.strikeMode) {
+    if (netAct("strike", { cell, kind: app.strikeMode })) {
+      sfx.launch();
+      app.strikeMode = null;
+      R.mode = "paint";
+      $("#map").classList.remove("striking");
+      updateTab();
+      return;
+    }
     const err = game.launchStrike(p, cell, app.strikeMode);
     if (err) {
       toast(err, "bad");
@@ -862,6 +1156,16 @@ function handleClick(cell, e) {
   }
 
   if (app.brush) {
+    if (netAct("build", { key: app.brush, cell })) {
+      sfx.build();
+      if (!e.shiftKey) {
+        app.brush = null;
+        R.brush = null;
+        $("#map").classList.remove("placing");
+        updateTab();
+      }
+      return;
+    }
     const err = game.build(p, app.brush, cell);
     if (err) {
       toast(err, "bad");
@@ -886,6 +1190,10 @@ function handleClick(cell, e) {
       toast("لا يوجد مبنى هنا — استخدم Shift مع مبنى للترقية");
       return;
     }
+    if (netAct("upgrade", { cell })) {
+      sfx.upgrade();
+      return;
+    }
     const err = game.upgradeBuilding(p, b);
     toast(err || `${eraName(b.key)} أصبح المستوى ${b.level}`, err ? "bad" : "good");
     if (err) sfx.error();
@@ -895,6 +1203,7 @@ function handleClick(cell, e) {
     return;
   }
   if (owner === -2) {
+    if (netAct("reclaim", { cell })) return;
     const err = game.reclaim(p, cell);
     if (err) toast(err, "bad");
     else sfx.click();
@@ -929,6 +1238,11 @@ function handleClick(cell, e) {
         toast(`اضغط مرة أخرى لبدء الهجوم على ${n.ar}`);
       }
     } else if (game.hasPort(p)) {
+      if (netAct("attack", { target: n.id, frac: game.attackFraction })) {
+        toast(`غزو بحري على ${n.ar}!`, "good");
+        sfx.attack();
+        return;
+      }
       const err = game.launchAttack(p, n, game.attackFraction);
       if (err) toast(err, "bad");
       else toast(`غزو بحري على ${n.ar}!`, "good");
@@ -953,6 +1267,12 @@ function orderAttack(id) {
   const p = game.player();
   const target = game.byId[id];
   if (!target) return;
+  if (netAct("attack", { target: id, frac: game.attackFraction })) {
+    app.lastAttackSel = null;
+    sfx.attack();
+    updateEvents();
+    return;
+  }
   const err = game.launchAttack(p, target, game.attackFraction);
   if (err) {
     toast(err, "bad");
@@ -1025,7 +1345,7 @@ function closeModals() {
 
 let autosaveAt = 0;
 function autosave() {
-  if (!app.game || app.game.result) return;
+  if (!app.game || app.game.result || app.game.remote) return;
   try {
     const data = app.game.serialize();
     data.savedAt = Date.now();
@@ -1045,19 +1365,19 @@ function loop(ts) {
     idleTick();
     return;
   }
-  if (!app.paused) {
+  if (!app.paused && !app.game.remote) {
     app.game.update(dt);
     // adaptive simulation speed so weak devices stay above ~30fps
     app.frameMs = app.frameMs * 0.92 + dt * 1000 * 0.08;
     if (app.frameMs > 42) app.game.speed = Math.min(app.speed, 0.65);
     else if (app.frameMs < 26 && app.game.speed < app.speed) app.game.speed = Math.min(app.speed, app.game.speed + 0.02);
   }
-  if (app.game.explosions.length) {
+  if (app.game.explosions && app.game.explosions.length) {
     const big = app.game.explosions.some((e) => e.kind === "nuke");
     if (big) sfx.nuke();
     else sfx.boom();
   }
-  if (app.game.time - autosaveAt > 45) {
+  if (!app.game.remote && app.game.time - autosaveAt > 45) {
     autosaveAt = app.game.time;
     autosave();
   }
@@ -1140,7 +1460,8 @@ function setRes(sel, value, sub) {
 
 function updateHud(force) {
   const game = app.game;
-  const p = game?.player();
+  let p = game?.player();
+  if (game && game.remote && app.netMirror) p = app.netMirror.me || p;
   if (!p) return;
   const rate = game.resourceRate(p);
   setRes("#res-gold", p.gold, "+" + fmt(rate.gold) + "/ث");
@@ -1152,7 +1473,7 @@ function updateHud(force) {
   const flag = $("#flag");
   flag.style.background = `rgb(${col.r},${col.g},${col.b})`;
   flag.textContent = (p.def.iso || "؟").slice(0, 2);
-  const share = game.playerShare();
+  const share = game.playerShare ? game.playerShare() : 0;
   $("#goal-pct").textContent = pct(share);
   $("#goal-bar").style.width = clamp((share / game.goal) * 100, 0, 100) + "%";
   $("#goal-label").textContent = `الهدف: ${game.goal * 100}% من الأرض`;
@@ -1168,6 +1489,7 @@ function updateHud(force) {
     <div class="oe"><span>الحروب</span><b style="color:var(--red)">${arNum(wars.length)}</b></div>
     <div class="oe"><span>التحالفات</span><b style="color:var(--green)">${arNum(allies.length)}</b></div>
     <div class="oe"><span>الترتيب</span><b>${arNum(rankOfNation(game, p))} / ${arNum(game.nations.size)}</b></div>
+    ${game.remote ? `<div class="oe"><span>لاعبون</span><b>${arNum((game.seats || []).filter((s) => s.alive).length)} / ${arNum((game.seats || []).length)}</b></div>` : ""}
     <div class="oe tip"><span>💡</span><b style="font-weight:500;color:var(--muted);text-align:left">${currentTip()}</b></div>`;
   const cez = game.ceasefireLeft;
   const badge = $("#ceasefire-badge");
@@ -1181,7 +1503,7 @@ function updateHud(force) {
     badge.style.background = "rgba(255,125,116,0.16)";
     badge.style.color = "var(--red)";
   }
-  const t = Math.floor(game.time - (game.openedAt || 0));
+  const t = Math.max(0, Math.floor(game.time - (game.openedAt || 0)));
   $("#clock").textContent = `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
   $("#force-val").textContent = Math.round(game.attackFraction * 100) + "%";
   $("#force-slider").value = Math.round(game.attackFraction * 100);
@@ -1305,19 +1627,29 @@ function updateEvents() {
   el.querySelectorAll("[data-retreat]").forEach((b) => {
     b.onclick = () => {
       const a = game.attackById(+b.dataset.retreat);
-      if (a && a.attacker === p) game.retreat(a.id);
-      else {
-        const err = game.fortify(p);
-        toast(err || "تم تحصين الحدود", err ? "bad" : "good");
+      if (a && a.attacker === p) {
+        if (netAct("retreat", { id: a.id })) return;
+        game.retreat(a.id);
+      } else {
+        if (!netAct("fortify", {}) || !online.lastState) {
+          const err = game.fortify(p);
+          toast(err || "تم تحصين الحدود", err ? "bad" : "good");
+        }
       }
       updateEvents();
     };
   });
   el.querySelectorAll("[data-accept]").forEach((b) => {
-    b.onclick = () => game.answerOffer(+b.dataset.accept, true);
+    b.onclick = () => {
+      if (netAct("answer", { id: +b.dataset.accept, accept: true })) return;
+      game.answerOffer(+b.dataset.accept, true);
+    };
   });
   el.querySelectorAll("[data-decline]").forEach((b) => {
-    b.onclick = () => game.answerOffer(+b.dataset.decline, false);
+    b.onclick = () => {
+      if (netAct("answer", { id: +b.dataset.decline, accept: false })) return;
+      game.answerOffer(+b.dataset.decline, false);
+    };
   });
 }
 
@@ -1400,9 +1732,11 @@ function updateTab() {
         <label class="melt-toggle"><input type="checkbox" id="melt" ${game.melt ? "checked" : ""}/> تحويل الجيش إلى ذهب</label>
       </div>`;
     body.querySelector("#melt").onchange = (e) => {
+      if (netAct("melt", { on: e.target.checked })) return;
       game.melt = e.target.checked;
     };
     body.querySelector("#btn-rally").onclick = () => {
+      if (app.game.remote) return toast("التجنيد الفوري غير متاح أونلاين", "bad");
       if (p.gold < 1800) return toast("الذهب غير كافٍ", "bad");
       p.gold -= 1800;
       p.army = Math.min(p.cap, p.army + 9000);
@@ -1454,6 +1788,10 @@ function updateTab() {
     body.querySelectorAll("[data-naval]").forEach((b) => {
       b.onclick = () => {
         const n = game.byId[+b.dataset.naval];
+        if (netAct("attack", { target: n.id, frac: game.attackFraction })) {
+          toast(`أسطولك يتجه إلى ${n.ar}`, "good");
+          return;
+        }
         const err = game.launchAttack(p, n, game.attackFraction);
         toast(err || `أسطولك يتجه إلى ${n.ar}`, err ? "bad" : "good");
       };
@@ -1591,6 +1929,10 @@ function updateResearch() {
   }).join("");
   grid.querySelectorAll("[data-tech]").forEach((b) => {
     b.onclick = () => {
+      if (netAct("research", { key: b.dataset.tech })) {
+        setTimeout(updateResearch, 300);
+        return;
+      }
       const err = app.game.doResearch(app.game.player(), b.dataset.tech);
       if (err) toast(err, "bad");
       updateResearch();
@@ -1621,10 +1963,18 @@ function renderDiplo() {
     })
     .join("");
   offers.querySelectorAll("[data-acc]").forEach((b) => (b.onclick = () => {
+    if (netAct("answer", { id: +b.dataset.acc, accept: true })) {
+      setTimeout(renderDiplo, 300);
+      return;
+    }
     game.answerOffer(+b.dataset.acc, true);
     renderDiplo();
   }));
   offers.querySelectorAll("[data-dec]").forEach((b) => (b.onclick = () => {
+    if (netAct("answer", { id: +b.dataset.dec, accept: false })) {
+      setTimeout(renderDiplo, 300);
+      return;
+    }
     game.answerOffer(+b.dataset.dec, false);
     renderDiplo();
   }));
@@ -1679,6 +2029,10 @@ function renderDiplo() {
   list.querySelectorAll("[data-gift]").forEach((b) => (b.onclick = () => doDiplo("gift", +b.dataset.gift)));
   list.querySelectorAll("[data-dow]").forEach((b) => (b.onclick = () => {
     const n = game.byId[+b.dataset.dow];
+    if (netAct("declaw", { target: n.id })) {
+      setTimeout(renderDiplo, 300);
+      return;
+    }
     game.declareWar(p, n);
     renderDiplo();
   }));
@@ -1687,6 +2041,10 @@ function renderDiplo() {
 function doDiplo(type, id) {
   const game = app.game;
   const p = game.player();
+  if (netAct("offer", { kind: type, target: id })) {
+    setTimeout(renderDiplo, 350);
+    return;
+  }
   const err = game.propose({ type, from: p.id, to: id });
   toast(err || (type === "ceasefire" ? "تم إرسال عرض الهدنة" : type === "gift" ? "أُرسلت الهدية" : "تم إرسال عرض التحالف"), err ? "bad" : "good");
   renderDiplo();
@@ -1701,6 +2059,88 @@ function renderMedals() {
   }).join("");
 }
 
+// A player who lost their nation while the match is still going.
+function showOnlineOut(state) {
+  const rows = (state.seats || [])
+    .slice()
+    .sort((a, b) => b.cells - a.cells)
+    .map((r) => {
+      const me = r.seat === net.seat;
+      return `<div class="row ${me ? "won" : ""}">
+        <span>${escapeHtml(r.name)}${me ? " (أنت)" : ""} — ${escapeHtml(r.nation || "—")}</span>
+        <b>${r.alive === false ? "خرج" : (r.cells / Math.max(1, app.game.totalCells) * 100).toFixed(1) + "%"}</b></div>`;
+    })
+    .join("");
+  $("#end-title").textContent = "💀 خرجت من المباراة";
+  $("#end-title").className = "lose";
+  $("#end-sub").textContent = "سقطت دولتك — يمكنك متابعة الآخرين أو انتظار مباراة جديدة.";
+  $("#end-stats").innerHTML = "";
+  const box = $("#end-online");
+  box.hidden = false;
+  box.innerHTML = rows + `<div class="rematch-row"><button class="btn ghost" id="btn-leave-match">الخروج من الغرفة</button></div>`;
+  $("#btn-leave-match").onclick = () => {
+    net.leave();
+    mirrorPromise = null;
+    app.netMirror = null;
+    app.game = null;
+    closeModals();
+    $("#chat-dock").hidden = true;
+    $("#btn-surrender").hidden = true;
+    show("menu");
+    buildMenu();
+  };
+  $("#modal-end").hidden = false;
+  sfx.lose();
+}
+
+function showOnlineEnd(payload) {
+  const me = (payload.results || []).find((r) => r.seat === net.seat);
+  const won = !!(me && me.won);
+  $("#end-title").textContent = won ? "🏆 فزت بالمباراة!" : "💀 خسرت المباراة";
+  $("#end-title").className = won ? "win" : "lose";
+  $("#end-sub").textContent = won
+    ? "سيطرت على الأرض قبل الجميع."
+    : payload.reason === "ai"
+      ? `${payload.by || "دولة" } سيطرت على الأرض أولًا — جرّب مرة أخرى.`
+      : me && me.surrendered
+        ? "استسلمت — يمكنك الانتقام في مباراة جديدة."
+        : `وصلت إلى ${((me ? me.share : 0) * 100).toFixed(1)}% من الأرض. حاول مرة أخرى!`;
+  const rows = (payload.results || [])
+    .sort((a, b) => (b.won ? 1 : 0) - (a.won ? 1 : 0) || b.share - a.share)
+    .map(
+      (r) => `<div class="row ${r.won ? "won" : ""}">
+        <span>${r.won ? "🏆 " : ""}${escapeHtml(r.name)} — ${escapeHtml(r.nation)}</span>
+        <b>${(r.share * 100).toFixed(1)}%${r.surrendered ? " · استسلم" : ""}</b></div>`
+    )
+    .join("");
+  const box = $("#end-online");
+  box.hidden = false;
+  box.innerHTML =
+    rows +
+    `<div class="rematch-row"><button class="btn gold" id="btn-rematch">مباراة جديدة</button>
+      <button class="btn ghost" id="btn-leave-match">الخروج من الغرفة</button></div>`;
+  $("#btn-rematch").onclick = () => {
+    net.send({ t: "rematch" });
+    toast("بانتظار المضيف لبدء مباراة جديدة…");
+    closeModals();
+  };
+  $("#btn-leave-match").onclick = () => {
+    net.leave();
+    mirrorPromise = null;
+    app.netMirror = null;
+    app.game = null;
+    closeModals();
+    $("#chat-dock").hidden = true;
+    $("#btn-surrender").hidden = true;
+    show("menu");
+    buildMenu();
+  };
+  $("#end-stats").innerHTML = "";
+  $("#modal-end").hidden = false;
+  if (won) sfx.win();
+  else sfx.lose();
+}
+
 function showEnd(summary) {
   $("#end-title").textContent = summary.result === "win" ? "🏆 النصر!" : "💀 الهزيمة";
   $("#end-title").className = summary.result === "win" ? "win" : "lose";
@@ -1708,6 +2148,7 @@ function showEnd(summary) {
     summary.result === "win"
       ? `سيطرت على ${pct(summary.share)} من الأرض في ${Math.round(summary.time / 60)} دقيقة.`
       : `وصلت إلى ${pct(summary.share)} من الأرض. حاول مرة أخرى!`;
+  $("#end-online").hidden = true;
   $("#end-stats").innerHTML = `
     <div class="stat"><b>${arNum(summary.conquered)}</b><small>دول محتلة</small></div>
     <div class="stat"><b>${arNum(Math.round(summary.time / 60))} د</b><small>مدة الحملة</small></div>
@@ -1789,7 +2230,10 @@ function howTo() {
     </ul>`;
 }
 
-function boot() {
+async function boot() {
+  // The map data is loaded dynamically so the same World class can run on the
+  // Node server for online matches (see js/online.js + server.js).
+  await initWorld();
   buildMenu();
   renderMedals();
   $("#btn-play").onclick = () => {
@@ -1826,6 +2270,118 @@ function boot() {
   };
   $("#btn-diplo").onclick = () => openDiplo(null);
   $("#btn-menu").onclick = () => ($("#modal-menu").hidden = false);
+  // ---------------------------------------------------------------- online
+  $("#btn-online-back").onclick = () => {
+    net.leave();
+    mirrorPromise = null;
+    app.game = null;
+    show("menu");
+    buildMenu();
+  };
+  $("#btn-create-room").onclick = async () => {
+    const name = onlineName();
+    const ok = await net.connect(name);
+    if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+    net.createRoom({
+      map: $("#online-map").value,
+      mode: $("#online-mode").value,
+      goal: parseFloat($("#online-goal").value),
+      aiLevel: $("#online-ai").value,
+    });
+  };
+  $("#btn-join-room").onclick = async () => {
+    const name = onlineName();
+    const code = ($("#online-code").value || "").trim().toUpperCase();
+    if (code.length < 3) return setOnlineStatus("اكتب كود الغرفة", "bad");
+    const ok = await net.connect(name);
+    if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+    net.joinRoom(code);
+  };
+  $("#online-code").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#btn-join-room").click();
+  });
+  $("#btn-leave-room").onclick = () => {
+    net.leave();
+    mirrorPromise = null;
+    online.lobby = null;
+    $("#online-home").hidden = false;
+    $("#online-lobby").hidden = true;
+    setOnlineStatus(`متصل بالخادم • ${net.name}`, "ok");
+  };
+  $("#btn-ready").onclick = () => {
+    online.ready = !online.ready;
+    net.ready(online.ready);
+  };
+  $("#btn-start-online").onclick = () => net.start();
+  const sendChat = (input, viaLobby) => {
+    const text = (input.value || "").trim();
+    if (!text) return;
+    net.chat(text);
+    input.value = "";
+    void viaLobby;
+  };
+  $("#chat-send").onclick = () => sendChat($("#chat-input"), true);
+  $("#chat-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendChat($("#chat-input"), true);
+  });
+  $("#dock-send").onclick = () => sendChat($("#dock-input"), false);
+  $("#dock-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendChat($("#dock-input"), false);
+  });
+  $("#dock-chat-toggle").onclick = () => {
+    online.chatOpen = !online.chatOpen;
+    $("#chat-dock").classList.toggle("collapsed", !online.chatOpen);
+  };
+
+  // ------------------------------------------------------------ net events
+  net.on("status", (st) => {
+    const label = st === "online" ? "متصل بالخادم" : st === "connecting" ? "جاري الاتصال…" : "غير متصل";
+    setOnlineStatus(label, st === "online" ? "ok" : st === "offline" ? "bad" : "");
+    const dot = $("#dock-ping");
+    if (dot) dot.textContent = st === "online" ? "●" : "○";
+  });
+  net.on("error", (text) => {
+    toast(text, "bad");
+    setOnlineStatus(text, "bad");
+  });
+  net.on("lobby", (view) => renderLobby(view));
+  net.on("state", (state) => {
+    applyNetState(state).catch((err) => console.error(err));
+  });
+  net.on("chat", (msg) => {
+    const entry = { seat: msg.seat, name: msg.name, text: msg.text, t: msg.t };
+    if (!online.lobby) return;
+    online.lobby.chat = [...(online.lobby.chat || []), entry].slice(-60);
+    renderChatLog($("#lobby-chat"), online.lobby.chat);
+    renderChatLog($("#dock-log"), online.lobby.chat);
+  });
+  net.on("notice", (msg) => toast(msg.text, msg.bad ? "bad" : ""));
+  net.on("end", (payload) => showOnlineEnd(payload));
+  net.on("left", () => {
+    $("#online-home").hidden = false;
+    $("#online-lobby").hidden = true;
+  });
+  net.on("disconnected", () => {
+    setOnlineStatus("انقطع الاتصال بالخادم", "bad");
+    if (app.screen === "game") toast("انقطع الاتصال — يحاول إعادة المحاولة", "bad");
+  });
+  setInterval(() => {
+    if (net.status === "online") {
+      net.ping();
+      const el = $("#dock-ping");
+      if (el) el.textContent = net.latency ? `${net.latency}ms` : "●";
+    }
+  }, 3000);
+
+  const btnSurr = $("#btn-surrender");
+  if (btnSurr) {
+    btnSurr.onclick = () => {
+      if (!net.room) return;
+      if (!confirm("هل تريد الاستسلام؟ ستخرج من المباراة.")) return;
+      net.act("surrender");
+    };
+  }
+
   $("#btn-fs").onclick = () => {
     const el = document.documentElement;
     if (!document.fullscreenElement) {
@@ -1860,6 +2416,13 @@ function boot() {
   };
   $("#btn-abandon").onclick = () => {
     closeModals();
+    if (app.game && app.game.remote) {
+      net.leave();
+      mirrorPromise = null;
+      app.netMirror = null;
+      $("#chat-dock").hidden = true;
+      $("#btn-surrender").hidden = true;
+    }
     app.game = null;
     show("menu");
     buildMenu();
@@ -1873,6 +2436,13 @@ function boot() {
   };
   $("#btn-to-menu").onclick = () => {
     closeModals();
+    if (app.game && app.game.remote) {
+      net.leave();
+      mirrorPromise = null;
+      app.netMirror = null;
+      $("#chat-dock").hidden = true;
+      $("#btn-surrender").hidden = true;
+    }
     app.game = null;
     show("menu");
     buildMenu();
@@ -1946,4 +2516,4 @@ function boot() {
 
 boot();
 
-export { app, fmt, toast };
+export { app, fmt, toast, online, net };
