@@ -218,8 +218,8 @@ npx netlify deploy --prod --dir conquest/deploy
 bash <(curl -fsSL https://raw.githubusercontent.com/ykashkush2014-blip/search-arena/arena/07357b19-search-arena/conquest/publish.sh)
 ```
 
-هذا السكربت ينزّل مجلد `conquest`، ويضبط اسم تطبيق فريد، وينشئ التطبيق، وينشره،
-ويطبع الرابط. لاختيار الاسم بنفسك: `APP=conquest-khalil bash <(curl -fsSL …publish.sh)`
+هذا السكربت **يثبّت `fly` تلقائيًا إن لم تكن موجودة**، ويسجّل دخولك (يفتح المتصفح)،
+ثم ينزّل مجلد `conquest`، ويضبط اسم تطبيق فريد، وينشئ التطبيق، وينشره، ويطبع الرابط. لاختيار الاسم بنفسك: `APP=conquest-khalil bash <(curl -fsSL …publish.sh)`
 (الاسم إنجليزي بأحرف صغيرة فقط).
 
 **أو يدويًا — المرة الأولى فقط:**
