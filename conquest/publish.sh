@@ -4,7 +4,7 @@
 #   APP=conquest-online bash conquest/publish.sh
 #
 # ماذا يفعل؟
-#   1) يتأكد أن fly مثبّتة ومُسجّل الدخول (وإلا يشرح الخطوة الناقصة بالضبط).
+#   1) يثبّت fly تلقائيًا إن لم تكن موجودة، ويسجّل الدخول إن لزم.
 #   2) ينزّل مجلد conquest فقط من المستودع (git، أو tar إن لم يوجد git).
 #   3) يضبط اسم التطبيق في fly.toml (لأن أسماء Fly عالمية وفريدة).
 #   4) ينشئ التطبيق أول مرة ثم ينشره، ويطبع الرابط.
@@ -29,27 +29,32 @@ say() { printf '\n\033[1;33m%s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
 # ------------------------------------------------------------------ 1) fly ---
-FLY=""
-for c in fly flyctl "$HOME/.fly/bin/fly" "$HOME/.fly/bin/flyctl"; do
-  if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then FLY="$c"; break; fi
-done
+export PATH="$HOME/.fly/bin:$PATH"   # إن كانت مثبّتة بالفعل
 
-if [ -z "$FLY" ]; then
-  say "أداة fly غير مثبّتة — ثبّتها بهذا الأمر ثم أعد هذا الأمر:"
-  echo '    curl -fsSL https://fly.io/install.sh | bash'
-  echo
-  echo "  وبعد التثبيت أضفها إلى مسارك (أمر واحد):"
-  echo '    export FLYCTL_INSTALL="$HOME/.fly" && export PATH="$FLYCTL_INSTALL/bin:$PATH"'
-  die "الخطوة الناقصة: تثبيت fly"
+find_fly() {
+  for c in fly flyctl "$HOME/.fly/bin/fly" "$HOME/.fly/bin/flyctl"; do
+    if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then echo "$c"; return 0; fi
+  done
+  return 1
+}
+
+if ! FLY="$(find_fly)"; then
+  say "تثبيت أداة fly تلقائيًا (مرة واحدة، ~40MB)…"
+  curl -fsSL https://fly.io/install.sh | bash || die "فشل تثبيت fly — جرّب يدويًا: curl -fsSL https://fly.io/install.sh | bash"
+  export FLYCTL_INSTALL="${FLYCTL_INSTALL:-$HOME/.fly}"
+  export PATH="$FLYCTL_INSTALL/bin:$PATH"
+  FLY="$(find_fly)" || die "تم التثبيت لكن الأمر fly غير موجود. نفّذ: export PATH=\"$HOME/.fly/bin:$PATH\""
 fi
 echo "✓ fly: $FLY ($("$FLY" version 2>/dev/null | head -1))"
 
 if ! "$FLY" auth whoami >/dev/null 2>&1; then
-  say "لست مسجّلًا في Fly على هذا الجهاز — نفّذ هذا الأمر ثم أعد هذا السكربت:"
-  echo "    $FLY auth login   # يفتح المتصفح، أو استخدم مفتاح API"
-  die "الخطوة الناقصة: fly auth login"
+  say "تسجيل الدخول إلى Fly — سيفتح المتصفح. إن فشل، أنشئ مفتاحًا من:"
+  echo "    https://fly.io/user/personal_access_tokens   ثم:  $FLY auth token"
+  "$FLY" auth login || die "فشل تسجيل الدخول — جرّب: $FLY auth login   أو: $FLY auth token"
 fi
-echo "✓ الحساب: $("$FLY" auth whoami 2>/dev/null | head -1)"
+WHO="$("$FLY" auth whoami 2>/dev/null | head -1)"
+[ -n "$WHO" ] || die "لم يكتمل تسجيل الدخول — أعد المحاولة: $FLY auth login"
+echo "✓ الحساب: $WHO"
 
 # ------------------------------------------------------------- 2) download ---
 WORK="$(mktemp -d 2>/dev/null || mktemp -d -t conquest)"
@@ -90,7 +95,7 @@ if exists; then
   "$FLY" deploy --yes || die "فشل النشر (افتح: $FLY logs)"
 else
   say "إنشاء التطبيق أول مرة في منطقة $REGION…"
-  "$FLY" launch --copy-config --no-deploy --yes --name "$APP" --region "$REGION" \
+  "$FLY" launch --copy-config --no-deploy --name "$APP" --region "$REGION" </dev/null \
     || die "فشل إنشاء التطبيق — جرّب اسمًا آخر بالإنجليزية: APP=conquest-khalil bash publish.sh"
   say "بناء الصورة ونشرها…"
   "$FLY" deploy --yes || die "فشل النشر (افتح: $FLY logs)"
