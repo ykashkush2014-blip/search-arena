@@ -107,7 +107,7 @@ export class NetClient {
         if (!settled) {
           settled = true;
           clearTimeout(timer);
-          this.emit("error", "تعذر الاتصال بالخادم — شغّل node server.js أولًا");
+          this.emit("error", "تعذر الاتصال بالخادم. الأونلاين يحتاج تشغيل خادم Node: node server.js (النسخة الثابتة على الإنترنت تلعب فردي فقط)");
           resolve(false);
         } else if (wasOnline) {
           this.emit("disconnected");
