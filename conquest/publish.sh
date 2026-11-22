@@ -14,7 +14,7 @@
 #   REGION=fra            المنطقة (fra أمستردام… افتراضي fra)
 #   BRANCH=arena/...      الفرع (افتراضي: الفرع الذي بنى فيه هذا الملف)
 set -uo pipefail
-VERSION="2026-11-21.6"   # اطبع هذا في أول سطر لتعرف أنك على النسخة الحديثة
+VERSION="2026-11-21.7"   # اطبع هذا في أول سطر لتعرف أنك على النسخة الحديثة
 
 REPO_SLUG="${REPO_SLUG:-ykashkush2014-blip/search-arena}"
 BRANCH="${BRANCH:-arena/07357b19-search-arena}"
@@ -155,6 +155,37 @@ if [ -z "$SRC" ]; then
   if ok_src "$WORK/raw/conquest"; then
     SRC="$WORK/raw/conquest"
     echo "  ✓ عبر raw.githubusercontent"
+  fi
+fi
+
+# اقرأ بصمة الالتزام المنشور (HEAD) لاستخدامها في تثبيت نسخة Vercel.
+COMMIT_SHA=""
+if [ -d "$WORK/git/.git" ]; then
+  COMMIT_SHA="$(git -C "$WORK/git" rev-parse HEAD 2>/dev/null || true)"
+fi
+if [ -z "$COMMIT_SHA" ] && command -v git >/dev/null 2>&1; then
+  COMMIT_SHA="$(git ls-remote "https://github.com/$REPO_SLUG.git" "refs/heads/$BRANCH" 2>/dev/null | awk '{print $1}')"
+fi
+if [ -z "$COMMIT_SHA" ]; then
+  COMMIT_SHA="$(curl -fsSL "https://api.github.com/repos/$REPO_SLUG/commits/$BRANCH" 2>/dev/null \
+    | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([a-f0-9]\{40\}\)".*/\1/p' | head -1)"
+fi
+
+# ملف deploy/index.html يثبّت نسخة مجمّدة على CDN (jsDelivr) — يجب أن يشير إلى
+# نفس الالتزام الذي ننشره الآن، وإلا بقي الموقع المنشور على كود قديم للأبد.
+if [ -n "$COMMIT_SHA" ] && [ -f "$SRC/deploy/index.html" ]; then
+  if grep -q 'const REF = "' "$SRC/deploy/index.html"; then
+    python3 - "$SRC/deploy/index.html" "$COMMIT_SHA" <<'PYEOF' 2>/dev/null || true
+import re, sys
+path, sha = sys.argv[1], sys.argv[2]
+src = open(path, encoding="utf-8").read()
+out = re.sub(r'(const REF = ")[a-f0-9]+(")', r'\g<1>' + sha + r'\g<2>', src, count=1)
+if out != src:
+    open(path, "w", encoding="utf-8").write(out)
+    print("  ✓ ثُبّت deploy/index.html على " + sha[:7])
+else:
+    print("  • deploy/index.html يشير بالفعل إلى " + sha[:7])
+PYEOF
   fi
 fi
 
