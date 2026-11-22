@@ -204,8 +204,24 @@ npx netlify deploy --prod --dir conquest/deploy
 
 - **الرابط العام الشغّال:** <https://conquest-opal.vercel.app/> — تم فتحه والتحقق منه (القائمة،
   اختيار الدول، شاشة الأونلاين كلها تعمل). البديل: <https://conquest-ykashkush2014-1271.vercel.app/>.
-- لتحديث النسخة الثابتة بعد تعديل اللعبة: بدّل `REF` في `conquest/deploy/index.html`
-  إلى الـ commit الجديد ثم أعد النشر.
+- **لتحديث النسخة الثابتة** (مهم — وإلا بقي الموقع على كود قديم للأبد):
+
+  ```bash
+  # 1) ادفع تعديلاتك أولًا (الصفحة تحمّل الأصول من CDN مثبّت على الـ commit)
+  git add -A && git commit -m "..." && git push
+  # 2) اربط الصفحة بالـ commit الجديد
+  node conquest/scripts/gen-deploy.mjs <commit-sha>
+  # 3) انشر مجلد conquest/deploy كما هو
+  npx vercel deploy --prod conquest/deploy
+  ```
+
+  `conquest/deploy/index.html` **مُولَّد** من `conquest/js/deploypage.js` — لا تحرّره يدويًا.
+  `publish.sh` يزامن الـ REF تلقائيًا عند النشر على Fly.
+
+- ملاحظة معمارية: `server.js` يخدم صفحة bootstrap على `/` **فقط** عند
+  `VERCEL=1` (serverless لا يستطيع تقديم ملفات اللعبة)، ويخدم اللعبة الكاملة
+  محليًا وعلى Fly. أما `conquest/vercel.json` (دالة serverless) فهو للنشر
+  على Vercel فقط؛ النشر الثابت الصحيح هو `conquest/deploy`.
 
 ### ج) Fly.io — الأونلاين الكامل على الإنترنت (موصى به)
 
