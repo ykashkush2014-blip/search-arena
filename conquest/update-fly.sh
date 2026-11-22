@@ -16,7 +16,7 @@
 #    REGION=fra                 منطقة الإنشاء لو لم يكن التطبيق موجودًا
 # ═══════════════════════════════════════════════════════════════════════════
 set -uo pipefail
-VERSION="2026-11-22.2"
+VERSION="2026-11-22.3"
 
 REPO_SLUG="${REPO_SLUG:-ykashkush2014-blip/search-arena}"
 BRANCH="${BRANCH:-arena/07357b19-search-arena}"
@@ -98,16 +98,28 @@ awk -v n="$APP" '/^app[[:space:]]*=/{print "app = \"" n "\""; next} {print}' fly
 
 if "$FLY" apps list 2>/dev/null | awk 'NR>1{print $1}' | grep -qx "$APP"; then
   say "التطبيق موجود — نشر التحديث…"
-  "$FLY" deploy --build-arg "GIT_SHA=${SHA:-dev}" --yes || die "فشل النشر. راجع: fly logs -a $APP"
+  "$FLY" deploy --build-arg "GIT_SHA=${SHA:-dev}" --ha=false --yes || die "فشل النشر. راجع: fly logs -a $APP"
 else
   say "التطبيق غير موجود — إنشاؤه أول مرة…"
   "$FLY" launch --copy-config --no-deploy --name "$APP" --region "$REGION" </dev/null \
     || "$FLY" apps create "$APP" || die "تعذّر إنشاء التطبيق"
-  "$FLY" deploy --build-arg "GIT_SHA=${SHA:-dev}" --yes || die "فشل النشر. راجع: fly logs -a $APP"
+  "$FLY" deploy --build-arg "GIT_SHA=${SHA:-dev}" --ha=false --yes || die "فشل النشر. راجع: fly logs -a $APP"
 fi
 
 # ---- 4) تحقّق ---------------------------------------------------------------
 URL="https://$APP.fly.dev"
+
+# الغرف تُحفظ في ذاكرة العملية نفسها (بلا قاعدة بيانات مشتركة)، لذلك ماشينتان
+# تعنيان عالمين منفصلين: صديقان قد يدخلان عالمين مختلفين ولا يتلاقيا أبدًا.
+# ماشين واحدة = عالم واحد. نُوسّع عموديًا لا أفقيًا.
+N="$( "$FLY" machine list -a "$APP" 2>/dev/null | grep -cE '^[a-f0-9]{8,}' )"
+if [ "${N:-0}" -gt 1 ]; then
+  say "العدد الحالي $N ماشين — تقليصه إلى واحدة حتى يلتقي اللاعبون في عالم واحد…"
+  "$FLY" scale count 1 --yes -a "$APP" >/dev/null 2>&1 || true
+  N="$( "$FLY" machine list -a "$APP" 2>/dev/null | grep -cE '^[a-f0-9]{8,}' )"
+fi
+echo "  ✓ عدد الماشينات: ${N:-?} (الغرف في الذاكرة — واحدة تكفي وتُبقي الجميع في عالم واحد)"
+
 say "التحقّق من الموقع…"
 OK=0
 for i in $(seq 1 12); do
