@@ -23,6 +23,11 @@ const CAN_BOOTSTRAP = !!process.env.VERCEL;
 // Which revision this process serves. Fly/Docker pass GIT_SHA at build time;
 // locally we fall back to a marker so a stale process is visible in /health.
 const BUILD = (process.env.GIT_SHA || process.env.FLY_IMAGE_REF || "dev").slice(0, 12);
+// Per-process id. Two machines serving the same code return *different* boot
+// ids, so a single request cannot tell them apart — but repeated requests can.
+// update-fly.sh uses it to prove only one machine is behind the app, which is
+// what keeps every player in the same in-memory world.
+const BOOT_ID = `${BUILD}-${Math.random().toString(36).slice(2, 8)}`;
 const PORT = Number(process.argv[2] || process.env.PORT || 5173);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -56,7 +61,7 @@ const server = http.createServer((req, res) => {
     // `build` lets anyone (and publish.sh) confirm which revision is actually
     // running. Without it a stale deploy looks healthy while serving old code.
     res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size, clients: clients.size, build: BUILD }));
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size, clients: clients.size, build: BUILD, boot: BOOT_ID }));
     return;
   }
   // "/" serves the tiny pinned bootstrap (works on serverless: it loads the
