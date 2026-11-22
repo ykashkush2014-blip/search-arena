@@ -2465,9 +2465,30 @@ async function boot() {
   if ($("#btn-quick-play"))
     $("#btn-quick-play").onclick = async () => {
       const ok = await net.connect(onlineName());
-      if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
-      net.quickJoin();
+      if (!ok) {
+        return setOnlineStatus(
+          net.remote ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل" : "تعذر الاتصال بالخادم",
+          "bad"
+        );
+      }
+      const btn = $("#btn-quick-play");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "…جارٍ البحث";
+      }
+      net.quickJoin({
+        map: $("#online-map") ? $("#online-map").value : "world",
+        mode: $("#online-mode") ? $("#online-mode").value : "normal",
+        goal: $("#online-goal") ? parseFloat($("#online-goal").value) : 0.5,
+        aiLevel: $("#online-ai") ? $("#online-ai").value : "normal",
+      });
     };
+  net.on("searching", (on) => {
+    const btn = $("#btn-quick-play");
+    if (!btn) return;
+    btn.disabled = !!on;
+    btn.textContent = on ? "…جارٍ البحث" : "⚡ العب الآن";
+  });
   net.on("roomlist", renderRoomList);
   net.on("hello", () => net.listRooms());
 
@@ -2537,7 +2558,7 @@ async function boot() {
     renderChatLog($("#lobby-chat"), online.lobby.chat);
     renderChatLog($("#dock-log"), online.lobby.chat);
   });
-  net.on("notice", (msg) => toast(msg.text, msg.bad ? "bad" : ""));
+  net.on("notice", (msg) => toast(msg.text, msg.bad ? "bad" : msg.soft ? "good" : ""));
   net.on("end", (payload) => showOnlineEnd(payload));
   net.on("left", () => {
     $("#online-home").hidden = false;

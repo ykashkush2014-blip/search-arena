@@ -20,12 +20,25 @@ export class NetClient {
     this.pending = [];
     this.log = [];
     this.reconnectTries = 0;
+    // "Play now" is resolved client-side from the room list, so it works on the
+    // older server (which has no `quickjoin` message) as well as the new one.
+    this.wantPublic = false;
+    this.quickOpts = {};
+    this.quickTimer = null;
   }
 
   on(event, fn) {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
     this.listeners.get(event).add(fn);
     return () => this.listeners.get(event).delete(fn);
+  }
+
+  once(event, fn) {
+    const off = this.on(event, (data) => {
+      off();
+      fn(data);
+    });
+    return off;
   }
 
   emit(event, data) {
@@ -202,12 +215,37 @@ export class NetClient {
 
   // Public worlds: list joinable lobbies (no codes), and "play now" which
   // either joins the fullest lobby or opens a fresh one.
-  listRooms() {
+  // Ask for the public worlds. Resolves with the list, or null when the server
+  // does not answer (an older build that has no `rooms` message yet).
+  listRooms(timeout = 1600) {
+    const seen = this.roomList;
     this.send({ t: "rooms" });
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(this.roomList !== seen ? this.roomList : null), timeout);
+      this.once("roomlist", (list) => {
+        clearTimeout(timer);
+        resolve(list);
+      });
+    });
   }
 
+  // "Play now": join the fullest open world, or open one. Driven by the room
+  // list rather than a server-side `quickjoin`, so it also works on a server
+  // that predates public worlds — it simply creates a room instead.
   quickJoin(opts = {}) {
-    this.send({ t: "quickjoin", name: this.name, ...opts });
+    this.wantPublic = true;
+    this.quickOpts = opts;
+    this.emit("searching", true);
+    this.send({ t: "rooms" });
+    clearTimeout(this.quickTimer);
+    this.quickTimer = setTimeout(() => {
+      if (!this.wantPublic) return;
+      this.wantPublic = false;
+      this.emit("searching", false);
+      if (this.status !== "online") return;
+      this.emit("notice", { text: "لا توجد عوالم مفتوحة — فتحت لك عالمًا جديدًا", soft: true });
+      this.createRoom(this.quickOpts || {});
+    }, 1800);
   }
 
   pick(nationId) {
@@ -249,10 +287,25 @@ export class NetClient {
         this.seat = null;
         this.emit("hello", msg);
         break;
-      case "roomlist":
+      case "roomlist": {
         this.roomList = msg.rooms || [];
         this.emit("roomlist", this.roomList);
+        if (this.wantPublic) {
+          this.wantPublic = false;
+          clearTimeout(this.quickTimer);
+          this.emit("searching", false);
+          const open = this.roomList.filter((r) => r.players < (r.max || 8));
+          if (open.length) {
+            // Fullest lobby first, so players meet instead of spreading out.
+            open.sort((a, b) => b.players - a.players);
+            this.emit("notice", { text: `انضممت إلى العالم ${open[0].code}`, soft: true });
+            this.joinRoom(open[0].code);
+          } else {
+            this.createRoom(this.quickOpts || {});
+          }
+        }
         break;
+      }
       case "joined":
         this.emit("joined", msg);
         break;
