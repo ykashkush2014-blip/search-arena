@@ -213,8 +213,6 @@ export class NetClient {
     this.send({ t: "join", room: code, name: this.name });
   }
 
-  // Public worlds: list joinable lobbies (no codes), and "play now" which
-  // either joins the fullest lobby or opens a fresh one.
   // Ask for the public worlds. Resolves with the list, or null when the server
   // does not answer (an older build that has no `rooms` message yet).
   listRooms(timeout = 1600) {
