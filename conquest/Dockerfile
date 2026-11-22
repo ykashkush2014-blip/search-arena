@@ -9,6 +9,10 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
+# بصمة الإصدار: تُطبع في /health حتى يثبت فورًا أي مراجعة يعمل عليها الخادم.
+ARG GIT_SHA=dev
+ENV GIT_SHA=${GIT_SHA}
+
 # ملفات اللعبة فقط (انظر .dockerignore) — الخادم يقدّم الصفحة والملفات بنفسه.
 COPY . .
 

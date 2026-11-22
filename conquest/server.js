@@ -20,6 +20,9 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // unreliable file tracing), so there "/" must return the CDN bootstrap.
 // Locally we serve the real build so the live preview always reflects the code.
 const CAN_BOOTSTRAP = !!process.env.VERCEL;
+// Which revision this process serves. Fly/Docker pass GIT_SHA at build time;
+// locally we fall back to a marker so a stale process is visible in /health.
+const BUILD = (process.env.GIT_SHA || process.env.FLY_IMAGE_REF || "dev").slice(0, 12);
 const PORT = Number(process.argv[2] || process.env.PORT || 5173);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -39,8 +42,10 @@ const TYPES = {
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || "/").split("?")[0]);
   if (url === "/health") {
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size, clients: clients.size }));
+    // `build` lets anyone (and publish.sh) confirm which revision is actually
+    // running. Without it a stale deploy looks healthy while serving old code.
+    res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size, clients: clients.size, build: BUILD }));
     return;
   }
   // "/" serves the tiny pinned bootstrap (works on serverless: it loads the

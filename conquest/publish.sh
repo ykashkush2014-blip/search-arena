@@ -14,7 +14,7 @@
 #   REGION=fra            المنطقة (fra أمستردام… افتراضي fra)
 #   BRANCH=arena/...      الفرع (افتراضي: الفرع الذي بنى فيه هذا الملف)
 set -uo pipefail
-VERSION="2026-11-21.7"   # اطبع هذا في أول سطر لتعرف أنك على النسخة الحديثة
+VERSION="2026-11-22.1"   # اطبع هذا في أول سطر لتعرف أنك على النسخة الحديثة
 
 REPO_SLUG="${REPO_SLUG:-ykashkush2014-blip/search-arena}"
 BRANCH="${BRANCH:-arena/07357b19-search-arena}"
@@ -204,7 +204,7 @@ exists() { "$FLY" apps list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$APP
 
 if exists; then
   say "التطبيق موجود — تحديث النشر…"
-  "$FLY" deploy --yes || die "فشل النشر (افتح: $FLY logs)"
+  "$FLY" deploy --build-arg "GIT_SHA=${COMMIT_SHA:-dev}" --yes || die "فشل النشر (افتح: $FLY logs)"
 else
   say "إنشاء التطبيق أول مرة في منطقة ${REGION}…"
   if "$FLY" launch --copy-config --no-deploy --name "$APP" --region "$REGION" </dev/null; then
@@ -217,7 +217,7 @@ else
     die "فشل إنشاء التطبيق — جرّب اسمًا آخر: APP=conquest-kashkush bash pub.sh   (أو REGION=cdg إن كان السبب سعة)"
   fi
   say "بناء الصورة ونشرها…"
-  "$FLY" deploy --yes || die "فشل النشر (افتح: $FLY logs)"
+  "$FLY" deploy --build-arg "GIT_SHA=${COMMIT_SHA:-dev}" --yes || die "فشل النشر (افتح: $FLY logs)"
 fi
 
 URL="https://$APP.fly.dev"
@@ -235,6 +235,18 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   printf "  … جارٍ الانتظار (%s/10، شهادة HTTPS قد تتأخر دقيقة)\n" "$i"
   sleep 6
 done
+
+if [ "$OK" = "1" ] && [ -n "${COMMIT_SHA:-}" ]; then
+  # أثبت أن النسخة الجديدة هي التي تعمل، لا نسخة قديمة رفضت التحديث.
+  got="$(printf '%s' "$body" | sed -n 's/.*"build":"\([^"]*\)".*/\1/p')"
+  want="$(printf '%s' "$COMMIT_SHA" | cut -c1-12)"
+  if [ "$got" = "$want" ]; then
+    echo "  ✓ الإصدار المباشر = $got (مطابق للفرع)"
+  else
+    echo "  ⚠ الإصدار المباشر \"$got\" ≠ المتوقع \"$want\" — قد تكون النسخة القديمة لم تُستبدل بعد."
+    echo "    أعد المحاولة بعد دقيقة: curl -s $URL/health"
+  fi
+fi
 
 if [ "$OK" = "1" ]; then
   page="$(curl -fsS -m 10 "$URL/" 2>/dev/null | head -c 4000 || true)"
