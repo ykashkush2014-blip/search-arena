@@ -80,4 +80,4 @@ export function deployPage(ref) {
 
 // The commit whose assets the deployed page loads. Bump it (or let publish.sh
 // rewrite it) whenever the game ships, so the public link never serves stale code.
-export const DEPLOY_REF = "e0ed5dd34c3cacfc574413a9edc9b16162e62621";
+export const DEPLOY_REF = "f7d929cb5fc2bc528ba99355991194d4fa13a454";
