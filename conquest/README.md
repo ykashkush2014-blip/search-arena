@@ -255,11 +255,32 @@ cd search-arena && git checkout HEAD -- conquest && cd conquest
 fly launch --copy-config --no-deploy --name conquest-online
 ```
 
-**النشر / التحديث:**
+**تحديث تطبيق موجود (مثل `conquest-online-8129.fly.dev`) — أمر واحد:**
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ykashkush2014-blip/search-arena/arena/07357b19-search-arena/conquest/update-fly.sh)
+```
+
+`update-fly.sh` يثبّت `flyctl` إن لزم، يسجّل الدخول إن لزم، ينزّل مجلد `conquest`
+**فقط** من آخر نسخة على الفرع، ينشر على التطبيق الموجود نفسه (لا ينشئ تطبيقًا
+جديدًا)، ثم يتحقق من نجاح التحديث. لتغيير التطبيق: `APP=اسم bash update-fly.sh`.
+
+**كيف تعرف أن التحديث نجح فعلًا؟** كل خادم يطبع بصمة الإصدار في `/health`:
+
+```bash
+curl -s https://conquest-online-8129.fly.dev/health
+# {"ok":true,"rooms":0,"clients":0,"build":"4c1b1210f3a1"}
+```
+
+قارن `build` بآخر commit على الفرع (`git rev-parse HEAD | cut -c1-12`).
+إن اختلفا فالنسخة القديمة ما زالت تعمل — أعد النشر. `publish.sh` و`update-fly.sh`
+يقارنان البصمة تلقائيًا ويطبعان ✓ أو ⚠.
+
+**أو يدويًا:**
 
 ```bash
 cd conquest
-fly deploy
+fly deploy --build-arg GIT_SHA=$(git rev-parse HEAD) --yes
 fly open          # يفتح https://<اسم-التطبيق>.fly.dev
 ```
 
