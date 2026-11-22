@@ -1,7 +1,7 @@
 // CONQUEST — Arabic-first pixel world-conquest strategy game.
 // Wires the menus, the map picker, the in-game HUD and input handling to the
 // simulation in state.js and the canvas renderer in render.js.
-import { World, PRESETS, initWorld } from "./world.js";
+import { World, PRESETS, initWorld, difficultyOf } from "./world.js";
 import { Game } from "./state.js";
 import { Renderer } from "./render.js";
 import {
@@ -322,11 +322,10 @@ function bindLobbyCanvas(canvas) {
     const dy = Math.abs(e.clientY - down.y);
     down = null;
     if (dx + dy > 5) return;
-    const rect = canvas.getBoundingClientRect();
-    const cell = online.lobbyRenderer.screenToCell(e.clientX - rect.left, e.clientY - rect.top);
-    if (cell < 0) return;
-    const owner = app.pickWorld.owner[cell];
-    if (owner >= 0) pickLobbyNation(owner);
+    // Choosing a nation by tapping the map was fiddly on a phone (you often
+    // hit the wrong pixel), so the lobby uses the list instead. Tapping the
+    // map still selects nothing and the hint says so.
+    void e;
   });
   canvas.addEventListener(
     "wheel",
@@ -340,6 +339,70 @@ function bindLobbyCanvas(canvas) {
     },
     { passive: false }
   );
+}
+
+// ------------------------------------------------------- lobby nation list ---
+// Same choice as the offline "pick your country" screen, but as a scrollable
+// list so it works with a thumb on a phone: search, tap, done.
+function nationStars(world, id) {
+  let stars = 3;
+  try {
+    stars = difficultyOf(world, id);
+  } catch {
+    stars = world.countries[id] && world.countries[id].difficulty ? world.countries[id].difficulty : 3;
+  }
+  return "★".repeat(Math.max(1, Math.min(5, stars)));
+}
+
+function renderNationList() {
+  const box = $("#nation-list");
+  if (!box || !app.pickWorld) return;
+  const world = app.pickWorld;
+  const view = online.lobby;
+  if (!view) return;
+  const q = ($("#nation-search") ? $("#nation-search").value : "").trim();
+  const mine = view.seats.find((s) => s.seat === net.seat);
+  const myPick = mine ? mine.nationId : null;
+  const takenBy = new Map();
+  for (const s of view.seats) {
+    if (s.seat !== net.seat && s.nationId != null) takenBy.set(s.nationId, s.name);
+  }
+
+  const list = world
+    .playable()
+    .filter((c) => !q || c.ar.includes(q) || (c.name || "").toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => (a.ar || "").localeCompare(b.ar || "", "ar"));
+
+  if (!list.length) {
+    box.innerHTML = `<div class="nation-empty">لا توجد دولة بهذا الاسم</div>`;
+    return;
+  }
+  box.innerHTML = list
+    .map((c) => {
+      const taken = takenBy.get(c.id);
+      const picked = c.id === myPick;
+      const cls = `nation-row${picked ? " picked" : ""}${taken ? " taken" : ""}`;
+      return `<button class="${cls}" data-nation="${c.id}" ${taken ? "disabled" : ""}>
+        <i class="swatch" style="background:rgb(${c.color.r},${c.color.g},${c.color.b})"></i>
+        <span class="nm">${escapeHtml(c.ar)}</span>
+        <span class="meta">${c.cells.toLocaleString("ar-EG")} خلية</span>
+        <span class="stars">${nationStars(world, c.id)}</span>
+      </button>`;
+    })
+    .join("");
+
+  box.querySelectorAll("[data-nation]").forEach((b) => {
+    b.onclick = () => pickLobbyNation(Number(b.dataset.nation));
+  });
+}
+
+let nationSearchBound = false;
+function bindNationSearch() {
+  if (nationSearchBound) return;
+  const input = $("#nation-search");
+  if (!input) return;
+  nationSearchBound = true;
+  input.addEventListener("input", () => renderNationList());
 }
 
 function pickLobbyNation(nationId) {
@@ -399,8 +462,16 @@ function renderLobby(view) {
 
   renderChatLog($("#lobby-chat"), view.chat);
   setupLobbyRenderer(view);
+  bindNationSearch();
+  renderNationList();
   const mine = view.seats.find((s) => s.seat === net.seat);
   online.ready = !!(mine && mine.ready);
+  // Warn only *me* when my pick is not on this map, rather than silently
+  // starting me somewhere else (which is what used to happen).
+  const mySeat = view.seats.find((s) => s.seat === net.seat);
+  if (mySeat && mySeat.nationId != null && !app.pickWorld.active[mySeat.nationId]) {
+    toast("دولتك ليست على هذه الخريطة — اختر دولة أخرى من القائمة", "bad");
+  }
 }
 
 function renderChatLog(el, chat) {
@@ -2565,8 +2636,15 @@ async function boot() {
     $("#online-lobby").hidden = true;
   });
   net.on("disconnected", () => {
-    setOnlineStatus("انقطع الاتصال بالخادم", "bad");
-    if (app.screen === "game") toast("انقطع الاتصال — يحاول إعادة المحاولة", "bad");
+    setOnlineStatus("انقطع الاتصال — جارٍ استعادة المباراة", "bad");
+    if (app.screen === "game") toast("انقطع الاتصال — جارٍ إعادة الاتصال", "bad");
+  });
+  net.on("reconnecting", ({ attempt }) => {
+    setOnlineStatus(`جارٍ إعادة الاتصال… (محاولة ${attempt})`, "bad");
+  });
+  net.on("reconnected", ({ room }) => {
+    setOnlineStatus(room ? `عاد الاتصال — عالم ${room}` : "عاد الاتصال", "ok");
+    toast(room ? "عاد الاتصال بمباراتك" : "عاد الاتصال", "good");
   });
   setInterval(() => {
     if (net.status === "online") {

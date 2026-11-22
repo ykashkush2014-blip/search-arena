@@ -256,6 +256,9 @@ class Room {
     this.aiLevel = "normal";
     this.mode = "normal"; // normal | coop | ffa
     this.public = true; // listed in the room browser (no code typing needed)
+    // Last ownership version sent to this room's players: the map is attached
+    // to a state message only when it moves past this.
+    this.lastSentGridVersion = -1;
   }
 
   get hostSeat() {
@@ -354,7 +357,14 @@ class Room {
   broadcastState() {
     const pub = this.snapshotState();
     if (!pub) return;
-    const base = { ...pub, owners: encodeOwners(this.game) };
+    // Only ship the map when ownership changed since the previous broadcast —
+    // that was the difference between ~1.7 MB/s and a few KB/s per player.
+    const base = { ...pub };
+    if (this.game.ownerVersion !== this.lastSentGridVersion) {
+      base.owners = encodeOwners(this.game);
+      base.ownersVersion = this.game.ownerVersion;
+      this.lastSentGridVersion = this.game.ownerVersion;
+    }
     for (const p of this.players) {
       if (!p.connected) continue;
       sendJSON(p.client, this.stateForSeat(base, p.seat));
@@ -614,32 +624,60 @@ function seatAttacks(game) {
   return out;
 }
 
-// owners grid -> base64 RLE (int32 pairs), compact enough for 4 updates/second
-let lastGrid = null;
+// owners grid -> base64 RLE.
+//
+// The world is 1.8M cells; even run-length encoded that was ~23k int32 pairs
+// (~240 KB) and it was re-sent with *every* state update, 4-7 times a second.
+// On a real connection that queue backs up until the client stops receiving
+// new state: the match looks smooth, then freezes. Two fixes:
+//   1. The grid is only attached when its version actually changed (the client
+//      already assumed this — it checks `if (state.owners)`).
+//   2. Pairs are packed as unsigned LEB128 varints instead of int32, which is
+//      ~58 KB instead of ~180 KB for the same data.
+// Ownership values are zig-zagged so -1 (ocean) and -3 (out of arena) stay
+// valid while ids stay small.
+function zig(v) {
+  return v < 0 ? -v * 2 - 1 : v * 2;
+}
+function unzig(u) {
+  return u & 1 ? -((u + 1) / 2) : u / 2;
+}
+function writeVarint(out, n) {
+  while (n >= 0x80) {
+    out.push((n & 0x7f) | 0x80);
+    n = Math.floor(n / 128);
+  }
+  out.push(n);
+}
+
 let lastGridVersion = -1;
 let lastGridB64 = null;
 function encodeOwners(game) {
-  // The grid only changes when ownership does; reuse the previous encoding.
-  if (lastGrid && lastGridVersion === game.ownerVersion) return lastGridB64;
+  // Reuse the previous encoding while ownership is unchanged; the caller then
+  // omits the field entirely.
+  if (lastGridVersion === game.ownerVersion && lastGridB64) return lastGridB64;
   const grid = game.owners;
-  const rle = [];
+  const out = [];
   let prev = -2;
   let run = 0;
   for (let i = 0; i < grid.length; i++) {
     const v = grid[i];
     if (v === prev) run++;
     else {
-      if (prev !== -2) rle.push(prev, run);
+      if (prev !== -2) {
+        writeVarint(out, zig(prev));
+        writeVarint(out, run);
+      }
       prev = v;
       run = 1;
     }
   }
-  if (prev !== -2) rle.push(prev, run);
-  const buf = Buffer.alloc(rle.length * 4);
-  for (let i = 0; i < rle.length; i++) buf.writeInt32LE(rle[i], i * 4);
-  lastGrid = grid;
+  if (prev !== -2) {
+    writeVarint(out, zig(prev));
+    writeVarint(out, run);
+  }
   lastGridVersion = game.ownerVersion;
-  lastGridB64 = buf.toString("base64");
+  lastGridB64 = Buffer.from(out).toString("base64");
   return lastGridB64;
 }
 

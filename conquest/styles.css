@@ -671,7 +671,30 @@ input, select { font-family: inherit; }
 .online-tips { margin: 0; padding-inline-start: 18px; font-size: 11px; color: var(--muted); line-height: 1.8; }
 
 /* lobby */
-.lobby-grid { flex: 1; display: grid; grid-template-columns: 250px 1fr 260px; gap: 12px; min-height: 0; }
+/* الخريطة للعرض فقط، واختيار الدولة من قائمة على اليمين (RTL) — كما في
+   الوضع العادي. العمود على اليمين لأن dir=rtl: أول عمود يظهر يمينًا. */
+.lobby-grid { flex: 1; display: grid; grid-template-columns: 250px 236px 1fr 260px; gap: 12px; min-height: 0; }
+
+.lobby-nations {
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+  padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 0;
+}
+.lobby-nations h3 { margin: 2px 4px 4px; font-size: 12.5px; color: var(--gold); font-weight: 700; }
+.nation-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.nation-row {
+  display: flex; align-items: center; gap: 7px; padding: 6px 8px; cursor: pointer;
+  border-radius: 9px; background: rgba(255,255,255,0.035);
+  border: 1px solid var(--line); color: inherit; font: inherit; text-align: start;
+}
+.nation-row:hover { background: rgba(255,255,255,0.07); }
+.nation-row.picked { border-color: var(--gold); background: rgba(244,210,122,0.12); }
+.nation-row.taken { opacity: 0.45; cursor: not-allowed; }
+.nation-row .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.nation-row .nm { flex: 1; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nation-row .meta { font-size: 10.5px; color: var(--muted); }
+.nation-row .stars { font-size: 9.5px; color: var(--gold); letter-spacing: -1px; }
+.nation-empty { padding: 10px; font-size: 12px; color: var(--muted); text-align: center; }
+
 .lobby-seats, .lobby-chat {
   border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
   overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px;
@@ -730,7 +753,8 @@ input, select { font-family: inherit; }
 
 @media (max-width: 980px) {
   .online-cards { grid-template-columns: 1fr; }
-  .lobby-grid { grid-template-columns: 1fr; grid-template-rows: auto 44% auto; }
+  .lobby-grid { grid-template-columns: 1fr; grid-template-rows: auto 34% 30% auto; }
+  .lobby-nations { max-height: 30vh; }
   .lobby-seats { flex-direction: row; overflow-x: auto; }
   .seat-row { min-width: 150px; }
   .lobby-chat { max-height: 26vh; }

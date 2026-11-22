@@ -248,16 +248,20 @@ export const BALANCE = {
   // advances: cells/sec = frontWidthFactor * fronts^0.75 * ratio^0.7 (capped)
   frontWidthFactor: 0.2, // how fast a winning front physically advances
   maxBuildings: 40, // hard cap per nation (grows slightly with land)
-  frontSpeedCap: 18, // max cells/sec one offensive can take (hard ceiling)
+  // Conquest pace. Measured on Sudan (5,653 cells): cap 14 → 217s, cap 18 →
+  // 114s. 24 lands the same conquest near ~85s, which keeps a 50%-of-world
+  // online match inside a sitting instead of dragging for many minutes.
+  frontSpeedCap: 24, // max cells/sec one offensive can take (hard ceiling)
   capitulation: 0.45, // a nation that loses this share of its land surrenders at once
-  haltRatio: 0.24, // attacker/defender engagement ratio below which a front stalls
+  haltRatio: 0.2, // attacker/defender engagement ratio below which a front stalls
+  // After taking a capital, a nation breaks much faster (was 0.22).
+  capitulateFraction: 0.3,
   attackerAttrition: 0.0085,
   defenderAttrition: 0.022,
   retreatLoss: 0.25,
   bunkerSlow: 0.09,
   bunkerMax: 0.55,
   capitalArmyLoss: 1 / 3,
-  capitulateFraction: 0.22,
 
   // --- strikes ---
   missileCost: 2600,

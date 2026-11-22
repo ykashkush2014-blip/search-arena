@@ -4,7 +4,7 @@
 import { World, setWorldData, rleToGrid } from "./world.js";
 import { Game } from "./state.js";
 
-const SOCKET_TIMEOUT = 9000;
+const SOCKET_TIMEOUT = 12000;
 
 export class NetClient {
   constructor() {
@@ -185,9 +185,38 @@ export class NetClient {
           resolve(false);
         } else if (wasOnline) {
           this.emit("disconnected");
+          this.scheduleReconnect();
         }
       };
     });
+  }
+
+  // A match keeps running on the server while our socket is down (the server
+  // hands the nation to the AI). Without this the page stayed frozen forever:
+  // the player stared at a dead map with no way back into their own match.
+  scheduleReconnect() {
+    if (this.reconnectTries < 0) return;
+    if (!this.room && !this.lastState) return; // nothing to come back to
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTries = (this.reconnectTries || 0) + 1;
+    // 1s, 2s, 4s … capped at 8s, and give up after ~1 minute of trying.
+    const delay = Math.min(8000, 1000 * Math.pow(2, Math.min(4, this.reconnectTries - 1)));
+    if (this.reconnectTries > 12) {
+      this.emit("error", "تعذر استعادة الاتصال بالمباراة. أعد تحميل الصفحة للدخول من جديد");
+      return;
+    }
+    this.emit("reconnecting", { in: delay, attempt: this.reconnectTries });
+    this.reconnectTimer = setTimeout(async () => {
+      if (this.status === "online") return;
+      const room = this.room;
+      const name = this.name;
+      this.status = "offline"; // force a fresh socket
+      this.ws = null;
+      const ok = await this.connect(name);
+      if (!ok) return; // onclose will schedule the next try
+      if (room) this.joinRoom(room);
+      this.emit("reconnected", { room });
+    }, delay);
   }
 
   hello(name) {
@@ -263,6 +292,8 @@ export class NetClient {
   }
 
   leave() {
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTries = 0;
     this.send({ t: "leave" });
     this.room = null;
     this.seat = null;
@@ -499,9 +530,9 @@ export class NetMirror {
     game.winners = state.winners || null;
     game.onlinePhase = state.phase || game.onlinePhase;
 
-    // ownership grid (sent only when it changed)
+    // ownership grid (the server only attaches it when something moved)
     if (state.owners) {
-      const grid = rleToGrid(decodeB64(state.owners), world.size);
+      const grid = rleToGrid(decodeVarintPairs(state.owners), world.size);
       let changed = false;
       for (let i = 0; i < world.size; i++) {
         if (grid[i] !== world.owner[i]) {
@@ -692,7 +723,35 @@ function decodeB64(b64) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Int32Array(bytes.buffer, 0, bytes.length >> 2);
+  return bytes;
+}
+
+// Owners map: base64 of LEB128 varint pairs [zigzaggedOwner, runLength].
+// ~58 KB for the whole world instead of ~180 KB as int32 — the difference
+// between a match that keeps up and one that freezes the socket.
+function decodeVarintPairs(b64) {
+  const bytes = decodeB64(b64);
+  const out = [];
+  let i = 0;
+  const next = () => {
+    let shift = 0;
+    let val = 0;
+    for (;;) {
+      const b = bytes[i++];
+      if (b === undefined) return -1;
+      val += (b & 0x7f) * Math.pow(2, shift);
+      if ((b & 0x80) === 0) return val;
+      shift += 7;
+    }
+  };
+  for (;;) {
+    const u = next();
+    if (u < 0) break;
+    const run = next();
+    if (run < 0) break;
+    out.push(u & 1 ? -((u + 1) / 2) : u / 2, run);
+  }
+  return Int32Array.from(out);
 }
 
 export async function buildMirror(state, opts = {}) {

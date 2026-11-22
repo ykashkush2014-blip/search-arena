@@ -197,9 +197,11 @@ export class Game {
         personality: this.rng.pick(["builder", "warlord", "trader", "opportunist"]),
       };
       if (n.cells < 6) {
-        n.ai.lite = true;
+        // A tiny nation used to be flagged "lite" and skipped entirely, so
+        // micro-states froze forever. Slow them down instead of stopping them.
         n.ai.aggression *= 0.4;
         n.ai.buildRate *= 0.4;
+        n.ai.nextThink = Math.max(n.ai.nextThink, 2.5);
       }
       if (this.lobby) {
         const seat = this.lobby.seats.find((s2) => s2.nationId === n.id);
@@ -259,6 +261,13 @@ export class Game {
 
   player() {
     return [...this.nations.values()].find((n) => n.isPlayer) || null;
+  }
+
+  // Every human seat, in single-player and online alike. `player()` returns
+  // just the first one, which is what the offline HUD and camera want; AI
+  // diplomacy has to treat *all* human seats as protected.
+  humans() {
+    return [...this.nations.values()].filter((n) => n.isPlayer);
   }
 
   // Online: the nation owned by a given seat (null if knocked out).
@@ -1654,8 +1663,13 @@ export class Game {
       for (const b of n.buildings) {
         if (b.cd > 0) b.cd = Math.max(0, b.cd - dt);
       }
-      // passive small-scale AI economy handled in ai module
-      if (!n.isPlayer && n.ai && !n.ai.lite && !this.lobby) this.stepAI(n, dt);
+      // Passive small-scale AI economy handled in the ai module.
+      // NOTE: this used to be gated on `!this.lobby` — but every online match
+      // HAS a lobby object, so in online mode all 230+ AI nations stood still
+      // while only their armies grew: the world map never moved and the other
+      // players were the only thing happening. The lobby only matters during
+      // the lobby phase, which is already frozen above (onlinePhase check).
+      if (!n.isPlayer && n.ai && !n.ai.lite) this.stepAI(n, dt);
     }
 
     // combat
@@ -1825,8 +1839,8 @@ export class Game {
       // don't dogpile a nation that is already collapsing
       const strength = other.army * this.attackMult(other);
       const mine = n.army * this.attackMult(n) * (1 + n.ai.aggression * 0.35);
-      const p0 = this.player();
-      const isPlayerTarget = p0 && other.id === p0.id;
+      const p0 = other.isPlayer ? other : null;
+      const isPlayerTarget = !!p0;
       if (isPlayerTarget) {
         const elapsed = this.time - (this.openedAt || 0);
         // The human gets breathing room to build up, and AI coalitions only
@@ -1846,12 +1860,12 @@ export class Game {
       candidates.push({ id, score });
     }
     if (!candidates.length) return;
-    const p = this.player();
     candidates.sort((a, b) => b.score - a.score);
-    // AI avoids attacking a much stronger player early on
+    // AI avoids attacking a human that is far stronger, and hesitates early on.
     let target = candidates[0];
-    if (p && target.id === p.id && (p.cells > n.cells * 2.2 || this.time < 25)) {
-      target = candidates.find((c) => c.id !== p.id) || null;
+    const tn = this.byId[target.id];
+    if (tn && tn.isPlayer && (tn.cells > n.cells * 2.2 || this.time < 25)) {
+      target = candidates.find((c) => !this.byId[c.id]?.isPlayer) || target;
     }
     if (!target) return;
     if (this.rng.chance(0.55 * n.ai.aggression)) {
