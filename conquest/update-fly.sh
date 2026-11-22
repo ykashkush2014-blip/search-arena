@@ -16,7 +16,7 @@
 #    REGION=fra                 منطقة الإنشاء لو لم يكن التطبيق موجودًا
 # ═══════════════════════════════════════════════════════════════════════════
 set -uo pipefail
-VERSION="2026-11-22.1"
+VERSION="2026-11-22.2"
 
 REPO_SLUG="${REPO_SLUG:-ykashkush2014-blip/search-arena}"
 BRANCH="${BRANCH:-arena/07357b19-search-arena}"
@@ -60,27 +60,34 @@ say "تنزيل آخر نسخة (فرع $BRANCH)…"
 
 SRC=""
 SHA=""
-if command -v git >/dev/null 2>&1; then
-  if git clone --depth 1 -b "$BRANCH" "https://github.com/$REPO_SLUG.git" "$WORK/g" >"$WORK/g.log" 2>&1; then
+# الأرشيف أولًا: لا يحتاج git، ولا يفتح نافذة مصادقة مخفية.
+# على macOS يتوقف `git clone` لمستودع عام عند سؤال Keychain لا يظهر حين تكون
+# المخرجات محوّلة إلى ملف — فيبدو السكربت معلّقًا عند التنزيل. حدث هذا فعلًا.
+mkdir -p "$WORK/t"
+if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 -m 300 \
+     "https://codeload.github.com/$REPO_SLUG/tar.gz/refs/heads/$BRANCH" \
+     | tar xz -C "$WORK/t" --strip-components=1 2>/dev/null; then
+  SRC="$WORK/t/conquest"
+  echo "  ✓ عبر أرشيف GitHub"
+fi
+# git احتياطي فقط: بلا أي تفاعل، لأنه لا يستطيع التوقف لأجل كلمة مرور.
+if [ -z "$SRC" ] && command -v git >/dev/null 2>&1; then
+  echo "  ⚠ الأرشيف لم ينجح — أحاول git…"
+  if GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true git -c credential.helper= \
+       clone --depth 1 --single-branch -b "$BRANCH" \
+       "https://github.com/$REPO_SLUG.git" "$WORK/g" >"$WORK/g.log" 2>&1; then
     SRC="$WORK/g/conquest"
     SHA="$(git -C "$WORK/g" rev-parse HEAD 2>/dev/null || true)"
-    echo "  ✓ عبر git — الإصدار ${SHA:0:7}"
+    echo "  ✓ عبر git"
   fi
 fi
-if [ -z "$SRC" ]; then
-  mkdir -p "$WORK/t"
-  if curl -fsSL "https://codeload.github.com/$REPO_SLUG/tar.gz/refs/heads/$BRANCH" \
-       | tar xz -C "$WORK/t" --strip-components=1 2>/dev/null; then
-    SRC="$WORK/t/conquest"
-    echo "  ✓ عبر أرشيف tar"
-  fi
-fi
-[ -n "$SRC" ] && [ -f "$SRC/server.js" ] || die "تعذّر تنزيل ملفات اللعبة — تحقق من الإنترنت"
+[ -n "$SRC" ] && [ -f "$SRC/server.js" ] || die "تعذّر تنزيل ملفات اللعبة — تحقق من الإنترنت وأعد المحاولة"
 
-# استخرج الإصدار من الأرشيف إن لم يوجد git
+# الإصدار المستهدف: من GitHub API مباشرة (يعمل بلا git).
 if [ -z "$SHA" ]; then
-  SHA="$(curl -fsSL "https://api.github.com/repos/$REPO_SLUG/commits/$BRANCH" 2>/dev/null \
-    | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([a-f0-9]\{40\}\)".*/\1/p' | head -1)"
+  SHA="$(curl -fsSL --connect-timeout 15 -m 40 \
+    "https://api.github.com/repos/$REPO_SLUG/commits/$BRANCH" 2>/dev/null \
+    | tr ',{' '\n\n' | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([a-f0-9]\{40\}\).*/\1/p' | head -1)"
 fi
 [ -n "$SHA" ] && echo "  ✓ الإصدار المستهدف: ${SHA:0:7}" || echo "  ⚠ تعذّر تحديد الإصدار (سننشر بلا بصمة)"
 
@@ -110,7 +117,20 @@ for i in $(seq 1 12); do
   esac
   printf '  … انتظار (%s/12)\n' "$i"; sleep 6
 done
-[ "$OK" = "1" ] || die "الموقع لم يستجب. راجع: fly logs -a $APP"
+if [ "$OK" != "1" ]; then
+  printf '\n\033[1;31m✗ النشر تم لكن الموقع لم يستجب بعد.\033[0m\n' >&2
+  cat >&2 <<HINT
+  هذا يحدث غالبًا لأحد سببين:
+   1) الحساب على خطة مجانية بلا طريقة دفع على الملف — Fly لا تشغّل الماشين حينها.
+      الحل: https://fly.io/dashboard  ← أضف بطاقة (لن تُخصم في الخطة المجانية)
+   2) الماشين بدأت للتوّ وتحتاج دقيقة.
+  افحص:   fly status -a $APP
+          fly logs   -a $APP --no-tail
+  ثم تحقّق يدويًا:
+          curl -s https://$APP.fly.dev/health
+HINT
+  exit 1
+fi
 
 if [ -n "$SHA" ]; then
   got="$(printf '%s' "$body" | sed -n 's/.*"build":"\([^"]*\)".*/\1/p')"
@@ -119,7 +139,8 @@ if [ -n "$SHA" ]; then
     echo "  ✓ الإصدار المباشر = $got  (مطابق للفرع — التحديث نجح)"
   else
     echo "  ⚠ الإصدار المباشر \"$got\" ≠ المتوقع \"$want\"."
-    echo "    قد يكون النشر القديم ما زال يعمل. تحقّق بعد دقيقة: curl -s $URL/health"
+    echo "    قد يكون النشر القديم ما زال يعمل. تحقّق بعد دقيقة:"
+    echo "    curl -s $URL/health"
   fi
 fi
 
