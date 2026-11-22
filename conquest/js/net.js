@@ -239,7 +239,9 @@ export class NetClient {
   }
 
   joinRoom(code) {
-    this.send({ t: "join", room: code, name: this.name });
+    // `seat` lets the server hand a returning player their own nation back
+    // instead of refusing the join or starting them fresh.
+    this.send({ t: "join", room: code, name: this.name, seat: this.seat });
   }
 
   // Ask for the public worlds. Resolves with the list, or null when the server
@@ -530,8 +532,40 @@ export class NetMirror {
     game.winners = state.winners || null;
     game.onlinePhase = state.phase || game.onlinePhase;
 
-    // ownership grid (the server only attaches it when something moved)
-    if (state.owners) {
+    // --- ownership: full grid or delta patch ---
+    // The server sends a patch (a few bytes) for the handful of cells that
+    // moved, and only falls back to the full grid on first join / reconnect.
+    // Patches reference the exact grid they were derived from, so a mismatch
+    // simply means "wait for the next full grid" instead of corrupting the map.
+    if (state.ownersDelta) {
+      if (state.ownersFrom === this.gridVersion && this.gridVersion != null) {
+        const { cells, owners } = decodePatch(state.ownersDelta);
+        for (let k = 0; k < cells.length; k++) {
+          const i = cells[k];
+          if (i < 0 || i >= world.size) continue;
+          if (world.owner[i] === owners[k]) continue;
+          world.owner[i] = owners[k];
+          game.dirtyCells.push(i);
+        }
+        this.gridVersion++;
+        world.cellCount.fill(0);
+        let total = 0;
+        for (let i = 0; i < world.size; i++) {
+          const o = world.owner[i];
+          if (o >= 0) {
+            world.cellCount[o]++;
+            total++;
+          }
+        }
+        game.totalCells = total;
+        game.ownerVersion++;
+        if (game.dirtyCells.length > 20000) {
+          game.dirtyCells.length = 0;
+          game.fullRepaint = (game.fullRepaint || 0) + 1;
+        }
+      }
+    } else if (state.owners) {
+      this.gridVersion = state.ownersVersion ?? 0;
       const grid = rleToGrid(decodeVarintPairs(state.owners), world.size);
       let changed = false;
       for (let i = 0; i < world.size; i++) {
@@ -729,6 +763,39 @@ function decodeB64(b64) {
 // Owners map: base64 of LEB128 varint pairs [zigzaggedOwner, runLength].
 // ~58 KB for the whole world instead of ~180 KB as int32 — the difference
 // between a match that keeps up and one that freezes the socket.
+// Decode a delta patch: pairs of (zigzag(cellIndex - previous), zigzag(owner)).
+// Mirrors encodePatch() in server.js.
+function decodePatch(b64) {
+  const bytes = decodeB64(b64);
+  const cells = [];
+  const owners = [];
+  let i = 0;
+  let pos = 0;
+  while (i < bytes.length) {
+    let shift = 0;
+    let v = 0;
+    let b;
+    do {
+      b = bytes[i++];
+      v |= (b & 0x7f) << shift;
+      shift += 7;
+    } while (b & 0x80 && i < bytes.length);
+    pos += (v >>> 1) ^ -(v & 1);
+    let shift2 = 0;
+    let o = 0;
+    let c;
+    do {
+      c = bytes[i++];
+      o |= (c & 0x7f) << shift2;
+      shift2 += 7;
+    } while (c & 0x80 && i < bytes.length);
+    const owner = (o >>> 1) ^ -(o & 1);
+    cells.push(pos);
+    owners.push(owner);
+  }
+  return { cells, owners };
+}
+
 function decodeVarintPairs(b64) {
   const bytes = decodeB64(b64);
   const out = [];

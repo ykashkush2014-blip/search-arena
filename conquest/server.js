@@ -261,9 +261,13 @@ class Room {
     this.aiLevel = "normal";
     this.mode = "normal"; // normal | coop | ffa
     this.public = true; // listed in the room browser (no code typing needed)
-    // Last ownership version sent to this room's players: the map is attached
-    // to a state message only when it moves past this.
-    this.lastSentGridVersion = -1;
+    // Ownership sync. `baseGrid` is the exact grid every client is believed to
+    // hold; `pendingCells` accumulates the indices that moved since that base.
+    // When the backlog is small we ship a patch, otherwise the full grid.
+    this.baseGrid = null;
+    this.baseVersion = 0;
+    this.pendingCells = [];
+    this.pendingSet = null;
   }
 
   get hostSeat() {
@@ -277,8 +281,26 @@ class Room {
     }
   }
 
-  addPlayer(name, client) {
-    if (this.phase !== "lobby" && this.phase !== "ended") return null;
+  // `seat` is passed when a dropped player comes back: they must get *their*
+  // nation back, not a new one.
+  addPlayer(name, client, seatWanted = null) {
+    // A running match used to reject joins outright, which meant a reconnect
+    // returned to a room whose state was never broadcast to it: the page sat
+    // on a frozen map with no way back. Now we re-admit the old seat if the
+    // player is already known, and refuse only genuinely new players.
+    const known = seatWanted != null ? this.players.find((p) => p.seat === seatWanted) : null;
+    if (!known && this.phase !== "lobby" && this.phase !== "ended") return null;
+
+    if (known) {
+      known.connected = true;
+      known.client = client;
+      if (this.game) this.game.setSeatDisconnected(known.seat, false);
+      client.player = known;
+      client.room = this;
+      this.lastAt = Date.now();
+      return known;
+    }
+
     const used = new Set(this.players.map((p) => p.seat));
     let seat = 0;
     while (used.has(seat)) seat++;
@@ -359,21 +381,72 @@ class Room {
     return pub;
   }
 
+  // Rebuild the list of cells whose owner moved since `baseGrid`. Called once
+  // per broadcast; the result is either shipped as a patch or discarded when
+  // we decide to send the full grid instead.
+  collectChanged() {
+    const grid = this.game.owners;
+    const base = this.baseGrid;
+    if (!base || base.length !== grid.length) return null;
+    const set = this.pendingSet || (this.pendingSet = new Set());
+    for (const i of this.pendingCells) set.add(i);
+    for (let i = 0; i < grid.length; i++) {
+      if (grid[i] !== base[i]) set.add(i);
+    }
+    const cells = [...set].sort((a, b) => a - b);
+    return cells;
+  }
+
   broadcastState() {
     const pub = this.snapshotState();
     if (!pub) return;
-    // Only ship the map when ownership changed since the previous broadcast —
-    // that was the difference between ~1.7 MB/s and a few KB/s per player.
     const base = { ...pub };
-    if (this.game.ownerVersion !== this.lastSentGridVersion) {
+    const grid = this.game.owners;
+
+    // First broadcast of a match: clients have nothing, send the whole grid.
+    if (!this.baseGrid || this.baseGrid.length !== grid.length) {
       base.owners = encodeOwners(this.game);
-      base.ownersVersion = this.game.ownerVersion;
-      this.lastSentGridVersion = this.game.ownerVersion;
+      this.baseVersion = (this.baseVersion || 0) + 1;
+      base.ownersVersion = this.baseVersion;
+      this.baseGrid = Int32Array.from(grid);
+      this.pendingCells = [];
+      this.pendingSet = new Set();
+    } else {
+      const cells = this.collectChanged();
+      if (cells === null || cells.length === 0) {
+        // nothing moved: the message carries no grid at all
+      } else if (cells.length <= PATCH_MAX_CELLS) {
+        const { b64, count } = encodePatch(grid, cells);
+        base.ownersDelta = b64;
+        base.ownersFrom = this.baseVersion;
+        base.ownersCount = count;
+        this.baseGrid = Int32Array.from(grid);
+        this.baseVersion = (this.baseVersion || 0) + 1;
+        this.pendingCells = [];
+        this.pendingSet = new Set();
+      } else {
+        // Too much moved to describe economically: resend the full grid.
+        base.owners = encodeOwners(this.game);
+        this.baseVersion = (this.baseVersion || 0) + 1;
+        base.ownersVersion = this.baseVersion;
+        this.baseGrid = Int32Array.from(grid);
+        this.pendingCells = [];
+        this.pendingSet = new Set();
+      }
     }
+
     for (const p of this.players) {
       if (!p.connected) continue;
       sendJSON(p.client, this.stateForSeat(base, p.seat));
     }
+  }
+
+  // A joining/reconnecting client holds nothing, so give it the full grid on
+  // its next state message rather than a patch it cannot apply.
+  forceFullGrid() {
+    this.baseGrid = null;
+    this.pendingCells = [];
+    this.pendingSet = null;
   }
 
   stateForSeat(base, seat) {
@@ -657,6 +730,36 @@ function writeVarint(out, n) {
 
 let lastGridVersion = -1;
 let lastGridB64 = null;
+// Delta patches: ship only the cells whose owner actually changed.
+//
+// The full grid is ~83 KB on the world map and came out as one giant change
+// every ~5 s (because the version bumps per *cell*, so the "changed" gate in
+// broadcastState fired almost every broadcast). Measured in a live match that
+// was still ~660 KB/s per player. A patch is a list of (cellIndex, owner)
+// pairs, which is orders of magnitude smaller for the handful of cells a
+// single offensive touches per tick.
+//
+// A patch is only valid if the client already holds the exact grid we derived
+// it from, so each patch carries `from`. If the client's version is not `from`
+// (first join, reconnect, lost message) the server falls back to the full grid.
+// Measured: a healthy offensive patch is ~1-4 KB (a few thousand cells). If a
+// broadcast would need more than this, the full grid (~83 KB) is the cheaper
+// and simpler message.
+const PATCH_MAX_CELLS = 6000;
+
+function encodePatch(grid, cells) {
+  // cells: array of changed indices. Pairs varint-encoded: zigzag(index) then
+  // the *signed* owner (zigzag too, so -1 ocean / -3 off-map stay valid).
+  const out = [];
+  let prev = 0;
+  for (const i of cells) {
+    writeVarint(out, zig(i - prev)); // sorted, so deltas are small
+    prev = i;
+    writeVarint(out, zig(grid[i]));
+  }
+  return { b64: Buffer.from(out).toString("base64"), count: cells.length };
+}
+
 function encodeOwners(game) {
   // Reuse the previous encoding while ownership is unchanged; the caller then
   // omits the field entirely.
@@ -805,15 +908,21 @@ function setupClient(client) {
         const r = rooms.get(code);
         if (!r) return sendJSON(client, { t: "error", text: "الغرفة غير موجودة" });
         if (r.players.length >= 8) return sendJSON(client, { t: "error", text: "الغرفة ممتلئة" });
-        if (r.phase === "playing") return sendJSON(client, { t: "error", text: "المباراة بدأت — انتظر جولة جديدة" });
-        r.addPlayer(client.session.name || msg.name || "لاعب", client);
+        const wantSeat = msg.seat != null ? Number(msg.seat) : null;
+        const joined = r.addPlayer(client.session.name || msg.name || "لاعب", client, wantSeat);
+        if (!joined) return sendJSON(client, { t: "error", text: "المباراة بدأت — انتظر جولة جديدة" });
         if (msg.nationId != null) client.player.nationId = Number(msg.nationId);
         r.lastAt = Date.now();
-        r.broadcast({ seat: -1, name: "غرفة", text: `${client.player.name} انضم`, at: Date.now(), t: "chat" });
-        r.broadcastLobby();
-        if (r.phase === "ended" && r.game) {
-          r.broadcastState();
+        // A client that just (re)joined holds no grid, so the next state must
+        // carry the whole map rather than a patch it cannot apply.
+        r.forceFullGrid();
+        // And nudge one out immediately: without this the returning player sat
+        // on a frozen map until the room's slow "nothing changed" tick.
+        r.broadcastState();
+        if (wantSeat == null) {
+          r.broadcast({ seat: -1, name: "غرفة", text: `${client.player.name} انضم`, at: Date.now(), t: "chat" });
         }
+        r.broadcastLobby();
         break;
       }
       case "pick": {
