@@ -111,7 +111,7 @@ export class NetClient {
 
   connect(name) {
     if (this.ws && (this.status === "online" || this.status === "connecting")) {
-      if (name && name !== this.name) this.send({ t: "hello", name });
+      if (name && name !== this.name) this.send({ t: "hello", name, proto: NetClient.PROTOCOL });
       return Promise.resolve(this.status === "online");
     }
     this.name = String(name || "").trim() || `لاعب-${Math.floor(Math.random() * 900 + 100)}`;
@@ -149,7 +149,7 @@ export class NetClient {
         this.status = "online";
         this.reconnectTries = 0;
         this.emit("status", this.status);
-        this.send({ t: "hello", name: this.name });
+        this.send({ t: "hello", name: this.name, proto: NetClient.PROTOCOL });
         for (const msg of this.pending.splice(0)) this.send(msg);
         if (!settled) {
           settled = true;
@@ -219,9 +219,17 @@ export class NetClient {
     }, delay);
   }
 
+  // Bumped whenever the wire format changes in a way an older page cannot
+  // read. A tab that was already open when the server was updated keeps its
+  // old JavaScript, so the server must be told which format to speak — the
+  // alternative is a map that silently stops moving for that player.
+  static get PROTOCOL() {
+    return 2; // 2 = delta patches (ownersDelta)
+  }
+
   hello(name) {
     this.name = String(name || "").slice(0, 18);
-    this.send({ t: "hello", name: this.name });
+    this.send({ t: "hello", name: this.name, proto: NetClient.PROTOCOL });
   }
 
   send(msg) {

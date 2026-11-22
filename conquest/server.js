@@ -435,9 +435,20 @@ class Room {
       }
     }
 
+    const full = base.owners; // only present when we just rebuilt the grid
     for (const p of this.players) {
       if (!p.connected) continue;
-      sendJSON(p.client, this.stateForSeat(base, p.seat));
+      let msg;
+      if ((p.client.proto || 1) < 2 && !full) {
+        // Legacy page: it needs the whole grid every time, so build it here
+        // rather than letting that player stare at a frozen map.
+        msg = this.stateForSeat({ ...base, owners: encodeOwners(this.game), ownersVersion: this.baseVersion }, p.seat);
+        delete msg.ownersDelta;
+      } else {
+        msg = this.stateForSeat(base, p.seat);
+        if ((p.client.proto || 1) < 2) delete msg.ownersDelta;
+      }
+      sendJSON(p.client, msg);
     }
   }
 
@@ -819,6 +830,15 @@ function setupClient(client) {
     switch (msg.t) {
       case "hello": {
         client.session.name = String(msg.name || "لاعب").slice(0, 18);
+        // A page opened before the server was updated keeps running the old
+        // JavaScript. It cannot apply delta patches, so anything below the
+        // current protocol must keep receiving the whole grid or its map
+        // would freeze mid-match with no error shown.
+        const proto = Number(msg.proto) || 1;
+        if (client.proto !== proto) {
+          client.proto = proto;
+          if (client.room) client.room.forceFullGrid();
+        }
         if (client.player) client.player.name = client.session.name;
         sendJSON(client, { t: "hello", name: client.session.name, online: true });
         if (client.room) client.room.broadcastLobby();
