@@ -33,9 +33,65 @@ export class NetClient {
     if (set) for (const fn of set) fn(data);
   }
 
+  // ---------------------------------------------------------------- server ---
+  //
+  // The published game is a static page (Vercel). A static host cannot hold a
+  // WebSocket open, so on such a page the browser dials the one address that
+  // can run the match: ONLINE_SERVER. Browsers allow that cross-origin — the
+  // server answers directly, there is no proxy — which is what gives the public
+  // link real online play instead of a local-only demo.
+  //
+  // Everywhere else (localhost, Fly/Docker, any real game server) the page and
+  // the server share an origin and the derived URL is used, exactly as before.
+  static get ONLINE_SERVER() {
+    return "wss://conquest-online-8129.fly.dev/ws";
+  }
+
+  // Hosts that serve the static page and nothing else.
+  static isStaticHost(host) {
+    const h = String(host || "").split(":")[0].toLowerCase();
+    if (!h) return true; // file:// or opaque origin
+    return (
+      h.endsWith(".vercel.app") ||
+      h.endsWith(".now.sh") ||
+      h.endsWith(".netlify.app") ||
+      h.endsWith(".pages.dev") ||
+      h.endsWith(".github.io") ||
+      h.endsWith(".web.app") ||
+      h.endsWith(".surge.sh")
+    );
+  }
+
+  // ?server=wss://host/ws  (remembered for the session) redirects the client to
+  // a different server without a redeploy — useful for a custom domain.
+  static override() {
+    try {
+      const q = new URLSearchParams(location.search).get("server");
+      if (q) {
+        localStorage.setItem("conquest.server", q);
+        return q;
+      }
+      return localStorage.getItem("conquest.server") || "";
+    } catch {
+      return "";
+    }
+  }
+
+  // True when this page cannot host the game itself and must use ONLINE_SERVER.
+  static needsRemote() {
+    return NetClient.isStaticHost(location.host) && !NetClient.override();
+  }
+
   url() {
+    const forced = NetClient.override();
+    if (forced) return forced;
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    if (NetClient.needsRemote()) return NetClient.ONLINE_SERVER;
     return `${proto}//${location.host}/ws`;
+  }
+
+  get remote() {
+    return this.url() === NetClient.ONLINE_SERVER;
   }
 
   // ------------------------------------------------------------- lifecycle ---
@@ -107,7 +163,12 @@ export class NetClient {
         if (!settled) {
           settled = true;
           clearTimeout(timer);
-          this.emit("error", "تعذر الاتصال بالخادم. الأونلاين يحتاج تشغيل خادم Node: node server.js (النسخة الثابتة على الإنترنت تلعب فردي فقط)");
+          this.emit(
+            "error",
+            this.remote
+              ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل (اللعب الفردي يعمل دائمًا)"
+              : "تعذر الاتصال بالخادم. محليًا شغّله بـ: node server.js"
+          );
           resolve(false);
         } else if (wasOnline) {
           this.emit("disconnected");

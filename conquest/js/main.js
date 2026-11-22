@@ -226,10 +226,17 @@ async function openOnlineHome() {
   setOnlineStatus(net.status === "online" ? "متصل بالخادم" : "جاري الاتصال…", net.status === "online" ? "ok" : "");
   const ok = await net.connect(profile.settings.name || "");
   if (!ok) {
-    setOnlineStatus("تعذر الاتصال — شغّل الخادم: node server.js", "bad");
+    // On the published page the server is remote, so "run node server.js" is
+    // the wrong advice — say what is actually happening.
+    setOnlineStatus(
+      net.remote
+        ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل. اللعب الفردي يعمل دائمًا"
+        : "تعذر الاتصال — شغّل الخادم: node server.js",
+      "bad"
+    );
     return;
   }
-  setOnlineStatus(`متصل بالخادم • ${net.name}`, "ok");
+  setOnlineStatus(`متصل بالخادم • ${net.name}${net.remote ? " (أونلاين)" : ""}`, "ok");
   if (!app.pickWorld) {
     app.pickWorld = new World("world", app.era);
     app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
@@ -2442,7 +2449,12 @@ async function boot() {
     const ok = await net.connect(onlineName());
     if (!ok) {
       renderRoomList([]);
-      setOnlineStatus("الخادم غير متاح — الأونلاين يحتاج تشغيل node server.js", "bad");
+      setOnlineStatus(
+        net.remote
+          ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل"
+          : "الخادم غير متاح — الأونلاين يحتاج تشغيل node server.js",
+        "bad"
+      );
       return false;
     }
     net.listRooms();

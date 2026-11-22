@@ -41,6 +41,17 @@ const TYPES = {
 
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || "/").split("?")[0]);
+  // The published page is served from another origin (Vercel) and dials this
+  // server directly, so probes like /health must be readable cross-origin.
+  // Only the plain-HTTP endpoints need this: the WebSocket handshake is not
+  // subject to CORS, and nothing here is authenticated.
+  res.setHeader("access-control-allow-origin", "*");
+  res.setHeader("access-control-allow-headers", "content-type");
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, { "access-control-max-age": "86400" });
+    res.end();
+    return;
+  }
   if (url === "/health") {
     // `build` lets anyone (and publish.sh) confirm which revision is actually
     // running. Without it a stale deploy looks healthy while serving old code.
@@ -98,6 +109,10 @@ function wsHandshake(req, socket) {
   );
   const client = { socket, buffer: Buffer.alloc(0), open: true, id: Math.random().toString(36).slice(2) };
   clients.add(client);
+  // Fly's edge proxy closes connections that look idle. A lobby can sit quiet
+  // for minutes while players pick nations, so every socket gets a ping.
+  client.keep = setInterval(() => sendFrame(client, 0x9, Buffer.alloc(0)), 20000);
+  if (client.keep.unref) client.keep.unref();
   socket.on("data", (chunk) => {
     client.buffer = Buffer.concat([client.buffer, chunk]);
     try {
@@ -116,6 +131,8 @@ function wsHandshake(req, socket) {
 function closeClient(client) {
   if (!client.open) return;
   client.open = false;
+  if (client.keep) clearInterval(client.keep);
+  client.keep = null;
   clients.delete(client);
   try {
     client.socket.destroy();
