@@ -26,31 +26,24 @@
   </div>
 
   <script type="module">
-    // The game itself (map data, art, simulation) is served from a pinned,
-    // immutable copy of the repository. This page only bootstraps it, so a
-    // deploy stays tiny and always matches the committed build.
     const REF = "105d2e2eb58a35673236699c15b138af404e7be6";
     const CDN = "https://cdn.jsdelivr.net/gh/ykashkush2014-blip/search-arena@" + REF + "/conquest/";
     const RAW = "https://raw.githubusercontent.com/ykashkush2014-blip/search-arena/" + REF + "/conquest/";
     const boot = document.getElementById("boot");
     const fail = (msg) => {
-      boot.innerHTML = `<h1>⚠️ تعذر التحميل</h1><p>${msg}</p>`;
+      boot.innerHTML = "<h1>⚠️ تعذر التحميل</h1><p>" + msg + "</p>";
     };
     try {
-      // prefer the CDN; fall back to raw.githubusercontent for strict networks
       let BASE = CDN;
       let res = null;
       for (const b of [CDN, RAW]) {
         try {
           const r = await fetch(b + "index.html", { cache: "no-store" });
           if (r.ok) { BASE = b; res = r; break; }
-        } catch { /* try the next mirror */ }
+        } catch (e) { /* try the next mirror */ }
       }
       if (!res) throw new Error("assets unreachable");
       const doc = new DOMParser().parseFromString(await res.text(), "text/html");
-
-      // Rewrite every relative asset URL to the pinned CDN copy and drop the
-      // module tag (we import the entry point ourselves, after the DOM exists).
       for (const el of doc.querySelectorAll("[src], [href]")) {
         for (const attr of ["src", "href"]) {
           const val = el.getAttribute(attr);
@@ -60,18 +53,16 @@
         }
       }
       doc.querySelectorAll('script[src*="js/main.js"]').forEach((s) => s.remove());
-
       document.title = doc.title || document.title;
       document.body.innerHTML = doc.body.innerHTML;
       for (const style of doc.head.querySelectorAll("style, link")) {
         document.head.appendChild(style.cloneNode(true));
       }
       boot.remove();
-
       await import(BASE + "js/main.js");
     } catch (err) {
       console.error(err);
-      fail("تعذر الوصول إلى ملفات اللعبة. تحقق من اتصال الإنترنت ثم أعد تحميل الصفحة.");
+      fail("تعذر الوصول إلى ملفات اللعبة. تحقق من اتصالك بالإنترنت ثم أعد تحميل الصفحة.");
     }
   </script>
 </body>

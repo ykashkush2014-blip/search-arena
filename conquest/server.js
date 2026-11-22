@@ -10,8 +10,16 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// The pinned bootstrap page lives in js/deploypage.js so serverless bundlers
+// (Vercel) always trace and include it. Reading deploy/index.html from disk was
+// unreliable: includeFiles did not pick it up and "/" returned raw plain text.
+import { deployPage, DEPLOY_REF } from "./js/deploypage.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+// Serverless hosts cannot serve the game files themselves (no writable disk and
+// unreliable file tracing), so there "/" must return the CDN bootstrap.
+// Locally we serve the real build so the live preview always reflects the code.
+const CAN_BOOTSTRAP = !!process.env.VERCEL;
 const PORT = Number(process.argv[2] || process.env.PORT || 5173);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -35,7 +43,19 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ ok: true, rooms: rooms.size, clients: clients.size }));
     return;
   }
-  let file = path.join(ROOT, url === "/" ? "index.html" : url);
+  // "/" serves the tiny pinned bootstrap (works on serverless: it loads the
+  // game from the CDN). "/play" always serves the full local build, which is
+  // what the Node server and the live-preview use (the bootstrap needs the
+  // commit to be pushed to GitHub first, so it can lag behind local edits).
+  if ((url === "/" || url === "/index.html") && CAN_BOOTSTRAP) {
+    res.writeHead(200, {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-cache",
+    });
+    res.end(deployPage(DEPLOY_REF));
+    return;
+  }
+  let file = path.join(ROOT, url === "/" || url === "/play" ? "index.html" : url);
   if (!file.startsWith(ROOT)) {
     res.writeHead(403).end("forbidden");
     return;
