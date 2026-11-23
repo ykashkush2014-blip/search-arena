@@ -1,0 +1,16 @@
+{
+  "name": "sands-of-aether",
+  "version": "1.0.0",
+  "description": "Sands of Aether (رمال الأثير) — a top-down action RPG built on a zero-dependency canvas engine, tuned for low-end devices, with Google Docs / Notion / Supabase / GitHub / Linear integrations.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "gen": "node tools/gen-content.js",
+    "test": "node tests/run-tests.js",
+    "lines": "node tools/check-lines.js",
+    "serve": "node tools/serve.js",
+    "verify": "node tools/gen-content.js && node tests/run-tests.js && node tools/check-lines.js"
+  },
+  "keywords": ["game", "canvas", "rpg", "pixel-art", "arabic", "offline-first"],
+  "license": "MIT"
+}

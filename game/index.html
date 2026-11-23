@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#17111f">
+  <meta name="description" content="Sands of Aether — رمال الأثير: a desert action-RPG that runs beautifully on low-end devices. Vanilla JS, zero dependencies, no Vercel.">
+  <title>Sands of Aether — رمال الأثير</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/rtl.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏜️</text></svg>">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game-canvas" width="480" height="270" aria-label="Sands of Aether game canvas"></canvas>
+
+    <div id="loading" role="status" aria-live="polite">
+      <div class="loading-inner">
+        <div class="loading-title">رمال الأثير</div>
+        <div class="loading-sub">Sands of Aether</div>
+        <div class="loading-bar"><div class="loading-fill"></div></div>
+        <div class="loading-hint">جاري نحت الكثبان… · Carving the dunes…</div>
+      </div>
+    </div>
+
+    <div id="fatal-error" hidden>
+      <div class="error-box">
+        <h2>حدث خطأ غير متوقع · Unexpected error</h2>
+        <pre id="fatal-error-text"></pre>
+        <p>جرّب تحديث الصفحة. · Try refreshing the page.</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Global error trap — shows a friendly panel instead of a frozen canvas.
+    const fatal = document.getElementById('fatal-error');
+    const fatalText = document.getElementById('fatal-error-text');
+    window.addEventListener('error', (e) => {
+      if (!fatal || !fatalText) return;
+      fatal.hidden = false;
+      fatalText.textContent = String(e.message ?? e.error ?? 'unknown error');
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      if (!fatal || !fatalText) return;
+      fatal.hidden = false;
+      fatalText.textContent = String(e.reason ?? 'unhandled rejection');
+    });
+  </script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

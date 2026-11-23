@@ -1,0 +1,30 @@
+/* rtl.css — Arabic-first RTL adjustments for HTML overlays.
+   Canvas-drawn text handles its own direction via font.js measureText. */
+
+html[dir="rtl"] body {
+  text-align: right;
+}
+
+html[dir="rtl"] .toast-host {
+  left: auto;
+  right: 50%;
+  transform: translateX(50%);
+}
+
+html[dir="rtl"] .perf-badge {
+  left: auto;
+  right: 8px;
+}
+
+html[dir="rtl"] .error-box pre {
+  direction: ltr;
+  text-align: left;
+}
+
+html[dir="rtl"] .loading-hint {
+  direction: rtl;
+}
+
+html[dir="ltr"] .loading-title {
+  letter-spacing: 2px;
+}

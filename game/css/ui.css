@@ -1,0 +1,98 @@
+/* ui.css — panels, toasts, and canvas-adjacent chrome. The in-game UI is
+   canvas-drawn; this stylesheet covers HTML overlays only. */
+
+#stage::after {
+  /* subtle scanline overlay, pure CSS, cheap */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.07) 3px
+  );
+  z-index: 5;
+  opacity: 0.5;
+}
+
+.toast-host {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 8px 16px;
+  background: rgba(36, 27, 48, 0.95);
+  border: 1px solid #6e5230;
+  color: #f5e9d0;
+  font-size: 13px;
+  text-align: center;
+  animation: toast-in 0.25s ease-out;
+}
+
+.toast.success { border-color: #63c76a; }
+.toast.error { border-color: #e05548; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* performance badge (dev only, hidden unless .show-perf on body) */
+.perf-badge {
+  display: none;
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  background: rgba(13, 10, 18, 0.8);
+  border: 1px solid #3a2c48;
+  font-size: 11px;
+  color: #7ec8a3;
+  z-index: 25;
+  font-family: monospace;
+}
+
+body.show-perf .perf-badge {
+  display: block;
+}
+
+/* integration status strip */
+.integrations-strip {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.int-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #3a2c48;
+  background: rgba(23, 17, 31, 0.85);
+  font-size: 11px;
+  color: #b8a888;
+}
+
+.int-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7a6a52;
+}
+
+.int-dot.live { background: #63c76a; }
+.int-dot.snapshot { background: #e8b64c; }
+.int-dot.offline { background: #7a6a52; }
+.int-dot.error { background: #e05548; }
