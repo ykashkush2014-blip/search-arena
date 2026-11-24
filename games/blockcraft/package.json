@@ -1,0 +1,11 @@
+{
+  "name": "blockcraft-3d",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "لعبة بلوك كرافت ثلاثية الأبعاد تعمل بالكامل داخل المتصفح (voxel sandbox).",
+  "scripts": {
+    "start": "python3 -m http.server 4173",
+    "test": "node test/game.test.mjs"
+  }
+}

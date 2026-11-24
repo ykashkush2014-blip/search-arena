@@ -79,3 +79,18 @@ Install all necessary dependencies: ``pip3 install -r requirements.txt``
       url={https://openreview.net/forum?id=MMGRlDnhtI}
 }
 ```
+
+## 🎮 Bonus: بلوك كرافت — BlockCraft 3D
+
+A self-contained, offline voxel sandbox in the browser (`games/blockcraft/`),
+inspired by the *mine craft blocks* game on [YallaPlay](https://yallaplay.pages.dev/).
+It reuses the procedural world, mesher and physics modules tested in
+`games/blockcraft/test/game.test.mjs`.
+
+```bash
+cd games/blockcraft && python3 -m http.server 4173   # open http://localhost:4173
+node test/game.test.mjs                              # 41 headless logic tests
+```
+
+See [`games/blockcraft/README.md`](games/blockcraft/README.md) for controls,
+features and publishing instructions.

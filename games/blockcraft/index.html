@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#1a2333" />
+<meta property="og:title" content="بلوك كرافت — BlockCraft 3D" />
+<meta property="og:description" content="عالم مكعبات ثلاثي الأبعاد داخل المتصفح: احفر، ابنِ، اصنع، وأكمل المهام." />
+<meta property="og:image" content="thumbnail.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="description" content="بلوك كرافت — لعبة بناء واستكشاف ثلاثية الأبعاد داخل المتصفح: احفر، ابنِ، اصنع، وانجِ في عالم مكعبات لا نهائي." />
+<title>بلوك كرافت — BlockCraft 3D</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="thumbnail.png" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%234a8b32'/><path d='M32 8 56 22 32 36 8 22z' fill='%237fbd4c'/><path d='M8 22v20l24 14V36z' fill='%238a6141'/><path d='M56 22v20L32 56V36z' fill='%235f412d'/></svg>" />
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <!-- ===== In-game HUD ===== -->
+  <div id="hud" class="hidden" aria-live="polite">
+    <div id="crosshair"><span></span><span></span></div>
+
+    <div id="stats" class="glass">
+      <div class="stat-row"><span class="stat-icon"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 12V7.5"/><path d="M12 12l3.5 2"/></svg></span><span id="stat-clock">07:00</span><span id="stat-phase" class="pill">نهار</span></div>
+      <div class="stat-row"><span class="stat-icon"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z"/></svg></span><span id="stat-health">100</span><span class="hpbar"><i id="hpbar"></i></span></div>
+      <div class="stat-row"><span class="stat-icon"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-6.1 6-11a6 6 0 1 0-12 0c0 4.9 6 11 6 11z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span id="stat-coords">0 / 30 / 0</span></div>
+      <div class="stat-row"><span class="stat-icon"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 7.5v9L12 21 4 16.5v-9z"/><path d="M4 7.5 12 12l8-4.5"/><path d="M12 12v9"/></svg></span><span id="stat-target">—</span></div>
+      <div class="stat-row dim"><span class="stat-icon"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17a8 8 0 1 1 16 0"/><path d="m12 14 4-4"/></svg></span><span id="stat-fps">60</span> إطار/ث <span id="stat-chunks" class="dim">· 0 قطعة</span></div>
+    </div>
+
+    <aside id="quests" class="glass">
+      <header>
+        <h2>المهام</h2>
+        <span id="quest-count" class="pill">0/7</span>
+        <button id="btn-quests-toggle" class="icon-btn" title="طيّ القائمة" aria-label="طيّ قائمة المهام">▾</button>
+      </header>
+      <ul id="quest-list"></ul>
+      <div id="quest-hint" class="hint">أكمل كل المهام لتفوز باللعبة</div>
+    </aside>
+
+    <div id="minimap-wrap" class="glass">
+      <canvas id="minimap" width="140" height="140"></canvas>
+      <div class="minimap-label"><span id="mini-biome">سهول</span> · N</div>
+    </div>
+
+    <div id="toolbar" role="toolbar" aria-label="أدوات اللعبة">
+      <button class="tool" id="btn-inventory" title="الحقيبة والصناعة (E)" aria-label="الحقيبة"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h16v11.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 7.5V6a4 4 0 0 1 8 0v1.5"/><path d="M4 12h16"/></svg></span><em>الحقيبة</em></button>
+      <button class="tool" id="btn-fly" title="وضع الطيران (F)" aria-label="طيران"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13c4-1 6-3 7.5-6.5C12 3 15 3 16 5c1 2 1 5 5 6-4 1-6 3-7 5.5-1 2.5-4 3-5 1-.7-1.4-.6-3 0-4.5z"/></svg></span><em>طيران</em></button>
+      <button class="tool" id="btn-time" title="قدّم الوقت (T)" aria-label="الوقت"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 12V7.5"/><path d="M12 12l3.5 2"/></svg></span><em>الوقت</em></button>
+      <button class="tool" id="btn-mute" title="كتم الصوت (Q)" aria-label="الصوت"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L13 5v14l-5.5-4.5H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg></span><em>الصوت</em></button>
+      <button class="tool" id="btn-help" title="المساعدة" aria-label="مساعدة"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.2a2.7 2.7 0 1 1 3.6 2.5c-.7.3-1 .9-1 1.6v.4"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></span><em>مساعدة</em></button>
+      <button class="tool" id="btn-fullscreen" title="ملء الشاشة" aria-label="شاشة"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></span><em>شاشة</em></button>
+      <button class="tool" id="btn-map" title="الخريطة (M)" aria-label="الخريطة"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg></span><em>خريطة</em></button>
+      <button class="tool" id="btn-pause" title="إيقاف مؤقت (Esc)" aria-label="إيقاف"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14"/><path d="M15 5v14"/></svg></span><em>إيقاف</em></button>
+    </div>
+
+    <div id="hotbar" role="toolbar" aria-label="شريط المكعبات"></div>
+
+    <div id="toasts"></div>
+
+    <!-- touch controls -->
+    <div id="touch-ui" class="hidden">
+      <div id="joystick"><div id="knob"></div></div>
+      <div id="lookpad"></div>
+      <div id="touch-actions">
+        <button id="btn-touch-break" class="touch-btn danger" aria-label="اكسر"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21 15 12"/><path d="M14 4.5 19.5 10 16 13.5 10.5 8z"/></svg><em>اكسر</em></button>
+        <button id="btn-touch-place" class="touch-btn primary" aria-label="ضع"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 7.5v9L12 21 4 16.5v-9z"/><path d="M4 7.5 12 12l8-4.5"/><path d="M12 12v9"/></svg><em>ضع</em></button>
+        <button id="btn-touch-jump" class="touch-btn" aria-label="قفز"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V5"/><path d="m6.5 10.5 5.5-6 5.5 6"/></svg><em>قفز</em></button>
+        <button id="btn-touch-sprint" class="touch-btn" aria-label="جري"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.5" cy="4.8" r="1.8"/><path d="m13 8 3 2 1 4"/><path d="m16 14-3.5 3.5L11 22"/><path d="M13 8 9 10l-1 4"/></svg><em>جري</em></button>
+      </div>
+    </div>
+
+    <div id="damage-flash"></div>
+    <div id="water-tint"></div>
+  </div>
+
+  <!-- ===== Start menu ===== -->
+  <section id="menu" class="overlay">
+    <div class="menu-card">
+      <div class="logo-row">
+        <div class="logo-cube" aria-hidden="true">
+          <span class="face top"></span><span class="face left"></span><span class="face right"></span>
+        </div>
+        <div>
+          <h1>بلوك كرافت</h1>
+          <p class="tagline">عالم مكعبات لا نهائي — احفر، ابنِ، اصنع… وابقَ حياً حتى الليل.</p>
+        </div>
+      </div>
+
+      <div class="mode-row" role="radiogroup" aria-label="وضع اللعب">
+        <button class="mode-card active" data-mode="survival" role="radio" aria-checked="true">
+          <strong><svg class="mode-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 19 7-7"/><path d="M13.5 4.5 19 10l-3 3-5.5-5.5z"/><path d="m16 16 3 3"/><path d="m4 16 4 4"/></svg> مغامرة</strong>
+          <span>اجمع الموارد، اصنع الأدوات، وأكمل المهام. الموارد محدودة!</span>
+        </button>
+        <button class="mode-card" data-mode="creative" role="radio" aria-checked="false">
+          <strong><svg class="mode-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 7.5v9L12 21 4 16.5v-9z"/><path d="M4 7.5 12 12l8-4.5"/><path d="M12 12v9"/></svg> بناء حر</strong>
+          <span>مكعبات لا نهائية، طيران، ووقت متوقف/سريع. ابنِ ما تشاء.</span>
+        </button>
+      </div>
+
+      <div class="cta-row">
+        <button id="btn-play" class="btn primary big"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg> ابدأ اللعب</button>
+        <button id="btn-continue" class="btn ghost big hidden"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 3 8"/><path d="M4 5v5h5"/></svg> متابعة الحفظ</button>
+      </div>
+
+      <div class="controls-grid touch-hint-only">
+        <div>عصا التحكم يمين الشاشة: الحركة</div>
+        <div>اسحب على يسار الشاشة: النظر</div>
+        <div>أزرار اليسار: اكسر / ضع / اقفز / اجري</div>
+        <div>زر الحقيبة: صناعة المكعبات</div>
+      </div>
+
+      <div class="controls-grid desktop-only">
+        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> الحركة</div>
+        <div><kbd>Space</kbd> قفز / طيران لأعلى</div>
+        <div><kbd>Shift</kbd> جري</div>
+        <div><kbd>زر أيسر</kbd> اكسر مكعب</div>
+        <div><kbd>زر أيمن</kbd> ضع مكعب</div>
+        <div><kbd>1</kbd>…<kbd>9</kbd> اختيار مكعب</div>
+        <div><kbd>E</kbd> الحقيبة والصناعة</div>
+        <div><kbd>F</kbd> طيران</div>
+        <div><kbd>T</kbd> تقديم الوقت</div>
+        <div><kbd>M</kbd> خريطة مصغرة</div>
+        <div><kbd>Esc</kbd> إيقاف مؤقت</div>
+        <div><kbd>Q</kbd> كتم الصوت</div>
+      </div>
+      <p class="footnote">على الجوال: عصا التحكم للحركة، واسحب على يسار الشاشة للنظر. الأزرار على اليمين للكسر والبناء.</p>
+    </div>
+  </section>
+
+  <!-- ===== Pause menu ===== -->
+  <section id="pause" class="overlay hidden">
+    <div class="menu-card narrow">
+      <h2><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14"/><path d="M15 5v14"/></svg> إيقاف مؤقت</h2>
+      <p id="pause-stats" class="dim"></p>
+      <div class="stack">
+        <button id="btn-resume" class="btn primary"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg> متابعة</button>
+        <button id="btn-save" class="btn"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v6h7V4"/><path d="M8 20v-6h8v6"/></svg> حفظ اللعبة</button>
+        <button id="btn-settings" class="btn ghost"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/></svg> الإعدادات</button>
+        <button id="btn-quit" class="btn danger"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7"/><path d="M6.5 10v10h11V10"/></svg> إلى القائمة</button>
+      </div>
+      <div id="settings" class="hidden stack">
+        <label class="slider">حساسية النظر <input id="set-sens" type="range" min="4" max="30" value="12" /></label>
+        <label class="slider">مسافة الرؤية <input id="set-distance" type="range" min="2" max="6" value="4" /></label>
+        <label class="toggle"><input id="set-invert" type="checkbox" /> اعكس محور Y</label>
+        <label class="toggle"><input id="set-sound" type="checkbox" checked /> الأصوات</label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Inventory / crafting ===== -->
+  <section id="inventory" class="overlay hidden">
+    <div class="inv-card">
+      <header>
+        <h2><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h16v11.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 7.5V6a4 4 0 0 1 8 0v1.5"/><path d="M4 12h16"/></svg> الحقيبة</h2>
+        <button id="btn-inv-close" class="icon-btn" aria-label="إغلاق">✕</button>
+      </header>
+      <div class="inv-body">
+        <div>
+          <h3>مكعباتك</h3>
+          <div id="inv-grid" class="inv-grid"></div>
+        </div>
+        <div>
+          <h3><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="m14 4 6 6-9 9H5v-6z"/><path d="m12 6 6 6"/></svg> ورشة الصناعة</h3>
+          <div id="recipes" class="recipes"></div>
+        </div>
+      </div>
+      <p class="footnote">اختر مكعباً لتصنعه في الشريط السفلي · الموارد المستهلكة تُنقص من حقيبتك.</p>
+    </div>
+  </section>
+
+  <!-- ===== Help ===== -->
+  <section id="help" class="overlay hidden">
+    <div class="menu-card narrow">
+      <h2><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.2a2.7 2.7 0 1 1 3.6 2.5c-.7.3-1 .9-1 1.6v.4"/><circle cx="12" cy="17" r=".9" fill="currentColor" stroke="none"/></svg> كيف تلعب</h2>
+      <ul class="help-list">
+        <li><strong>اجمع:</strong> اكسر الأشجار بالخشب للحصول على جذوع، والحجر للحصول على حصى.</li>
+        <li><strong>اصنع:</strong> من الحقيبة (<kbd>E</kbd>) حوّل الجذوع إلى ألواح، والرمل إلى زجاج، ثم الزجاج إلى مصباح.</li>
+        <li><strong>ابنِ:</strong> اختر مكعباً بالأرقام أو بعجلة الفأرة، ثم اضغط الزر الأيمن لتضعه.</li>
+        <li><strong>انجُ:</strong> الليل أطول وأبرد — ضع مصابيح لتُدفئ المكان، والسباحة تُبطئك.</li>
+        <li><strong>افُز:</strong> أكمل المهام السبعة في اللوحة الجانبية.</li>
+      </ul>
+      <button id="btn-help-close" class="btn primary">فهمت!</button>
+    </div>
+  </section>
+
+  <!-- ===== Win ===== -->
+  <section id="win" class="overlay hidden">
+    <div class="menu-card narrow win-card">
+      <div class="win-badge"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 5.5H5.5A2.5 2.5 0 0 0 8 10"/><path d="M16 5.5h2.5A2.5 2.5 0 0 1 16 10"/><path d="M12 13v4"/><path d="M9 20h6"/><path d="M9.5 17h5l.5 3h-6z"/></svg></div>
+      <h2>مبروك! أكملت كل المهام</h2>
+      <p id="win-stats" class="dim"></p>
+      <div class="stack">
+        <button id="btn-win-again" class="btn primary"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/></svg> عالم جديد</button>
+        <button id="btn-win-stay" class="btn ghost"><svg class="ico-inline" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.6 2.4 4 5.3 4 8.5s-1.4 6.1-4 8.5c-2.6-2.4-4-5.3-4-8.5s1.4-6.1 4-8.5z"/></svg> ابقَ وابنِ</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Loading ===== -->
+  <div id="loading" class="overlay hidden">
+    <div class="loading-box">
+      <div class="loading-cube"><span></span><span></span><span></span></div>
+      <p id="loading-text">جارٍ توليد العالم…</p>
+      <div class="bar"><div id="loading-bar"></div></div>
+    </div>
+  </div>
+
+  <div id="fatal" class="overlay hidden">
+    <div class="menu-card narrow">
+      <h2>تعذّر تشغيل اللعبة</h2>
+      <p id="fatal-text" class="dim"></p>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+  { "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

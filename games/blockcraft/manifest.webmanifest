@@ -1,0 +1,15 @@
+{
+  "name": "بلوك كرافت — BlockCraft 3D",
+  "short_name": "بلوك كرافت",
+  "description": "عالم مكعبات ثلاثي الأبعاد داخل المتصفح: احفر، ابنِ، اصنع، وأكمل المهام.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b1020",
+  "theme_color": "#1a2333",
+  "icons": [
+    { "src": "thumbnail.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
