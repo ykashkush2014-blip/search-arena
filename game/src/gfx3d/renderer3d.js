@@ -105,7 +105,13 @@ export class Renderer3D {
 
   setRenderScale(scale) {
     this.renderScale = clamp(scale, 0.5, 1);
-    this.gl.viewport(0, 0, Math.floor(this.width * this.renderScale), Math.floor(this.height * this.renderScale));
+    const w = Math.max(64, Math.floor(this.width * this.renderScale));
+    const h = Math.max(36, Math.floor(this.height * this.renderScale));
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
+    this.gl.viewport(0, 0, w, h);
   }
 
   // ------------------------------------------------------- level meshes

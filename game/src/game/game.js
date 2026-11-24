@@ -72,7 +72,7 @@ export class Game {
 
     // engine & io — 3D WebGL renderer with the 2D renderer as fallback
     this.renderer = this._createRenderer(opts.uiCanvas);
-    this.input = new Input({ canvas: this.canvas });
+    this.input = new Input({ canvas: this.canvas, width: 480, height: 270 });
     this.audio = audio;
     this.tweens = new TweenManager();
     this.performance = new PerformanceGovernor({
@@ -415,17 +415,8 @@ export class Game {
   _updateDialogue() {
     const input = this.input;
     const choices = this.dialogue.availableChoices(this._dialogueCtx());
-    if (input.justPressed('confirm') || input.justPressed('interact') || input.justPressed('attack')) {
-      if (choices.length === 0) {
-        this.dialogue.choose(0, this._dialogueCtx());
-      } else if (!this._dialogueChoice) {
-        this._dialogueChoice = 0;
-      } else {
-        this.dialogue.choose(this._dialogueChoice, this._dialogueCtx());
-        this._dialogueChoice = 0;
-      }
-      this.audio.play('uiMove');
-    }
+
+    // navigate choices (keyboard / virtual stick)
     if (choices.length > 0) {
       if (input.justPressed('moveDown')) {
         this._dialogueChoice = Math.min(choices.length - 1, (this._dialogueChoice ?? 0) + 1);
@@ -434,12 +425,61 @@ export class Game {
         this._dialogueChoice = Math.max(0, (this._dialogueChoice ?? 0) - 1);
       }
     }
+
+    // tap/click: pick a choice row when one is hit, otherwise advance
+    let pickedChoice = -1;
+    if (input.mouse.clicked) {
+      const layout = this._dialogueLayout(choices.length);
+      for (let i = 0; i < choices.length; i += 1) {
+        const ry = layout.choiceY0 + i * layout.choiceStep;
+        if (
+          input.mouse.x >= layout.x + 8 && input.mouse.x <= layout.x + layout.w - 8 &&
+          input.mouse.y >= ry - 2 && input.mouse.y <= ry + 8
+        ) {
+          pickedChoice = i;
+          break;
+        }
+      }
+    }
+
+    const confirmPressed =
+      input.justPressed('confirm') || input.justPressed('interact') || input.justPressed('attack') ||
+      input.mouse.clicked || input.touch.taps.length > 0;
+
+    if (pickedChoice >= 0) {
+      this.dialogue.choose(pickedChoice, this._dialogueCtx());
+      this._dialogueChoice = null;
+      this.audio.play('uiMove');
+    } else if (confirmPressed) {
+      if (choices.length === 0) {
+        this.dialogue.choose(0, this._dialogueCtx());
+      } else {
+        this.dialogue.choose(this._dialogueChoice ?? 0, this._dialogueCtx());
+      }
+      this._dialogueChoice = null;
+      this.audio.play('uiMove');
+    }
+
     if (input.justPressed('cancel')) {
       this.dialogue.end();
     }
     if (!this.dialogue.isTalking() && this.shop?.isOpen()) {
       this.openScreen('shop');
     }
+  }
+
+  /** Dialogue panel geometry shared by hit-testing and rendering. */
+  _dialogueLayout(choiceCount = 0) {
+    const vw = this.renderer.width;
+    const vh = this.renderer.height;
+    return {
+      x: 14,
+      y: vh - 92,
+      w: vw - 28,
+      choiceY0: vh - 92 + 56,
+      choiceStep: 9,
+      choiceCount,
+    };
   }
 
   _dialogueCtx() {
@@ -769,32 +809,35 @@ export class Game {
     const ui = this.ui;
     const node = this.dialogue.currentNode();
     if (!node) return;
-    const vw = this.renderer.width;
-    const vh = this.renderer.height;
-    const x = 14;
-    const w = vw - 28;
-    const y = vh - 92;
+    const choices = this.dialogue.availableChoices(this._dialogueCtx());
+    const layout = this._dialogueLayout(choices.length);
+    const { x, w } = layout;
+    const y = layout.y;
     ui.panel(x, y, w, 82, { alpha: 0.94 });
     const speaker = this.i18n.pick(node.speaker);
     if (speaker) {
       ui.text(speaker, x + 10, y + 6, { size: 7, color: '#e8b64c', bold: true });
     }
     ui.paragraph(this.i18n.pick(node.text), x + 10, y + 18, w - 20, { size: 7, lineHeight: 3 });
-    const choices = this.dialogue.availableChoices(this._dialogueCtx());
     if (choices.length > 0) {
-      let cy = y + 56;
       choices.forEach((choice, i) => {
         const selected = (this._dialogueChoice ?? 0) === i;
-        ui.text(`${selected ? '▶' : ' '} ${this.i18n.pick(choice.text)}`, x + 16, cy, {
+        ui.text(`${selected ? '▶' : ' '} ${this.i18n.pick(choice.text)}`, x + 16, layout.choiceY0 + i * layout.choiceStep, {
           size: 6,
           color: selected ? '#e8b64c' : '#f5e9d0',
         });
-        cy += 9;
+      });
+      ui.text(this.lang === 'ar' ? '↑↓ ثم Enter · أو انقر' : '↑↓ then Enter · or tap', x + w - 128, y + 68, {
+        size: 5,
+        color: '#9c8e70',
       });
     } else {
       ui.text('▼', x + w - 18, y + 68, { size: 8, color: '#e8b64c' });
+      ui.text(this.lang === 'ar' ? 'Space/Enter · أو انقر' : 'Space/Enter · or tap', x + w - 118, y + 68, {
+        size: 5,
+        color: '#9c8e70',
+      });
     }
-    void this.dialogue;
   }
 
   // --------------------------------------------------------------- misc

@@ -397,7 +397,7 @@ export const DIALOGUES = {
           },
           {
             text: { en: '[Wake up]', ar: '[استيقظ]' },
-            next: 'end',
+            next: 'wake',
             effects: [{ type: 'setFlag', flag: 'intro_seen' }, { type: 'playSound', sound: 'portal' }],
           },
         ],
@@ -408,9 +408,9 @@ export const DIALOGUES = {
           en: '...I am what the sand kept... hurry...',
           ar: '...أنا ما احتفظ به الرمل... أسرع...',
         },
-        next: 'end',
+        next: 'wake',
       },
-      end: {
+      wake: {
         speaker: { en: '', ar: '' },
         text: {
           en: 'You wake at the edge of the singing dunes.',

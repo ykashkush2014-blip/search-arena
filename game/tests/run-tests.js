@@ -917,6 +917,95 @@ suite('full game smoke (boot → play → fight → save)', () => {
   });
 });
 
+// ============================================== dialogue/input regressions
+// Frozen-start bug: the intro vision locked the game forever because choice
+// index 0 was treated as "no selection". These tests pin the fix.
+
+suite('dialogue/input regressions', () => {
+  test('intro dialogue completes with confirm and frees the player', () => {
+    const game = new Game({ canvas: makeCanvas(), lang: 'en' });
+    game.storage = new Storage();
+    game.saveManager.storage = game.storage;
+    game.boot();
+    game.startNewGame();
+    assert.ok(game.dialogue.isTalking(), 'intro dialogue opens');
+    // drive the dialogue with confirm presses (Space)
+    for (let i = 0; i < 6 && game.dialogue.isTalking(); i += 1) {
+      game.input.pressed.add('Space');
+      game.input.keys.add('Space');
+      game.update(1 / 60);
+      game.input.keys.delete('Space');
+    }
+    assert.equal(game.dialogue.isTalking(), false, 'dialogue must end (was hard-locked before)');
+    // movement now reaches the player
+    game.input.keys.add('KeyD');
+    game.update(1 / 60);
+    assert.equal(game.player.moveIntent.x, 1, 'player receives movement');
+    game.input.keys.delete('KeyD');
+  });
+
+  test('choice navigation: down-arrow then confirm picks choice 1', () => {
+    const game = new Game({ canvas: makeCanvas(), lang: 'en' });
+    game.storage = new Storage();
+    game.saveManager.storage = game.storage;
+    game.boot();
+    game.startNewGame();
+    assert.ok(game.dialogue.isTalking());
+    game.input.pressed.add('ArrowDown');
+    game.update(1 / 60); // highlight choice 1
+    game.input.pressed.add('Space');
+    game.update(1 / 60); // choose it
+    // intro choice 1 leads to the 'walk' node
+    assert.equal(game.dialogue.active?.nodeId, 'walk', 'choice 1 branch taken');
+  });
+
+  test('tap/click advances dialogue (mobile path)', () => {
+    const game = new Game({ canvas: makeCanvas(), lang: 'en' });
+    game.storage = new Storage();
+    game.saveManager.storage = game.storage;
+    game.boot();
+    game.startNewGame();
+    const before = game.dialogue.active?.nodeId;
+    game.input.mouse.clicked = true;
+    game.input.mouse.x = 240;
+    game.input.mouse.y = 20; // far from choice rows → plain advance
+    game.update(1 / 60);
+    const after = game.dialogue.active?.nodeId;
+    assert.ok(after !== before || !game.dialogue.isTalking(), 'tap advanced the dialogue');
+  });
+
+  test('virtual on-screen buttons register as justPressed', async () => {
+    const { Input } = await import('../src/core/input.js');
+    const input = new Input({ canvas: makeCanvas(), width: 480, height: 270 });
+    input.setVirtual('attack', true);
+    assert.equal(input.justPressed('attack'), true, 'virtual attack press visible');
+    input.endFrame();
+    input.setVirtual('interact', true);
+    assert.equal(input.justPressed('interact'), true);
+    input.endFrame();
+    assert.equal(input.isDown('interact'), true, 'held virtual button stays down');
+    input.setVirtual('interact', false);
+    assert.equal(input.isDown('interact'), false, 'virtual release clears');
+  });
+
+  test('gamepad buttons edge-detect without latching', async () => {
+    const { Input } = await import('../src/core/input.js');
+    const input = new Input({ canvas: makeCanvas(), width: 480, height: 270 });
+    // simulate a gamepad via the internal poll path
+    const fakePad = { index: 0, axes: [0, 0], buttons: { 0: { pressed: true } } };
+    input._getGamepad = () => fakePad;
+    input.pollGamepad();
+    assert.equal(input.justPressed('attack'), true, 'edge fires');
+    input.endFrame();
+    input.pollGamepad(); // held: no new edge
+    assert.equal(input.justPressed('attack'), false, 'held does not re-fire');
+    assert.equal(input.isDown('attack'), true, 'held still reads as down');
+    fakePad.buttons[0].pressed = false;
+    input.pollGamepad();
+    assert.equal(input.isDown('attack'), false, 'release clears held state (no latch)');
+  });
+});
+
 // ==================================================== gfx3d (3D world)
 const registerGfx3dTests = (await import('./gfx3d-tests.js')).default;
 await registerGfx3dTests({ suite, test, assert });

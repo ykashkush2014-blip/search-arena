@@ -71,9 +71,14 @@ export class Input {
     };
     this.enabled = true;
     this.canvas = opts.canvas || null;
+    // logical resolution for coordinate mapping (the GL backing store may be
+    // smaller than 480×270 on weak devices — coordinates stay logical)
+    this.logicalW = opts.width ?? (this.canvas ? this.canvas.width : 480);
+    this.logicalH = opts.height ?? (this.canvas ? this.canvas.height : 270);
     this._listeners = [];
     this._gamepadIndex = -1;
     this._prevGamepadButtons = [];
+    this._gpHeld = new Set(); // actions held on the gamepad this frame
     this._virtual = new Map(); // action -> boolean (from on-screen buttons)
     this._virtualAxes = { x: 0, y: 0 };
     this._attach();
@@ -119,8 +124,8 @@ export class Input {
       const toLocal = (clientX, clientY) => {
         const rect = canvas.getBoundingClientRect();
         return {
-          x: ((clientX - rect.left) / rect.width) * canvas.width,
-          y: ((clientY - rect.top) / rect.height) * canvas.height,
+          x: ((clientX - rect.left) / rect.width) * this.logicalW,
+          y: ((clientY - rect.top) / rect.height) * this.logicalH,
         };
       };
       this._listen(canvas, 'mousemove', (e) => {
@@ -151,7 +156,7 @@ export class Input {
         e.preventDefault();
         for (const t of e.changedTouches) {
           const p = toLocal(t.clientX, t.clientY);
-          if (p.x < canvas.width * 0.5 && this.touch.stickId === null) {
+          if (p.x < this.logicalW * 0.5 && this.touch.stickId === null) {
             this.touch.stickId = t.identifier;
             this.touch.stickBaseX = p.x;
             this.touch.stickBaseY = p.y;
@@ -217,6 +222,7 @@ export class Input {
 
   isDown(action) {
     if (this._virtual.get(action)) return true;
+    if (this._gpHeld.has(action)) return true;
     const codes = this.bindings[action];
     if (!codes) return false;
     for (const code of codes) if (this.keys.has(code)) return true;
@@ -224,6 +230,7 @@ export class Input {
   }
 
   justPressed(action) {
+    if (this.pressed.has(`V_${action}`) || this.pressed.has(`GP_${action}`)) return true;
     const codes = this.bindings[action];
     if (!codes) return false;
     for (const code of codes) if (this.pressed.has(code)) return true;
@@ -231,6 +238,7 @@ export class Input {
   }
 
   justReleased(action) {
+    if (this.released.has(`V_${action}`) || this.released.has(`GP_${action}`)) return true;
     const codes = this.bindings[action];
     if (!codes) return false;
     for (const code of codes) if (this.released.has(code)) return true;
@@ -276,7 +284,10 @@ export class Input {
   /** Poll gamepad buttons into the pressed map (call once per frame). */
   pollGamepad() {
     const gp = this._getGamepad();
-    if (!gp) return;
+    if (!gp) {
+      this._gpHeld.clear();
+      return;
+    }
     const map = [
       [0, Actions.ATTACK],
       [1, Actions.DASH],
@@ -285,10 +296,12 @@ export class Input {
       [9, Actions.PAUSE],
     ];
     for (const [idx, action] of map) {
-      const down = gp.buttons[idx] && gp.buttons[idx].pressed;
+      const down = Boolean(gp.buttons[idx] && gp.buttons[idx].pressed);
       const was = this._prevGamepadButtons[idx];
       if (down && !was) this.pressed.add(`GP_${action}`);
-      this._virtual.set(action, down || this._virtual.get(action) === true);
+      if (!down && was) this.released.add(`GP_${action}`);
+      if (down) this._gpHeld.add(action);
+      else this._gpHeld.delete(action);
       this._prevGamepadButtons[idx] = down;
     }
   }
