@@ -459,6 +459,20 @@ export class SettingsScreen {
     });
     cy += 24;
 
+    // renderer mode: 3D world / classic 2D (applies after reload)
+    const mode = g.settings?.renderer ?? 'auto';
+    ui.text(g.t('settings.renderer'), x + 12, cy, { size: 7 });
+    ['auto', '3d', '2d'].forEach((m, i) => {
+      ui.button(x + 120 + i * 42, cy - 4, 38, 14, m, {
+        onClick: () => {
+          g.setSetting('renderer', m);
+          ui.toast(g.t('settings.rendererApply'), { color: '#e8b64c' });
+        },
+        bg: mode === m ? UI_THEME.borderDark : undefined,
+      });
+    });
+    cy += 24;
+
     ui.text(g.t('settings.music'), x + 12, cy, { size: 7 });
     ui.bar(x + 120, cy, 104, 8, g.settings?.musicVolume ?? 0.45, {
       fill: UI_THEME.accent,

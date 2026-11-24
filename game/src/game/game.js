@@ -25,6 +25,8 @@ import { TitleMenu, PauseMenu, GameOverScreen } from '../ui/menus.js';
 import { ScreenManager } from '../ui/screens.js';
 import { TouchControls } from '../ui/touchControls.js';
 import { spriteBank } from '../gfx/spritegen.js';
+import { actorBank } from '../gfx3d/actors3d.js';
+import { Renderer3D } from '../gfx3d/renderer3d.js';
 import { Content } from './content.js';
 import { World } from './world.js';
 import { SaveManager, loadSettings, persistSettings } from '../save/saveManager.js';
@@ -65,10 +67,11 @@ export class Game {
       touchControls: true,
       screenShake: true,
       language: this.lang,
+      renderer: 'auto', // 'auto' | '3d' | '2d'
     });
 
-    // engine & io
-    this.renderer = new Renderer(this.canvas, { width: 480, height: 270 });
+    // engine & io — 3D WebGL renderer with the 2D renderer as fallback
+    this.renderer = this._createRenderer(opts.uiCanvas);
     this.input = new Input({ canvas: this.canvas });
     this.audio = audio;
     this.tweens = new TweenManager();
@@ -148,6 +151,27 @@ export class Game {
 
   // ---------------------------------------------------------------- boot
 
+  /**
+   * Pick the renderer: WebGL 3D unless unavailable or the user forced 2D.
+   * Falls back to the Canvas2D renderer (full pixel-art path) on any failure,
+   * so the game always boots — including on devices without WebGL.
+   */
+  _createRenderer(uiCanvas) {
+    const mode = this.settings.renderer ?? 'auto';
+    if (mode !== '2d' && typeof document !== 'undefined') {
+      try {
+        return new Renderer3D(this.canvas, {
+          uiCanvas: uiCanvas ?? (typeof document !== 'undefined' ? document.getElementById('ui-canvas') : null),
+          width: 480,
+          height: 270,
+        });
+      } catch (err) {
+        console.warn('[Game] 3D renderer unavailable, using 2D fallback:', err?.message ?? err);
+      }
+    }
+    return new Renderer(this.canvas, { width: 480, height: 270 });
+  }
+
   boot() {
     if (this._booted) return this;
     this._booted = true;
@@ -194,6 +218,7 @@ export class Game {
     this.world = new World(this);
     const firstId = this.content.firstLevelId();
     this.world.loadLevel(firstId);
+    this._syncLevelMesh();
     this.player.x = this.world.spawnPoint.x;
     this.player.y = this.world.spawnPoint.y;
     this.player.data.map = this.world.map;
@@ -222,6 +247,7 @@ export class Game {
       const spawn = this.pendingSpawn;
       if (spawn?.levelId && spawn.levelId !== this.world.levelId) {
         this.world.loadLevel(spawn.levelId);
+        this._syncLevelMesh();
       }
       if (spawn && Number.isFinite(spawn.x)) {
         this.player.x = spawn.x;
@@ -255,7 +281,10 @@ export class Game {
     if (ok) {
       this.ui.toast(this.t('toast.loaded'), { color: '#63c76a' });
       const spawn = this.pendingSpawn;
-      if (spawn?.levelId && this.world) this.world.loadLevel(spawn.levelId);
+      if (spawn?.levelId && this.world) {
+        this.world.loadLevel(spawn.levelId);
+        this._syncLevelMesh();
+      }
       if (spawn && Number.isFinite(spawn.x)) {
         this.player.x = spawn.x;
         this.player.y = spawn.y;
@@ -268,6 +297,7 @@ export class Game {
   gotoLevel(levelId, spawnIndex = 0) {
     if (!this.world) return;
     const level = this.world.loadLevel(levelId);
+    this._syncLevelMesh();
     const spawns = level.spawns ?? [level.spawn];
     const s = spawns[spawnIndex] ?? spawns[0] ?? level.spawn;
     const px = this.world.map.tileToPixel(s.x, s.y);
@@ -450,8 +480,12 @@ export class Game {
       cam.follow(this.player.x, this.player.y + 6, 1 / 60, 0.1);
 
       r.begin('#1a1220');
-      this.world.map.render(r.bctx, this.world.tileSet, cam, { fog: true });
-      this._renderEntities();
+      if (r.is3D && r.drawLevel) {
+        this._renderWorld3D();
+      } else {
+        this.world.map.render(r.bctx, this.world.tileSet, cam, { fog: true });
+        this._renderEntities();
+      }
       this.world.particles.render(r.bctx, cam);
       this.world.combat.renderFloaters(r.bctx, cam);
 
@@ -489,6 +523,107 @@ export class Game {
     }
     void alpha;
     void frameNo;
+  }
+
+  // ---------------------------------------------------------- 3D world
+
+  /**
+   * WebGL world pass: level mesh + posed actor meshes + glow billboards.
+   * HUD/particles/floaters still draw on the 2D overlay via Camera3D projection.
+   */
+  _renderWorld3D() {
+    const r = this.renderer;
+    const world = this.world;
+    const tint = world.dayNight.tint();
+    const exposure = 1 - (world.weather?.intensity ?? 0) * 0.12;
+    r.drawLevel(tint, exposure);
+
+    const drawable = world.entities
+      .filter((e) => e.alive !== false && e.kind !== 'portal' && r.camera.isVisible(e.x, e.y, 80))
+      .sort((a, b) => a.y - b.y);
+
+    for (const e of drawable) {
+      const anim = this._anim3D(e);
+      switch (e.kind) {
+        case 'enemy':
+        case 'boss': {
+          const def = e.def ?? {};
+          const mesh = actorBank.forEnemy({ family: def.family ?? 'beast', isBoss: e.kind === 'boss' });
+          r.drawActor(mesh, e.x, e.y, anim);
+          break;
+        }
+        case 'npc': {
+          const mesh = actorBank.get('humanoid', NPC_PALETTE[e.role] ?? NPC_PALETTE.villager);
+          r.drawActor(mesh, e.x, e.y, anim);
+          break;
+        }
+        case 'chest': {
+          const mesh = actorBank.get('chest', {});
+          r.drawActor(mesh, e.x, e.y, { ...anim, openT: e.opened ? 1 : 0 });
+          break;
+        }
+        case 'loot': {
+          const mesh = actorBank.get('loot', {});
+          r.drawActor(mesh, e.x, e.y, { ...anim, y: Math.sin(e.bobTimer ?? 0) * 2 });
+          break;
+        }
+        default:
+          break;
+      }
+    }
+
+    // player
+    const p = this.player;
+    if (p) {
+      const mesh = actorBank.get('humanoid', {
+        skin: '#e8b88a',
+        cloth: '#4a6fa5',
+        accent: '#e8b64c',
+        hair: '#2c1808',
+        boots: '#4a2c18',
+        weapon: this.inventory?.equipment?.weapon ? 'sword' : null,
+      });
+      r.drawActor(mesh, p.x, p.y, this._anim3D(p));
+    }
+
+    // glow pass: portals, projectiles, magic shimmer
+    r.beginGlow();
+    for (const e of world.entities) {
+      if (e.kind === 'portal' && e.alive !== false) {
+        const pulse = 11 + Math.sin((e.animTimer ?? 0) * 3) * 2;
+        r.glowQuad(e.x, e.y, pulse, '#b267e0', 9);
+        r.glowQuad(e.x, e.y, pulse * 0.55, '#e8c0ff', 9);
+      }
+    }
+    const projectiles = world.projectiles?.active;
+    if (projectiles) {
+      for (const pr of projectiles) {
+        if (pr.active === false) continue;
+        r.glowQuad(pr.x, pr.y, 6, pr.hostile ? '#e05548' : '#63c7c7', 6);
+      }
+    }
+    r.endGlow(world.weather.tint(), 0.5);
+  }
+
+  /** Push the current tilemap into the 3D renderer (no-op for 2D). */
+  _syncLevelMesh() {
+    if (this.renderer.setLevel && this.world?.map) {
+      this.renderer.setLevel(this.world.map);
+    }
+  }
+
+  _anim3D(e) {
+    const moving = e.state === 'walk' || e.state === 'chase' || e.state === 'flee' || e.state === 'patrol';
+    return {
+      facing: e.facing ?? 1,
+      walkPhase: (e.animTimer ?? e.stateTime ?? 0) * 9,
+      walking: moving,
+      attackT: e.state === 'attack' ? 0.5 : 0,
+      flying: e.flying ?? (e.z ?? 0) > 4,
+      y: e.z ?? 0,
+      scale: e.kind === 'boss' ? 1.5 : 1,
+      flash: e.flashTimer ?? 0,
+    };
   }
 
   _renderEntities() {
@@ -735,6 +870,11 @@ export class Game {
     if (this.engine) this.engine.setRenderEvery(profile.renderEvery);
     if (this.world?.particles) this.world.particles.setCapacity(profile.maxParticles);
     this.audio.maxVoices = profile.audioVoices;
+    // weak GPUs: shrink the 3D render target instead of dropping frames
+    if (this.renderer?.setRenderScale) {
+      const scale = this.performance.tier === 0 ? 0.55 : this.performance.tier === 1 ? 0.75 : 1;
+      this.renderer.setRenderScale(scale);
+    }
     gameEvents.emit(Events.QUALITY_CHANGED, { profile });
   }
 

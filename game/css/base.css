@@ -36,6 +36,19 @@ html, body {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  z-index: 1;
+}
+
+/* 2D overlay canvas (HUD/menus) stacked above the 3D WebGL canvas */
+#ui-canvas {
+  position: absolute;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  z-index: 2;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* -------- loading overlay -------- */
@@ -142,7 +155,7 @@ html, body {
 
 /* -------- mobile safe areas -------- */
 @supports (padding: env(safe-area-inset-top)) {
-  #game-canvas {
+  #game-canvas, #ui-canvas {
     margin-top: env(safe-area-inset-top);
     margin-bottom: env(safe-area-inset-bottom);
   }

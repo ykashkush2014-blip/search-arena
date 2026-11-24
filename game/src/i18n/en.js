@@ -64,6 +64,8 @@ export const EN = {
     shake: 'Screen shake',
     cloudSync: 'Cloud sync',
     auto: 'Auto',
+    renderer: 'Graphics',
+    rendererApply: 'Graphics mode applies after reload',
   },
   leaderboard: {
     empty: 'No scores yet — be the first',

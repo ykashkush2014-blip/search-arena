@@ -64,6 +64,8 @@ export const AR = {
     shake: 'اهتزاز الشاشة',
     cloudSync: 'المزامنة السحابية',
     auto: 'تلقائي',
+    renderer: 'الرسوميات',
+    rendererApply: 'يُطبَّق وضع الرسوميات بعد إعادة التحميل',
   },
   leaderboard: {
     empty: 'لا نتائج بعد — كن الأول',

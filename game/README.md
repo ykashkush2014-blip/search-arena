@@ -26,8 +26,9 @@ npm run verify    # gen + test + lines
 
 | Area | Contents |
 | --- | --- |
-| `src/core` | engine (fixed timestep), renderer (480×270 buffer), input, audio, particles, pooling, tweens, checksummed storage |
+| `src/core` | engine (fixed timestep), 2D renderer (480×270 buffer), input, audio, particles, pooling, tweens, checksummed storage |
 | `src/gfx` | procedural tile/sprite atlas, bitmap font with RTL, palettes |
+| `src/gfx3d` | WebGL low-poly renderer: mat4 math, vertex-lit shaders, 3/4 camera, level meshes, posed actor meshes |
 | `src/world` | tilemap + collision, A* pathfinding, dungeon generator |
 | `src/entities` | player, enemies + AI, bosses (6 patterns), projectiles, loot, NPCs |
 | `src/systems` | combat, inventory, skills (8), crafting (18 recipes), quests (39), dialogue, weather (6 types), day/night, achievements, shop, minimap |
@@ -37,6 +38,25 @@ npm run verify    # gen + test + lines
 | `src/data/generated` | the 40-level campaign emitted by `tools/gen-content.js` |
 | `tools` | content generator, line-budget checker, static server |
 | `tests` | headless harness that boots and plays the real game |
+
+## 3D world (with 2D fallback)
+
+The game renders its world twice over:
+
+- **3D (default)** — a WebGL pipeline (`src/gfx3d`): the tilemap becomes a
+  vertex-colored low-poly mesh (walls, trees, crystals, water), and every
+  character is a procedural box-model with posed limbs (walk cycles, attacks,
+  opening chests). Two tiny shader programs: vertex-lit + fog, and additive
+  glow billboards for portals/projectiles. HUD, menus and dialogue draw on a
+  2D overlay canvas stacked above the GL canvas.
+- **2D (fallback & option)** — the original pixel-art Canvas2D path. It is the
+  automatic fallback when WebGL is missing, and can be forced from
+  Settings → Graphics (`auto` / `3d` / `2d`, stored in localStorage).
+
+Weak-device support carries over: the 3D pass renders at 0.55–1× the 480×270
+buffer (the quality governor shrinks the render target instead of dropping
+frames), geometry is a few thousand untextured triangles, and there are zero
+downloaded assets.
 
 ## Performance on weak devices
 

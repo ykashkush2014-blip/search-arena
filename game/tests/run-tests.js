@@ -917,6 +917,10 @@ suite('full game smoke (boot → play → fight → save)', () => {
   });
 });
 
+// ==================================================== gfx3d (3D world)
+const registerGfx3dTests = (await import('./gfx3d-tests.js')).default;
+await registerGfx3dTests({ suite, test, assert });
+
 // ==================================================================== run
 
 const ok = await runAll();
