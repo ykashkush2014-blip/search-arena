@@ -2651,8 +2651,11 @@ async function boot() {
     if (dot) dot.textContent = st === "online" ? "●" : "○";
   });
   net.on("error", (text) => {
-    toast(text, "bad");
-    setOnlineStatus(text, "bad");
+    // net.js speaks Arabic because it is shared with the server-side client;
+    // translate once here rather than at each of its dozen throw sites.
+    const msg = t(text);
+    toast(msg, "bad");
+    setOnlineStatus(msg, "bad");
   });
   net.on("lobby", (view) => renderLobby(view));
   net.on("state", (state) => {

@@ -36,8 +36,6 @@ export const EN = {
   "العب مع أصدقائك: غرفة بكود، كل لاعب يدير دولة حقيقية على نفس الخريطة.":
     "Play with friends: a room code, and each player runs a real nation on the same map.",
 
-  // --------------------------------------------------------- country selection
-  "اختر دولتك": "Choose your nation",
   "كل دولة لها حدودها الحقيقية وصعوبتها الخاصة": "Every nation has its real borders and its own difficulty",
   "اضغط أي دولة على الخريطة لاختيارها": "Tap any nation on the map to choose it",
   "ابحث عن دولة…": "Search for a nation…",
@@ -107,7 +105,6 @@ export const EN = {
   "الحروب": "Wars",
   "التحالفات": "Alliances",
   "الدبلوماسية": "Diplomacy",
-  "الاقتصاد": "Economy",
   "اقتصاد حرب": "War economy",
   "الدفاعات": "Defences",
   "دفاعات": "Defences",
@@ -120,7 +117,6 @@ export const EN = {
   "الجيران:": "Neighbours:",
   "أرضك": "Your land",
   "أرضك: 0 خلية • جيران: 0": "Your land: 0 cells • Neighbours: 0",
-  "هدنة": "Truce",
   "حرب": "War",
   "حليف": "Ally",
   "محايد": "Neutral",
@@ -135,10 +131,8 @@ export const EN = {
   "المستوى الأقصى": "Max level",
   "مغلق": "Locked",
   "مبانٍ": "Buildings",
-  "مبنى": "Building",
   "بناء": "Build",
   "ابنِ": "Build",
-  "بناء 25 مبنى": "Build 25 buildings",
   "المدينة ترفع سقف جيشك وذهبك. المصنع يزيد ذهبك. القاعدة تسرّع التجنيد.":
     "A city raises your army cap and gold. A factory adds gold. A base speeds up recruiting.",
 
@@ -179,7 +173,6 @@ export const EN = {
   "حصار": "Siege",
   "حراسة": "Guard",
   "ترفيه": "Leisure",
-  "مدة الحملة": "Campaign length",
 
   // ------------------------------------------------------------- units/tech
   "مشاة الخط": "Line infantry",
@@ -277,9 +270,7 @@ export const EN = {
   "الحكيم": "The Sage",
   "أمير البحر": "Lord of the Sea",
   "مثابر": "Persistent",
-  "جيش لا يُهزم": "Unbeatable army",
   "أول ضربة": "First strike",
-  "كمّاشة": "Pincer",
 
   // -------------------------------------------------------------- campaign
   "الحملة": "Campaign",
@@ -317,8 +308,6 @@ export const EN = {
   "تحدي اليوم": "Today's challenge",
   "مدة الحملة": "Campaign length",
 
-  // ---------------------------------------------------------------- actions
-  "تجنيد": "Recruit",
   "تجنيد فوري": "Instant recruit",
   "تحويل الجيش إلى ذهب": "Convert army to gold",
   "تحويل الجيش لذهب": "Convert army to gold",
@@ -467,8 +456,6 @@ export const EN = {
   "أنت في غرفة بالفعل": "You are already in a room",
   "المباراة بدأت — انتظر جولة جديدة": "The match has started — wait for the next round",
   "تحتاج لاعبين اثنين على الأقل": "You need at least two players",
-  "الجبهة متعثرة": "The front is stalling",
-  "الجبهة متعثرة</b>` :": "The front is stalling</b>` :",
   "استعادة أرض خربة": "Reclaimed ruined land",
   "الأرض الخربة بعيدة عن حدودك": "That ruin is far from your border",
   "ليست أرضًا خربة": "That is not ruin",
@@ -605,11 +592,7 @@ export const EN = {
   "العلاقات": "Relations",
   "دعم": "support",
   "ذهب/ث": "gold/s",
-  "بحث/ث": "research/s",
-  "ث": "s",
   "د": "m",
-  "/ث": "/s",
-  "/د": "/m",
   "+0/ث": "+0/s",
   "؟": "?",
   "و": "and",
@@ -628,19 +611,10 @@ export const EN = {
   "جزر": "Islands",
   "جزيرة — لا حدود برية": "Island — no land borders",
   "حدود برية": "Land borders",
-  "برّي": "Land",
   "برق": "Lightning",
   "الفطر": "Fungus",
   "مدة": "Duration",
 
-  // ---- small fragments that appear as text nodes in composite markup
-  ">كونكوست": ">Conquest",
-  "الأسطول</span><span class=": "Fleet</span><span class=",
-  "مضيف</span>' :": "Host</span>' :",
-  "تحالف</button>` :": "Alliance</button>` :",
-  "حرب</button>` : `<button data-call=": "War</button>` : `<button data-call=",
-  "هدنة</button>` :": "Truce</button>` :",
-  "قبول</button><button data-dec=": "Accept</button><button data-dec=",
   // --- HUD, menu and medals: short labels that the DOM walk sees on its own
   "بحث": "Research",
   "بحث/ث": "research/s",
@@ -675,5 +649,7 @@ export const EN = {
   "كمّاشة": "pincer",
   "جاهز للإطلاق": "Ready to launch",
   "ترقية": "Upgrade",
+  "لا توجد عوالم مفتوحة — فتحت لك عالمًا جديدًا": "No open worlds — opened a new one for you",
+  "لا توجد عوالم مفتوحة الآن — اضغط «العب الآن» لتفتح عالمًا": "No open worlds right now — press “Play now” to open one",
+  "قائد": "Commander",
 };
-
