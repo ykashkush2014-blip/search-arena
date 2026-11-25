@@ -32,6 +32,7 @@ const MODULES = [
   "js/campaigns.js",
   "js/audio.js",
   "js/net.js",
+  "js/crazygames.js",
   "js/main.js",
 ];
 

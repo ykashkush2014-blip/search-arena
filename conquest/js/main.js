@@ -12,7 +12,28 @@ import { CAMPAIGNS, dailyChallenge } from "./campaigns.js";
 import { Rng } from "./rng.js";
 import { sfx } from "./audio.js";
 import { net, NetMirror } from "./net.js";
-import { t, tBack, setLang, getLang, loadLang, translateDom, watchDom, registerNationNames } from "./i18n.js";
+import { t, tBack, setLang, getLang, loadLang, translateDom, watchDom, registerNationNames, hasSavedLanguage } from "./i18n.js";
+import {
+  initCrazyGames,
+  getSettings,
+  onSettingsChange,
+  isPortal,
+  isInstantMultiplayer,
+  getInviteParams,
+  preferredLanguage,
+  gameplayStart,
+  gameplayStop,
+  loadingStart,
+  loadingStop,
+  happytime,
+  reportProgress,
+  roomJoined,
+  roomJoinable,
+  roomLeft,
+  onJoinRoom,
+  getUser,
+  requestMidgameAd,
+} from "./crazygames.js";
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -122,6 +143,13 @@ const app = {
 // --------------------------------------------------------------- navigation ---
 
 function show(screen) {
+  // Leaving the match (menu, results, lobby) ends the play session for the
+  // portal, which uses these edges to pause anything resource-hungry and to
+  // measure how long people actually play.
+  if (screen !== "game") {
+    gameplayStop();
+    roomGone();
+  }
   app.screen = screen;
   $$(".screen").forEach((el) => (el.hidden = true));
   $("#screen-" + screen).hidden = false;
@@ -244,6 +272,14 @@ async function openOnlineHome() {
   $("#online-home").hidden = false;
   $("#online-lobby").hidden = true;
   $("#online-name").value = profile.settings.name || "";
+  // Show the invite code immediately. A friend who followed an invite should
+  // see which room they are heading into even if the server is briefly down,
+  // and the retry "Join" button then works without retyping.
+  const invitedCode = inviteRoomCode();
+  if (invitedCode) {
+    const box = $("#online-code");
+    if (box) box.value = invitedCode;
+  }
   setOnlineStatus(net.status === "online" ? t("متصل بالخادم") : t("جاري الاتصال…"), net.status === "online" ? "ok" : "");
   const ok = await net.connect(profile.settings.name || "");
   if (!ok) {
@@ -258,11 +294,40 @@ async function openOnlineHome() {
     return;
   }
   setOnlineStatus(`متصل بالخادم • ${net.name}${net.remote ? " (أونلاين)" : ""}`, "ok");
+  // Two portal entry points drop the player straight into a room instead of
+  // the lobby browser: an invite link, and the platform's instant-multiplayer
+  // flag (friends list / multiplayer page). Both then put them in a room that
+  // is joinable, which is what the portal's Join UI needs.
+  const invited = inviteRoomCode();
+  if (invited) {
+    net.joinRoom(invited);
+    toast(t("جارٍ الانضمام إلى غرفة صديق") + " " + invited, "good");
+    return;
+  }
+  if (isInstantMultiplayer()) {
+    net.createRoom({
+      map: $("#online-map")?.value || "world",
+      mode: $("#online-mode")?.value || "normal",
+      goal: parseFloat($("#online-goal")?.value) || 0.5,
+      aiLevel: $("#online-ai")?.value || "normal",
+    });
+    return;
+  }
   if (!app.pickWorld) {
     app.pickWorld = new World("world", app.era);
     app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
     attachPickInput();
   }
+}
+
+// The portal can send a player here with a room code attached (invite link or
+// a friend's "Join"). The SDK exposes it as inviteParams; we also accept a
+// plain ?room= code so a normal URL works outside the portal.
+function inviteRoomCode() {
+  const params = getInviteParams();
+  const fromQuery = new URLSearchParams(location.search).get("room");
+  const code = (params && (params.room || params.roomId || params.roomName)) || fromQuery;
+  return code ? String(code).trim().toUpperCase() : "";
 }
 
 function setOnlineStatus(text, cls) {
@@ -438,6 +503,9 @@ function pickLobbyNation(nationId) {
 
 function renderLobby(view) {
   online.lobby = view;
+  // Report the room so the portal can offer Join/Invite. A lobby is joinable
+  // while it is still filling up.
+  roomUpdate(view.room, view.seats.length < view.maxSeats);
   $("#online-home").hidden = true;
   $("#online-lobby").hidden = false;
   $("#room-code").textContent = view.room;
@@ -765,6 +833,30 @@ function randomCountry() {
   }
 }
 
+// One click from the menu straight into a match. The portal allows at most one
+// click before gameplay, and this is that click: a random mid-sized nation on
+// the world map, default settings, no configuration screen. Players who want to
+// choose can still use "اختر دولتك", which is the explicitly labelled button.
+function quickStart() {
+  if (!app.pickWorld) {
+    app.pickWorld = new World("world", app.era);
+    app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
+    attachPickInput();
+  }
+  app.mode = "normal";
+  app.campaign = null;
+  app.daily = null;
+  app.era = app.era || "modern";
+  app.preset = "world";
+  if (!app.goal) app.goal = 0.5;
+  if (!app.aiLevel) app.aiLevel = "normal";
+  const pool = app.pickWorld.playable().filter((c) => c.cells > 120);
+  const c = pool[Math.floor(Math.random() * pool.length)];
+  if (!c) return startFlow();
+  startGame(c.id);
+  toast(t("⚡ بدأت فورًا") + " — " + nationName(c), "good");
+}
+
 function pickDailyNation(showToast) {
   const w = app.pickWorld;
   const list = w
@@ -1025,12 +1117,110 @@ function recomputeCounts(world) {
   for (const c of world.countries) if (world.active[c.id]) world.cellsOfActive += world.cellCount[c.id];
 }
 
+// --------------------------------------------------------------- rooms ---
+// The portal needs to know which room the player is in so friends can join.
+// Our lobby codes are already unique per open room, so they double as roomId.
+let roomState = null; // { id, joinable }
+
+function roomGone() {
+  if (!roomState) return;
+  roomState = null;
+  roomLeft();
+}
+
+function roomUpdate(id, joinable) {
+  if (!id) return roomGone();
+  const changed = !roomState || roomState.id !== String(id) || roomState.joinable !== !!joinable;
+  roomState = { id: String(id), joinable: !!joinable };
+  if (!changed) return;
+  // A player mid-match is not joinable; a lobby waiting for players is.
+  if (app.screen === "game" && app.game && !app.paused && !app.game.result) roomJoined(id, { joinable: false });
+  else roomJoined(id, { joinable: !!joinable });
+}
+
+// ------------------------------------------------------------ chat safety ---
+// CrazyGames requires a profanity filter on any user-generated text. This is the
+// simple word-list kind they recommend, deliberately conservative: it masks the
+// letters of an obvious slur and leaves ordinary trash talk alone, because
+// over-blocking is its own kind of broken.
+const BLOCKED = [
+  "fuck", "shit", "bitch", "cunt", "nigger", "nigga", "faggot", "retard", "whore",
+  "slut", "bastard", "asshole", "dick", "pussy", "rape", "kys", "hitler", "nazi",
+  "كلب", "حقير", "شرموط", "قحبة", "خرا", "زبالة", "تافه",
+];
+
+// Letters are compared with diacritics and common leet substitutions folded, so
+// "sh1t" and "f u c k" are caught too.
+function fold(text) {
+  return String(text)
+    .toLowerCase()
+    .replace(/[0@]/g, "o")
+    .replace(/[1!|]/g, "i")
+    .replace(/3/g, "e")
+    .replace(/4/g, "a")
+    .replace(/5\$/g, "s")
+    .replace(/7/g, "t")
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, ""); // Arabic diacritics
+}
+
+function censor(text) {
+  let out = String(text || "").slice(0, 200);
+  if (!out.trim()) return "";
+  const flat = fold(out);
+  for (const word of BLOCKED) {
+    const w = fold(word);
+    let from = 0;
+    for (;;) {
+      const at = flat.indexOf(w, from);
+      if (at === -1) break;
+      // mask the original characters that produced the match
+      out = out.slice(0, at) + "*".repeat(Math.min(w.length, out.length - at)) + out.slice(at + w.length);
+      from = at + w.length;
+    }
+  }
+  return out;
+}
+
+// Hide every chat affordance when the portal forbids chat.
+function applyChatSetting() {
+  const off = getSettings().disableChat;
+  for (const sel of ["#chat-dock", "#lobby-chat", "#chat-input", "#chat-send", "#dock-input", "#dock-send"]) {
+    const el = $(sel);
+    if (!el) continue;
+    if (off) {
+      el.hidden = true;
+      // a hidden chat still listening for Enter would be a trap
+      if (el.tagName === "INPUT") el.setAttribute("disabled", "disabled");
+    } else if (el.tagName === "INPUT") {
+      el.removeAttribute("disabled");
+    }
+  }
+}
+
+// The portal's muteAudio setting outranks the in-game toggle, so both feed
+// through here. With no SDK present getSettings() is all false and the player's
+// own preference wins, exactly as before.
+function applyAudioSetting() {
+  const platformMuted = getSettings().muteAudio;
+  sfx.enabled = !platformMuted && profile.settings.sound !== false;
+  const toggle = $("#set-sound");
+  if (toggle) {
+    toggle.checked = profile.settings.sound !== false;
+    // Make it obvious that the portal, not the game, is holding audio down.
+    toggle.disabled = platformMuted;
+    toggle.closest(".row")?.classList.toggle("locked", platformMuted);
+  }
+}
+
 function bootGame(game, prebuiltWorld) {
   if (prebuiltWorld) {
     app.pickWorld = prebuiltWorld;
     if (app.pickRenderer) app.pickRenderer.world = prebuiltWorld;
   }
   app.game = game;
+  // The player is now in a playable state — this is the event the portal uses
+  // to stop measuring load time and start measuring play time.
+  gameplayStart();
   app.brush = null;
   app.strikeMode = null;
   app.tab = "empire";
@@ -1045,7 +1235,7 @@ function bootGame(game, prebuiltWorld) {
     app.renderer.ctx = $("#map").getContext("2d", { alpha: false });
   }
   app.renderer.labels = profile.settings.labels !== false;
-  sfx.enabled = profile.settings.sound !== false;
+  applyAudioSetting();
   app.renderer.highlight = null;
   app.renderer.selected = null;
   app.renderer.brush = null;
@@ -1562,6 +1752,9 @@ function menuPulse() {
 
 function togglePause() {
   app.paused = !app.paused;
+  // A pause is a real play break: tell the portal so it can free resources.
+  if (app.paused) gameplayStop();
+  else if (app.screen === "game" && app.game && !app.game.result) gameplayStart();
   // Keep the floating touch pad just above the real bottom HUD height, which
   // varies with the mobile tab body. Without this it overlaps the build cards.
   const syncHudHeight = () => {
@@ -2354,6 +2547,14 @@ function showEnd(summary) {
     <div class="stat"><b>${arNum(summary.built)}</b><small>مبانٍ</small></div>
     <div class="stat"><b>${arNum(summary.xp)}</b><small>XP</small></div>`;
   $("#modal-end").hidden = false;
+  // The match is over, so this is a real play break and a natural place for a
+  // midgame ad: the player is reading results, not in the middle of a fight.
+  // The portal enforces its own frequency cap and simply ignores a request
+  // that comes too soon, so we never gate this on a timer of our own.
+  gameplayStop();
+  requestMidgameAd();
+  if (summary.result === "win") happytime();
+  reportProgress(Math.min(100, Math.round((summary.share || 0) * 100)));
   profile.games++;
   if (summary.result === "win") sfx.win();
   else sfx.lose();
@@ -2430,6 +2631,22 @@ function howTo() {
 }
 
 async function boot() {
+  // The SDK loads in the background and is deliberately NOT awaited: it lives
+  // on a CDN, and a slow or blocked request must never delay the first paint.
+  // Everything it controls (mute, chat, locale) is applied when it lands, and
+  // on a plain file:// page or offline it simply never lands.
+  const platformReady = initCrazyGames().then(() => {
+    // The portal knows the player's language from their account/region, but it
+    // must never override a choice made in this game's Settings.
+    if (!hasSavedLanguage() && isPortal()) {
+      setLang(preferredLanguage());
+      translateDom(document);
+    }
+    loadingStop();
+    applyAudioSetting();
+    applyChatSetting();
+  });
+
   // Language first: the saved choice decides dir/lang on <html> before any
   // screen is painted, so the first frame is already in the right language.
   loadLang();
@@ -2449,6 +2666,12 @@ async function boot() {
   }
   buildMenu();
   renderMedals();
+  void platformReady;
+  $("#btn-quick").onclick = () => {
+    sfx.resume();
+    sfx.click();
+    quickStart();
+  };
   $("#btn-play").onclick = () => {
     sfx.resume();
     sfx.click();
@@ -2599,6 +2822,22 @@ async function boot() {
   net.on("roomlist", renderRoomList);
   net.on("hello", () => net.listRooms());
 
+  // A friend accepted an invite while this player is already in a match: the
+  // portal calls this listener, and we drop them into that room without a
+  // reload. The current match is abandoned deliberately — the invite is the
+  // newer intent.
+  onJoinRoom((params) => {
+    const code = params.room || params.roomId || params.roomName;
+    if (!code) return;
+    toast(t("انضممت إلى غرفة صديق"), "good");
+    if (app.game) {
+      app.game = null;
+      app.netMirror = null;
+    }
+    app.mode = "online";
+    openOnlineHome().then(() => net.joinRoom(String(code).toUpperCase()));
+  });
+
   $("#btn-join-room").onclick = async () => {
     const name = onlineName();
     const code = ($("#online-code").value || "").trim().toUpperCase();
@@ -2624,12 +2863,25 @@ async function boot() {
   };
   $("#btn-start-online").onclick = () => net.start();
   const sendChat = (input, viaLobby) => {
+    // The portal can switch chat off for an account (younger players, parental
+    // settings). When it does, the inputs stay hidden and this is a no-op.
+    if (getSettings().disableChat) {
+      input.value = "";
+      return;
+    }
     const text = (input.value || "").trim();
     if (!text) return;
-    net.chat(text);
+    const clean = censor(text);
+    if (!clean) {
+      input.value = "";
+      return;
+    }
+    net.chat(clean);
     input.value = "";
     void viaLobby;
   };
+  applyChatSetting();
+  onSettingsChange(applyChatSetting);
   $("#chat-send").onclick = () => sendChat($("#chat-input"), true);
   $("#chat-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendChat($("#chat-input"), true);
@@ -2702,14 +2954,25 @@ async function boot() {
     };
   }
 
-  $("#btn-fs").onclick = () => {
-    const el = document.documentElement;
-    if (!document.fullscreenElement) {
-      (el.requestFullscreen ? el.requestFullscreen() : Promise.resolve()).catch(() => {});
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
+  // Fullscreen is banned in-game on CrazyGames: the portal owns the fullscreen
+  // button and a second one fights it. Off-portal (double-clicked file, own
+  // host) the button is still genuinely useful, so it stays but only there.
+  const btnFs = $("#btn-fs");
+  if (btnFs) {
+    if (isPortal()) {
+      btnFs.hidden = true;
+      btnFs.onclick = null;
+    } else {
+      btnFs.onclick = () => {
+        const el = document.documentElement;
+        if (!document.fullscreenElement) {
+          (el.requestFullscreen ? el.requestFullscreen() : Promise.resolve()).catch(() => {});
+        } else if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+      };
     }
-  };
+  }
   $("#btn-speed").onclick = () => {
     if (!app.paused && app.speed === 1) cycleSpeed(1);
     else if (!app.paused && app.speed > 1) togglePause();
@@ -2782,6 +3045,7 @@ async function boot() {
   $("#set-drag").checked = profile.settings.drag !== false;
   $("#set-sound").onchange = (e) => {
     profile.settings.sound = e.target.checked;
+    applyAudioSetting();
     sfx.enabled = e.target.checked;
     if (e.target.checked) {
       sfx.resume();
@@ -2875,6 +3139,9 @@ async function boot() {
   requestAnimationFrame(() => show("menu"));
 }
 
+// Bracket the load for the portal's measurement: loadingStart must come before
+// the first real work, loadingStop once the menu is interactive (inside boot).
+loadingStart();
 boot();
 
 export { app, fmt, toast, online, net };

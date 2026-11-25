@@ -27,9 +27,21 @@ body {
   font-family: var(--ff);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  /* CrazyGames' required snippet: on tablets a long press otherwise selects
+     the whole game or opens the magnifier / context menu. */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
+/* Text the player may legitimately want to copy (room codes, share links)
+   stays selectable — the global rule above is for stray drags. */
+.selectable, input, textarea { -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text; user-select: text; }
+
+/* The portal owns audio muting. When it is on, the in-game toggle is visibly
+   locked rather than lying about its state. */
+.settings .row.locked { opacity: 0.55; }
 button { font-family: inherit; color: inherit; cursor: pointer; }
 input, select { font-family: inherit; }
 [hidden] { display: none !important; }

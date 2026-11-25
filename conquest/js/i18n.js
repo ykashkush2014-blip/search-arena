@@ -51,6 +51,17 @@ export function setLang(next, { remember = true } = {}) {
   return lang;
 }
 
+// True when the player has actually chosen a language. The portal supplies a
+// locale at boot, but it must never override a choice the player made here.
+export function hasSavedLanguage() {
+  try {
+    const v = localStorage.getItem(STORE_KEY);
+    return v === "ar" || v === "en";
+  } catch {
+    return false;
+  }
+}
+
 // Saved choice, or the default (English). Called once at boot.
 export function loadLang() {
   let saved = null;

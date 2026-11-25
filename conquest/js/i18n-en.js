@@ -652,4 +652,10 @@ export const EN = {
   "لا توجد عوالم مفتوحة — فتحت لك عالمًا جديدًا": "No open worlds — opened a new one for you",
   "لا توجد عوالم مفتوحة الآن — اضغط «العب الآن» لتفتح عالمًا": "No open worlds right now — press “Play now” to open one",
   "قائد": "Commander",
+  "⚡ ابدأ فورًا": "⚡ Quick start",
+  "اختر دولتك": "Choose your nation",
+  "⚡ بدأت فورًا": "Quick start",
+  "انضممت إلى غرفة صديق": "Joined a friend's room",
+  "اختر حملة وابدأ من حدودها التاريخية": "Pick a campaign and start from its historical borders",
+  "جارٍ الانضمام إلى غرفة صديق": "Joining a friend's room",
 };
