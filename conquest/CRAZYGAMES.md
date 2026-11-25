@@ -73,13 +73,31 @@ usable as a downloadable `.html`.
 | Player name from CG account | ❌ not yet | name field defaults to the player's own; showing the CG username is a Full Launch item |
 | Progress save via `data` module | ❌ not yet | saves are `localStorage`; moving them onto the `data` module is a Full Launch item and needs the *Progress Save* toggle |
 
+
+### Where "translated" has to be checked beyond the DOM
+
+The map is a `<canvas>`, so none of its text exists as DOM nodes. A page can
+test as 100% English while the map under it still reads روسيا. Three paths need
+their own handling, and all three have a harness:
+
+| Path | Why the DOM walker misses it | Where it is handled |
+|---|---|---|
+| Nation names painted on the map | canvas text, no DOM nodes | `drawLabels()` in `js/render.js` picks `c.name` / `n.ar` from `getLang()` |
+| Browser tab title | lives in `<head>`, outside `<body>` | `applyDocumentTitle()` in `js/i18n.js`, original kept in a data attribute |
+| `confirm()` on surrender | native browser dialog | the message string goes through `t()` |
+
+`.smoketest/canvas-text.mjs` records every `fillText`/`strokeText` and asserts
+no Arabic survives on the canvas in English mode (and that Arabic is still
+there in Arabic mode). `.smoketest/sweep.mjs` opens the campaigns list, a
+campaign detail card, a live campaign match, the how-to and medals panels.
+
 ---
 
 ## Gameplay requirements
 
 | Requirement | Status | Notes |
 |---|---|---|
-| English localisation | ✅ | English is the default; Arabic is optional |
+| **English localisation, everywhere** | ✅ | English is the default; Arabic is optional. Covers DOM text *and* the three places the DOM walker cannot reach — see below |
 | Uses `locale`, falls back to English | ✅ | see above |
 | Readable at `devicePixelRatio: 1` | ✅ | 12–14 px minimum body text, high-contrast palette |
 | **Land in gameplay, max 1 click** | ✅ | **⚡ Quick start** on the menu is one click to a live match. The nation picker is a separate, clearly labelled choice |
