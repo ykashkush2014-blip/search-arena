@@ -3,6 +3,7 @@
 // explosions, attack fronts and labels. Deliberately avoids per-cell fillRect
 // calls so a 1.8M-cell map stays smooth.
 import { BUILDING_BY_KEY } from "./data.js";
+import { getLang } from "./i18n.js";
 
 const OCEAN_DEEP = [13, 24, 39];
 const OCEAN_SHALLOW = [26, 50, 76];
@@ -717,13 +718,17 @@ export class Renderer {
       const c = n.def || world.countries[n.id];
       if (n.cells * zoom * zoom < 2400) continue;
       const x = (c.x - this.cam.x) * zoom;
+      // Nation names are data, not copy: the map bundle carries both spellings.
+      // Canvas text is invisible to the DOM translator, so this is the one
+      // place that has to pick the field itself.
+      const label = getLang() === "en" ? c.name || n.ar : n.ar || c.name;
       const y = (c.y - this.cam.y) * zoom;
       if (x < -60 || y < -30 || x > this.viewW + 60 || y > this.viewH + 30) continue;
       ctx.lineWidth = 3;
       ctx.strokeStyle = "rgba(8,10,16,0.75)";
-      ctx.strokeText(n.ar, x, y);
+      ctx.strokeText(label, x, y);
       ctx.fillStyle = n.isPlayer ? "#ffe9a8" : "rgba(255,255,255,0.9)";
-      ctx.fillText(n.ar, x, y);
+      ctx.fillText(label, x, y);
     }
     ctx.restore();
   }

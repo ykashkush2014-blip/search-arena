@@ -399,6 +399,24 @@ function translateTree(root, reverseMode) {
 export function translateDom(root = typeof document !== "undefined" ? document.body : null) {
   if (!root) return;
   translateTree(root, lang !== "en");
+  applyDocumentTitle();
+}
+
+// The tab title lives in <head>, outside the body the walker covers, and a
+// player who switches to English still sees a browser tab reading "كونكوست".
+const TITLES = {
+  "كونكوست — فتح العالم": "Conquest — World Domination",
+};
+
+export function applyDocumentTitle() {
+  if (typeof document === "undefined") return;
+  const original = document.documentElement.dataset.titleAr || document.title;
+  document.documentElement.dataset.titleAr = original;
+  if (lang === "en") {
+    document.title = TITLES[original] || original;
+  } else {
+    document.title = original;
+  }
 }
 
 // Keep translating after boot. Every innerHTML write, list rebuild and toast

@@ -658,4 +658,21 @@ export const EN = {
   "انضممت إلى غرفة صديق": "Joined a friend's room",
   "اختر حملة وابدأ من حدودها التاريخية": "Pick a campaign and start from its historical borders",
   "جارٍ الانضمام إلى غرفة صديق": "Joining a friend's room",
+  "الحرب!": "War!",
+  // --- campaign names and modifiers
+  "الحصار": "The Siege",
+  "الثورة الصناعية": "Industrial Revolution",
+  "قوة عظمى": "Superpower",
+  // --- HUD and how-to fragments the DOM walker cannot split
+  "هجوم منسّق مع حلفاء": "coordinated attack with allies",
+  "قواعد": "bases",
+  "تجنيد فوري": "Instant recruit",
+  "إعلان حرب…": "Declare war…",
+  "وضع متعدد": "multi-select mode",
+  "الحد الأقصى للهجمات": "Attack limit reached",
+  "هل تريد الاستسلام؟ ستخرج من المباراة.": "Surrender? You will leave the match.",
+  "الحرب!": "War!",
+  "الهدف:": "Goal:",
+  "من الأرض": "of the world",
+  "الهدف الأرضي": "Land goal",
 };

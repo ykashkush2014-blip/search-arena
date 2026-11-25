@@ -529,7 +529,7 @@ function renderLobby(view) {
   $("#lobby-chips").innerHTML = [
     `الخريطة: ${PRESETS.find((p) => p.id === view.map)?.ar || view.map}`,
     `العصر: ${ERAS[view.era]?.ar || view.era}`,
-    `الهدف: ${Math.round(view.goal * 100)}%`,
+    `${t("الهدف:")} ${Math.round(view.goal * 100)}%`,
     `الوضع: ${{ normal: t("كل لاعب لنفسه"), coop: t("تحالف"), ffa: t("آخر صامد") }[view.mode] || view.mode}`,
   ]
     .map((t) => `<span class="chip">${t}</span>`)
@@ -992,7 +992,7 @@ function chooseCampaign(id) {
     <p style="font-size:12.5px;line-height:1.7;color:var(--muted)">${t(camp.arBlurb)}</p>
     <div class="stat-grid">
       <div class="stat"><b>${arNum(camp.include.length)}</b><small>${t("دولة تبدأ معك")}</small></div>
-      <div class="stat"><b>${camp.goal * 100}%</b><small>${t("هدف الأرض")}</small></div>
+      <div class="stat"><b>${camp.goal * 100}%</b><small>${t("الهدف الأرضي")}</small></div>
     </div>
     <div class="card-actions">
       <button class="btn gold" id="btn-start-campaign">${t("ابدأ")} ${campName(camp)}</button>
@@ -1838,7 +1838,7 @@ function updateHud(force) {
   const share = game.playerShare ? game.playerShare() : 0;
   $("#goal-pct").textContent = pct(share);
   $("#goal-bar").style.width = clamp((share / game.goal) * 100, 0, 100) + "%";
-  $("#goal-label").textContent = `الهدف: ${game.goal * 100}% من الأرض`;
+  $("#goal-label").textContent = `${t("الهدف:")} ${game.goal * 100}% ${t("من الأرض")}`;
   $("#obj-text").textContent = `سيطر على ${game.goal * 100}% من الأرض`;
   $("#obj-val").textContent = pct(share);
   $("#obj-bar").style.width = clamp((share / game.goal) * 100, 0, 100) + "%";
@@ -1868,7 +1868,7 @@ function updateHud(force) {
     }
     const bits = [];
     if (best) bits.push(`<span class="tac pincer">🗡 ${t("كمّاشة على")} ${escapeHtml(nationName(best.t))} ×${best.pincer.toFixed(2)}</span>`);
-    if (coord) bits.push(`<span class="tac coord">🤝 هجوم منسّق مع حلفاء</span>`);
+    if (coord) bits.push(`<span class="tac coord">🤝 ${t("هجوم منسّق مع حلفاء")}</span>`);
     if (allies.length) bits.push(`<span class="tac ally">🛡 ${arNum(allies.length)} حليف يقوّي دفاعك</span>`);
     tac.innerHTML = bits.join("");
   }
@@ -1880,7 +1880,7 @@ function updateHud(force) {
     badge.style.background = "rgba(142,217,138,0.16)";
     badge.style.color = "var(--green)";
   } else if (game.openedAt) {
-    badge.textContent = "الحرب!";
+    badge.textContent = t("الحرب!");
     badge.style.background = "rgba(255,125,116,0.16)";
     badge.style.color = "var(--red)";
   }
@@ -2106,10 +2106,10 @@ function updateTab() {
         <div class="mil-box"><b>${fmt(p.cap)}</b><small>السقف</small></div>
         <div class="mil-box"><b>+${fmt(rate)}${t("/ث")}</b><small>${t("تجنيد")}</small></div>
         <div class="mil-box"><b>${game.attackMult(p).toFixed(2)}×</b><small>قوة الهجوم</small></div>
-        <div class="mil-box"><b>${(p.agg?.base || 0)}</b><small>قواعد</small></div>
+        <div class="mil-box"><b>${(p.agg?.base || 0)}</b><small>${t("قواعد")}</small></div>
         <div class="mil-actions">
-          <button class="btn ghost" id="btn-rally">تجنيد فوري (${fmt(1800)} ◈)</button>
-          <button class="btn ghost" id="btn-war">إعلان حرب…</button>
+          <button class="btn ghost" id="btn-rally">${t("تجنيد فوري")} (${fmt(1800)} ◈)</button>
+          <button class="btn ghost" id="btn-war">${t("إعلان حرب…")}</button>
         </div>
         <label class="melt-toggle"><input type="checkbox" id="melt" ${game.melt ? "checked" : ""}/> تحويل الجيش إلى ذهب</label>
       </div>`;
@@ -2621,7 +2621,7 @@ function howTo() {
     </ul>
     <h4>لوحة المفاتيح</h4>
     <ul>
-      <li><code>1..8</code> اختيار مبنى • <code>Shift</code> وضع متعدد • <code>R</code> البحث • <code>Q/E</code> قوة الهجوم</li>
+      <li><code>1..8</code> اختيار مبنى • <code>Shift</code> ${t("وضع متعدد")} • <code>R</code> البحث • <code>Q/E</code> قوة الهجوم</li>
       <li><code>Space</code> إيقاف مؤقت • <code>WASD</code> تحريك • <code>F</code> العاصمة • <code>M</code> تحويل الجيش لذهب</li>
     </ul>
     <h4>الجوال</h4>
@@ -2949,7 +2949,9 @@ async function boot() {
   if (btnSurr) {
     btnSurr.onclick = () => {
       if (!net.room) return;
-      if (!confirm("هل تريد الاستسلام؟ ستخرج من المباراة.")) return;
+      // confirm() renders chrome-localised browser text around our string, so
+      // the message itself has to come from the dictionary.
+      if (!confirm(t("هل تريد الاستسلام؟ ستخرج من المباراة."))) return;
       net.act("surrender");
     };
   }

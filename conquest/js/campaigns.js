@@ -6,7 +6,7 @@ import { t } from "./i18n.js";
 export const CAMPAIGNS = [
   {
     id: "alexander",
-    ar: "الإسكندر الأكبر",
+    ar: t("الإسكندر الأكبر"),
     en: "Alexander the Great",
     year: t("336 ق.م"),
     era: "ancient",
@@ -23,7 +23,7 @@ export const CAMPAIGNS = [
   },
   {
     id: "rome",
-    ar: "صعود روما",
+    ar: t("صعود روما"),
     en: "Rise of Rome",
     year: t("117 م"),
     era: "ancient",
@@ -42,7 +42,7 @@ export const CAMPAIGNS = [
   },
   {
     id: "genghis",
-    ar: "جنكيز خان",
+    ar: t("جنكيز خان"),
     en: "Genghis Khan",
     year: t("1227 م"),
     era: "medieval",
@@ -60,7 +60,7 @@ export const CAMPAIGNS = [
   },
   {
     id: "constantinople",
-    ar: "سقوط القسطنطينية",
+    ar: t("سقوط القسطنطينية"),
     en: "Fall of Constantinople",
     year: t("1453 م"),
     era: "medieval",
@@ -78,7 +78,7 @@ export const CAMPAIGNS = [
   },
   {
     id: "new_world",
-    ar: "فتح العالم الجديد",
+    ar: t("فتح العالم الجديد"),
     en: "Conquest of the New World",
     year: t("1532 م"),
     era: "sail",
@@ -97,7 +97,7 @@ export const CAMPAIGNS = [
   },
   {
     id: "british",
-    ar: "الإمبراطورية البريطانية",
+    ar: t("الإمبراطورية البريطانية"),
     en: "The British Empire",
     year: t("1920 م"),
     era: "imperial",
@@ -120,7 +120,7 @@ export const CAMPAIGNS = [
   },
   {
     id: "napoleon",
-    ar: "نابليون",
+    ar: t("نابليون"),
     en: "Napoleon",
     year: t("1805 م"),
     era: "sail",
@@ -145,7 +145,7 @@ export function dailyChallenge(dateKey) {
   const twists = [
     {
       id: "blitz",
-      ar: "حرب خاطفة",
+      ar: t("حرب خاطفة"),
       arBlurb: "لا هدنة في البداية — الحرب تبدأ فورًا.",
       goal: 0.45,
       ceasefire: 0,
@@ -153,7 +153,7 @@ export function dailyChallenge(dateKey) {
     },
     {
       id: "frugal",
-      ar: "اقتصاد حرب",
+      ar: t("اقتصاد حرب"),
       arBlurb: "تبدأ بذهب قليل، والهدف أرض أكثر.",
       goal: 0.55,
       gold: 200,
@@ -161,7 +161,7 @@ export function dailyChallenge(dateKey) {
     },
     {
       id: "navy_day",
-      ar: "يوم البحرية",
+      ar: t("يوم البحرية"),
       arBlurb: "ميناء مجاني في البداية. استخدم البحر.",
       goal: 0.5,
       startBuildings: ["port", "port"],
@@ -169,7 +169,7 @@ export function dailyChallenge(dateKey) {
     },
     {
       id: "fortress",
-      ar: "الحصار",
+      ar: t("الحصار"),
       arBlurb: "مخابئ مجانية، لكن الأعداء أكثر شراسة.",
       goal: 0.5,
       startBuildings: ["bunker", "bunker", "city"],
@@ -177,7 +177,7 @@ export function dailyChallenge(dateKey) {
     },
     {
       id: "great_power",
-      ar: "قوة عظمى",
+      ar: t("قوة عظمى"),
       arBlurb: "ابدأ بدولة صغيرة… والعالم كله ضدك.",
       goal: 0.4,
       ai: "hard",
@@ -185,7 +185,7 @@ export function dailyChallenge(dateKey) {
     },
     {
       id: "industrial",
-      ar: "الثورة الصناعية",
+      ar: t("الثورة الصناعية"),
       arBlurb: "مصانع مجانية، لكن الهدف أعلى.",
       goal: 0.6,
       startBuildings: ["factory", "factory", "factory"],
@@ -193,7 +193,7 @@ export function dailyChallenge(dateKey) {
     },
     {
       id: "arms_race",
-      ar: "سباق التسلح",
+      ar: t("سباق التسلح"),
       arBlurb: "الأعداء يبنون جيوشًا أسرع. تسليحك هو الحل.",
       goal: 0.5,
       ai: "brutal",

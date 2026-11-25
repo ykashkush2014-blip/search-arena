@@ -681,7 +681,7 @@ export class Game {
       return null;
     }
     if (!attacker.war.has(defender.id)) this.declareWar(attacker, defender);
-    if (!attacker.isPlayer && this.attacks.length > 150) return "الحد الأقصى للهجمات";
+    if (!attacker.isPlayer && this.attacks.length > 150) return t("الحد الأقصى للهجمات");
     const troops = Math.min(available, Math.floor(attacker.army * fraction));
     if (troops < 100) return t("جيشك صغير جدًا");
     attacker.army -= troops;

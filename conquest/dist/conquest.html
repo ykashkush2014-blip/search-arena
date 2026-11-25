@@ -2116,6 +2116,23 @@ const EN = {
   "انضممت إلى غرفة صديق": "Joined a friend's room",
   "اختر حملة وابدأ من حدودها التاريخية": "Pick a campaign and start from its historical borders",
   "جارٍ الانضمام إلى غرفة صديق": "Joining a friend's room",
+  "الحرب!": "War!",
+  // --- campaign names and modifiers
+  "الحصار": "The Siege",
+  "الثورة الصناعية": "Industrial Revolution",
+  "قوة عظمى": "Superpower",
+  // --- HUD and how-to fragments the DOM walker cannot split
+  "هجوم منسّق مع حلفاء": "coordinated attack with allies",
+  "قواعد": "bases",
+  "تجنيد فوري": "Instant recruit",
+  "إعلان حرب…": "Declare war…",
+  "وضع متعدد": "multi-select mode",
+  "الحد الأقصى للهجمات": "Attack limit reached",
+  "هل تريد الاستسلام؟ ستخرج من المباراة.": "Surrender? You will leave the match.",
+  "الحرب!": "War!",
+  "الهدف:": "Goal:",
+  "من الأرض": "of the world",
+  "الهدف الأرضي": "Land goal",
 };
 
 
@@ -2525,6 +2542,24 @@ function translateTree(root, reverseMode) {
 function translateDom(root = typeof document !== "undefined" ? document.body : null) {
   if (!root) return;
   translateTree(root, lang !== "en");
+  applyDocumentTitle();
+}
+
+// The tab title lives in <head>, outside the body the walker covers, and a
+// player who switches to English still sees a browser tab reading "كونكوست".
+const TITLES = {
+  "كونكوست — فتح العالم": "Conquest — World Domination",
+};
+
+function applyDocumentTitle() {
+  if (typeof document === "undefined") return;
+  const original = document.documentElement.dataset.titleAr || document.title;
+  document.documentElement.dataset.titleAr = original;
+  if (lang === "en") {
+    document.title = TITLES[original] || original;
+  } else {
+    document.title = original;
+  }
 }
 
 // Keep translating after boot. Every innerHTML write, list rebuild and toast
@@ -2572,7 +2607,7 @@ function unwatchDom() {
 
 
 __exp.__done = true;
-return { getLang, isRTL, setLang, hasSavedLanguage, loadLang, initLang, t, tBack, swapPatterns, registerNationNames, translateDom, watchDom, unwatchDom };
+return { getLang, isRTL, setLang, hasSavedLanguage, loadLang, initLang, t, tBack, swapPatterns, registerNationNames, translateDom, applyDocumentTitle, watchDom, unwatchDom };
 });
 
 __def("js/data.js", function (__req, __exp, __reexport) {
@@ -3921,7 +3956,7 @@ class Game {
       return null;
     }
     if (!attacker.war.has(defender.id)) this.declareWar(attacker, defender);
-    if (!attacker.isPlayer && this.attacks.length > 150) return "الحد الأقصى للهجمات";
+    if (!attacker.isPlayer && this.attacks.length > 150) return t("الحد الأقصى للهجمات");
     const troops = Math.min(available, Math.floor(attacker.army * fraction));
     if (troops < 100) return t("جيشك صغير جدًا");
     attacker.army -= troops;
@@ -5503,6 +5538,7 @@ __def("js/render.js", function (__req, __exp, __reexport) {
 // explosions, attack fronts and labels. Deliberately avoids per-cell fillRect
 // calls so a 1.8M-cell map stays smooth.
 const { BUILDING_BY_KEY } = __req("js/data.js");
+const { getLang } = __req("js/i18n.js");
 
 const OCEAN_DEEP = [13, 24, 39];
 const OCEAN_SHALLOW = [26, 50, 76];
@@ -6217,13 +6253,17 @@ class Renderer {
       const c = n.def || world.countries[n.id];
       if (n.cells * zoom * zoom < 2400) continue;
       const x = (c.x - this.cam.x) * zoom;
+      // Nation names are data, not copy: the map bundle carries both spellings.
+      // Canvas text is invisible to the DOM translator, so this is the one
+      // place that has to pick the field itself.
+      const label = getLang() === "en" ? c.name || n.ar : n.ar || c.name;
       const y = (c.y - this.cam.y) * zoom;
       if (x < -60 || y < -30 || x > this.viewW + 60 || y > this.viewH + 30) continue;
       ctx.lineWidth = 3;
       ctx.strokeStyle = "rgba(8,10,16,0.75)";
-      ctx.strokeText(n.ar, x, y);
+      ctx.strokeText(label, x, y);
       ctx.fillStyle = n.isPlayer ? "#ffe9a8" : "rgba(255,255,255,0.9)";
-      ctx.fillText(n.ar, x, y);
+      ctx.fillText(label, x, y);
     }
     ctx.restore();
   }
@@ -6439,7 +6479,7 @@ const { t } = __req("js/i18n.js");
 const CAMPAIGNS = [
   {
     id: "alexander",
-    ar: "الإسكندر الأكبر",
+    ar: t("الإسكندر الأكبر"),
     en: "Alexander the Great",
     year: t("336 ق.م"),
     era: "ancient",
@@ -6456,7 +6496,7 @@ const CAMPAIGNS = [
   },
   {
     id: "rome",
-    ar: "صعود روما",
+    ar: t("صعود روما"),
     en: "Rise of Rome",
     year: t("117 م"),
     era: "ancient",
@@ -6475,7 +6515,7 @@ const CAMPAIGNS = [
   },
   {
     id: "genghis",
-    ar: "جنكيز خان",
+    ar: t("جنكيز خان"),
     en: "Genghis Khan",
     year: t("1227 م"),
     era: "medieval",
@@ -6493,7 +6533,7 @@ const CAMPAIGNS = [
   },
   {
     id: "constantinople",
-    ar: "سقوط القسطنطينية",
+    ar: t("سقوط القسطنطينية"),
     en: "Fall of Constantinople",
     year: t("1453 م"),
     era: "medieval",
@@ -6511,7 +6551,7 @@ const CAMPAIGNS = [
   },
   {
     id: "new_world",
-    ar: "فتح العالم الجديد",
+    ar: t("فتح العالم الجديد"),
     en: "Conquest of the New World",
     year: t("1532 م"),
     era: "sail",
@@ -6530,7 +6570,7 @@ const CAMPAIGNS = [
   },
   {
     id: "british",
-    ar: "الإمبراطورية البريطانية",
+    ar: t("الإمبراطورية البريطانية"),
     en: "The British Empire",
     year: t("1920 م"),
     era: "imperial",
@@ -6553,7 +6593,7 @@ const CAMPAIGNS = [
   },
   {
     id: "napoleon",
-    ar: "نابليون",
+    ar: t("نابليون"),
     en: "Napoleon",
     year: t("1805 م"),
     era: "sail",
@@ -6578,7 +6618,7 @@ function dailyChallenge(dateKey) {
   const twists = [
     {
       id: "blitz",
-      ar: "حرب خاطفة",
+      ar: t("حرب خاطفة"),
       arBlurb: "لا هدنة في البداية — الحرب تبدأ فورًا.",
       goal: 0.45,
       ceasefire: 0,
@@ -6586,7 +6626,7 @@ function dailyChallenge(dateKey) {
     },
     {
       id: "frugal",
-      ar: "اقتصاد حرب",
+      ar: t("اقتصاد حرب"),
       arBlurb: "تبدأ بذهب قليل، والهدف أرض أكثر.",
       goal: 0.55,
       gold: 200,
@@ -6594,7 +6634,7 @@ function dailyChallenge(dateKey) {
     },
     {
       id: "navy_day",
-      ar: "يوم البحرية",
+      ar: t("يوم البحرية"),
       arBlurb: "ميناء مجاني في البداية. استخدم البحر.",
       goal: 0.5,
       startBuildings: ["port", "port"],
@@ -6602,7 +6642,7 @@ function dailyChallenge(dateKey) {
     },
     {
       id: "fortress",
-      ar: "الحصار",
+      ar: t("الحصار"),
       arBlurb: "مخابئ مجانية، لكن الأعداء أكثر شراسة.",
       goal: 0.5,
       startBuildings: ["bunker", "bunker", "city"],
@@ -6610,7 +6650,7 @@ function dailyChallenge(dateKey) {
     },
     {
       id: "great_power",
-      ar: "قوة عظمى",
+      ar: t("قوة عظمى"),
       arBlurb: "ابدأ بدولة صغيرة… والعالم كله ضدك.",
       goal: 0.4,
       ai: "hard",
@@ -6618,7 +6658,7 @@ function dailyChallenge(dateKey) {
     },
     {
       id: "industrial",
-      ar: "الثورة الصناعية",
+      ar: t("الثورة الصناعية"),
       arBlurb: "مصانع مجانية، لكن الهدف أعلى.",
       goal: 0.6,
       startBuildings: ["factory", "factory", "factory"],
@@ -6626,7 +6666,7 @@ function dailyChallenge(dateKey) {
     },
     {
       id: "arms_race",
-      ar: "سباق التسلح",
+      ar: t("سباق التسلح"),
       arBlurb: "الأعداء يبنون جيوشًا أسرع. تسليحك هو الحل.",
       goal: 0.5,
       ai: "brutal",
@@ -8500,7 +8540,7 @@ function renderLobby(view) {
   $("#lobby-chips").innerHTML = [
     `الخريطة: ${PRESETS.find((p) => p.id === view.map)?.ar || view.map}`,
     `العصر: ${ERAS[view.era]?.ar || view.era}`,
-    `الهدف: ${Math.round(view.goal * 100)}%`,
+    `${t("الهدف:")} ${Math.round(view.goal * 100)}%`,
     `الوضع: ${{ normal: t("كل لاعب لنفسه"), coop: t("تحالف"), ffa: t("آخر صامد") }[view.mode] || view.mode}`,
   ]
     .map((t) => `<span class="chip">${t}</span>`)
@@ -8963,7 +9003,7 @@ function chooseCampaign(id) {
     <p style="font-size:12.5px;line-height:1.7;color:var(--muted)">${t(camp.arBlurb)}</p>
     <div class="stat-grid">
       <div class="stat"><b>${arNum(camp.include.length)}</b><small>${t("دولة تبدأ معك")}</small></div>
-      <div class="stat"><b>${camp.goal * 100}%</b><small>${t("هدف الأرض")}</small></div>
+      <div class="stat"><b>${camp.goal * 100}%</b><small>${t("الهدف الأرضي")}</small></div>
     </div>
     <div class="card-actions">
       <button class="btn gold" id="btn-start-campaign">${t("ابدأ")} ${campName(camp)}</button>
@@ -9809,7 +9849,7 @@ function updateHud(force) {
   const share = game.playerShare ? game.playerShare() : 0;
   $("#goal-pct").textContent = pct(share);
   $("#goal-bar").style.width = clamp((share / game.goal) * 100, 0, 100) + "%";
-  $("#goal-label").textContent = `الهدف: ${game.goal * 100}% من الأرض`;
+  $("#goal-label").textContent = `${t("الهدف:")} ${game.goal * 100}% ${t("من الأرض")}`;
   $("#obj-text").textContent = `سيطر على ${game.goal * 100}% من الأرض`;
   $("#obj-val").textContent = pct(share);
   $("#obj-bar").style.width = clamp((share / game.goal) * 100, 0, 100) + "%";
@@ -9839,7 +9879,7 @@ function updateHud(force) {
     }
     const bits = [];
     if (best) bits.push(`<span class="tac pincer">🗡 ${t("كمّاشة على")} ${escapeHtml(nationName(best.t))} ×${best.pincer.toFixed(2)}</span>`);
-    if (coord) bits.push(`<span class="tac coord">🤝 هجوم منسّق مع حلفاء</span>`);
+    if (coord) bits.push(`<span class="tac coord">🤝 ${t("هجوم منسّق مع حلفاء")}</span>`);
     if (allies.length) bits.push(`<span class="tac ally">🛡 ${arNum(allies.length)} حليف يقوّي دفاعك</span>`);
     tac.innerHTML = bits.join("");
   }
@@ -9851,7 +9891,7 @@ function updateHud(force) {
     badge.style.background = "rgba(142,217,138,0.16)";
     badge.style.color = "var(--green)";
   } else if (game.openedAt) {
-    badge.textContent = "الحرب!";
+    badge.textContent = t("الحرب!");
     badge.style.background = "rgba(255,125,116,0.16)";
     badge.style.color = "var(--red)";
   }
@@ -10077,10 +10117,10 @@ function updateTab() {
         <div class="mil-box"><b>${fmt(p.cap)}</b><small>السقف</small></div>
         <div class="mil-box"><b>+${fmt(rate)}${t("/ث")}</b><small>${t("تجنيد")}</small></div>
         <div class="mil-box"><b>${game.attackMult(p).toFixed(2)}×</b><small>قوة الهجوم</small></div>
-        <div class="mil-box"><b>${(p.agg?.base || 0)}</b><small>قواعد</small></div>
+        <div class="mil-box"><b>${(p.agg?.base || 0)}</b><small>${t("قواعد")}</small></div>
         <div class="mil-actions">
-          <button class="btn ghost" id="btn-rally">تجنيد فوري (${fmt(1800)} ◈)</button>
-          <button class="btn ghost" id="btn-war">إعلان حرب…</button>
+          <button class="btn ghost" id="btn-rally">${t("تجنيد فوري")} (${fmt(1800)} ◈)</button>
+          <button class="btn ghost" id="btn-war">${t("إعلان حرب…")}</button>
         </div>
         <label class="melt-toggle"><input type="checkbox" id="melt" ${game.melt ? "checked" : ""}/> تحويل الجيش إلى ذهب</label>
       </div>`;
@@ -10592,7 +10632,7 @@ function howTo() {
     </ul>
     <h4>لوحة المفاتيح</h4>
     <ul>
-      <li><code>1..8</code> اختيار مبنى • <code>Shift</code> وضع متعدد • <code>R</code> البحث • <code>Q/E</code> قوة الهجوم</li>
+      <li><code>1..8</code> اختيار مبنى • <code>Shift</code> ${t("وضع متعدد")} • <code>R</code> البحث • <code>Q/E</code> قوة الهجوم</li>
       <li><code>Space</code> إيقاف مؤقت • <code>WASD</code> تحريك • <code>F</code> العاصمة • <code>M</code> تحويل الجيش لذهب</li>
     </ul>
     <h4>الجوال</h4>
@@ -10920,7 +10960,9 @@ async function boot() {
   if (btnSurr) {
     btnSurr.onclick = () => {
       if (!net.room) return;
-      if (!confirm("هل تريد الاستسلام؟ ستخرج من المباراة.")) return;
+      // confirm() renders chrome-localised browser text around our string, so
+      // the message itself has to come from the dictionary.
+      if (!confirm(t("هل تريد الاستسلام؟ ستخرج من المباراة."))) return;
       net.act("surrender");
     };
   }
