@@ -334,6 +334,12 @@
         <button class="btn ghost" id="btn-abandon">الخروج للقائمة</button>
       </div>
       <div class="settings" id="settings" hidden>
+        <label class="row"><span>اللغة</span>
+          <select id="set-lang" class="select">
+            <option value="en">English</option>
+            <option value="ar">العربية</option>
+          </select>
+        </label>
         <label class="row"><span>المؤثرات الصوتية</span><input type="checkbox" id="set-sound" checked /></label>
         <label class="row"><span>أسماء الدول على الخريطة</span><input type="checkbox" id="set-labels" checked /></label>
         <label class="row"><span>سرعة المحاكاة</span>
@@ -1436,65 +1442,1195 @@ __exp.__done = true;
 return { hash32, mulberry32, Rng, noise2, fbm };
 });
 
+__def("js/i18n-en.js", function (__req, __exp, __reexport) {
+// Arabic → English text map. The Arabic string is the key (see i18n.js for
+// why). Keys must match the source EXACTLY, including punctuation, because a
+// miss simply falls back to Arabic rather than breaking anything.
+//
+// Conventions:
+//   • Game jargon keeps the register of the Arabic: short, punchy, no filler.
+//   • Numbers never appear in a key; those use swapPatterns() in i18n.js.
+//   • A key that is only a JS/HTML fragment is intentionally absent.
+const EN = {
+  // ------------------------------------------------------------- menu / brand
+  "كونكوست": "Conquest",
+  "كونكوست — فتح العالم": "Conquest — World Domination",
+  "ابدأ من حدود دولة حقيقية… واحتلّ العالم": "Start from a real country's borders… and take the world",
+  "ابدأ اللعب": "Play",
+  "متابعة": "Continue",
+  "استئناف آخر معركة": "Resume your last battle",
+  "الأوسمة": "Medals",
+  "كيف تلعب": "How to play",
+  "خريطة حقيقية • 236 دولة • 5 عصور • وضع الدبلوماسية": "Real map • 236 nations • 5 eras • diplomacy",
+  "إعدادات": "Settings",
+  "فتح العالم": "World Domination",
+  "الحملات التاريخية": "Historical Campaigns",
+  "التحدي اليومي": "Daily Challenge",
+  "أونلاين": "Online",
+  "الأونلاين": "Online",
+  "اختر أي دولة من 236 دولة على خريطة العالم وابدأ من حدودها الحقيقية.":
+    "Pick any of 236 real nations on the world map and start from its actual borders.",
+  "اختر أي دولة على خريطة العالم وابدأ من حدودها الحقيقية.":
+    "Pick any nation on the world map and start from its real borders.",
+  "7 حملات: الإسكندر، روما، جنكيز خان، القسطنطينية، العالم الجديد، بريطانيا، نابليون.":
+    "7 campaigns: Alexander, Rome, Genghis Khan, Constantinople, the New World, Britain, Napoleon.",
+  "دولة واحدة للجميع كل يوم، ومعها تعديل خاص. الفوز يبني سلسلتك.":
+    "One nation for everyone each day, with a special modifier. Winning builds your streak.",
+  "دولة واحدة للجميع كل يوم، وهدف متغيّر. الفوز يبني سلسلتك.":
+    "One nation for everyone each day, with a shifting goal. Winning builds your streak.",
+  "العب مع أصدقائك: غرفة بكود، كل لاعب يدير دولة حقيقية على نفس الخريطة.":
+    "Play with friends: a room code, and each player runs a real nation on the same map.",
+
+  // --------------------------------------------------------- country selection
+  "اختر دولتك": "Choose your nation",
+  "كل دولة لها حدودها الحقيقية وصعوبتها الخاصة": "Every nation has its real borders and its own difficulty",
+  "اضغط أي دولة على الخريطة لاختيارها": "Tap any nation on the map to choose it",
+  "ابحث عن دولة…": "Search for a nation…",
+  "ابحث باسم الدولة…": "Search by nation name…",
+  "اختيار عشوائي": "Random pick",
+  "لم تختر دولة بعد": "No nation chosen yet",
+  "دولة أخرى 🎲": "Another nation 🎲",
+  "ابدأ الحملة": "Start the campaign",
+  "العصر": "Era",
+  "الخريطة": "Map",
+  "الصعوبة": "Difficulty",
+  "الهدف": "Goal",
+  "العصور القديمة": "Ancient Era",
+  "العصور الوسطى": "Medieval Era",
+  "عصر الشراع": "Age of Sail",
+  "العصر الإمبراطوري": "Imperial Era",
+  "العصر الحديث": "Modern Era",
+  "العالم": "World",
+  "أوروبا": "Europe",
+  "آسيا": "Asia",
+  "أفريقيا": "Africa",
+  "الأمريكتان": "The Americas",
+  "سهل": "Easy",
+  "عادي": "Normal",
+  "صعب": "Hard",
+  "وحشي": "Brutal",
+  "الهدف: 30% — حملة سريعة": "Goal: 30% — quick campaign",
+  "الهدف: 50% — فتح العالم": "Goal: 50% — world domination",
+  "الهدف: 75% — سيطرة كاملة": "Goal: 75% — total control",
+  "الهدف: 50% من الأرض": "Goal: 50% of the world",
+  "الهدف: 30% من الأرض": "Goal: 30% of the world",
+  "30% من الأرض": "30% of the world",
+  "50% of the world": "50% of the world",
+  "50% من الأرض": "50% of the world",
+  "ابدأ بدولة صغيرة… والعالم كله ضدك.": "Start as a small nation… with the whole world against you.",
+  "تبدأ بذهب قليل، والهدف أرض أكثر.": "You start with little gold and a bigger goal.",
+  "مصانع مجانية، لكن الهدف أعلى.": "Free factories, but a higher goal.",
+  "مخابئ مجانية، لكن الأعداء أكثر شراسة.": "Free bunkers, but fiercer enemies.",
+  "ميناء مجاني في البداية. استخدم البحر.": "A free port at the start. Use the sea.",
+  "لا هدنة في البداية — الحرب تبدأ فورًا.": "No truce at the start — war begins immediately.",
+  "الأعداء يبنون جيوشًا أسرع. تسليحك هو الحل.": "Enemies build armies faster. Your arsenal is the answer.",
+  "تبدأ بدولة حقيقية بحدودها الحقيقية. الهدف: السيطرة على نسبة من الأرض قبل أن تقوم دول أخرى بذلك.":
+    "You start with a real nation inside its real borders. Goal: control a share of the world before someone else does.",
+  "دولة اليوم:": "Today's nation:",
+
+  // ------------------------------------------------------------------- ho top
+  "الأرض": "Land",
+  "الجيش": "Army",
+  "الخزينة": "Treasury",
+  "الذهب": "Gold",
+  "ذهب": "Gold",
+  "البحث": "Research",
+  "البحث (R)": "Research (R)",
+  "البحث •": "Research •",
+  "السكان": "Population",
+  "السقف": "Cap",
+  "الترتيب": "Rank",
+  "السرعة (Space للإيقاف)": "Speed (Space to pause)",
+  "إيقاف مؤقت •": "Paused •",
+  "العودة": "Resume",
+  "ملء الشاشة": "Fullscreen",
+  "الخروج للقائمة": "Exit to menu",
+  "القائمة": "Menu",
+  "المزيد": "More",
+  "الإمبراطورية": "Empire",
+  "الأهداف": "Goals",
+  "الحروب": "Wars",
+  "التحالفات": "Alliances",
+  "الدبلوماسية": "Diplomacy",
+  "الاقتصاد": "Economy",
+  "اقتصاد حرب": "War economy",
+  "الدفاعات": "Defences",
+  "دفاعات": "Defences",
+  "الأسطول": "Fleet",
+  "الضربات": "Strikes",
+  "ضربات": "Strikes",
+  "العلاقة": "Relation",
+  "الدولة": "Nation",
+  "دولة": "nation",
+  "الجيران:": "Neighbours:",
+  "أرضك": "Your land",
+  "أرضك: 0 خلية • جيران: 0": "Your land: 0 cells • Neighbours: 0",
+  "هدنة": "Truce",
+  "حرب": "War",
+  "حليف": "Ally",
+  "محايد": "Neutral",
+  "• محايد": "• Neutral",
+  "مضيف": "Host",
+  "جاهز": "Ready",
+  "جاهز ✓": "Ready ✓",
+  "بانتظار": "Waiting",
+  "خرج": "Eliminated",
+  "مكتمل": "Complete",
+  "أعلى مستوى": "Max level",
+  "المستوى الأقصى": "Max level",
+  "مغلق": "Locked",
+  "مبانٍ": "Buildings",
+  "مبنى": "Building",
+  "بناء": "Build",
+  "ابنِ": "Build",
+  "بناء 25 مبنى": "Build 25 buildings",
+  "المدينة ترفع سقف جيشك وذهبك. المصنع يزيد ذهبك. القاعدة تسرّع التجنيد.":
+    "A city raises your army cap and gold. A factory adds gold. A base speeds up recruiting.",
+
+  // ------------------------------------------------------------- buildings
+  "قرية": "Village",
+  "مدينة": "City",
+  "مصنع": "Factory",
+  "مصانع": "Factories",
+  "ثكنة": "Barracks",
+  "معسكر": "Camp",
+  "قاعدة": "Base",
+  "قاعدة عسكرية": "Military base",
+  "ميناء": "Port",
+  "موانئ": "Ports",
+  "مرسى": "Harbour",
+  "مرسى سفن": "Shipyard",
+  "مخبأ": "Bunker",
+  "حصن": "Fort",
+  "حصن نجمي": "Star fort",
+  "قلعة": "Castle",
+  "جامعة": "University",
+  "مكتبة": "Library",
+  "مختبر": "Laboratory",
+  "مختبر أبحاث": "Research lab",
+  "منجم": "Mine",
+  "ورشة": "Workshop",
+  "أكاديمية": "Academy",
+  "معبد الكهنة": "Temple of priests",
+  "منصة صواريخ": "Missile platform",
+  "منصات صواريخ": "Missile platforms",
+  "دفاع جوي": "Anti-air",
+  "أبراج": "Towers",
+  "أبراج حراسة": "Watchtowers",
+  "أبراج مراقبة": "Observation towers",
+  "بطاريات": "Batteries",
+  "حوض بناء": "Dry dock",
+  "حوض": "Dock",
+  "حصار": "Siege",
+  "حراسة": "Guard",
+  "ترفيه": "Leisure",
+  "مدة الحملة": "Campaign length",
+
+  // ------------------------------------------------------------- units/tech
+  "مشاة الخط": "Line infantry",
+  "مشاة آلية": "Mechanised infantry",
+  "رماحون": "Spearmen",
+  "فرسان": "Knights",
+  "قنّاص العواصم": "Capital sniper",
+  "مدفع": "Cannon",
+  "مدفع حجري": "Stone cannon",
+  "مدفع ميدان": "Field gun",
+  "مدفعية": "Artillery",
+  "مدفعية ثقيلة": "Heavy artillery",
+  "منجنيق": "Catapult",
+  "بنادق": "Rifles",
+  "الأسلحة": "Weapons",
+  "اللوجستيات": "Logistics",
+  "سباق التسلح": "Arms race",
+  "صراع": "Conflict",
+  "المدفعية": "Artillery",
+  "المخابئ": "Bunkers",
+  "التحصين": "Fortify",
+  "تحصين": "Fortify",
+  "انسحاب": "Retreat",
+  "هجوم": "Attack",
+  "الهجوم": "Attack",
+  "قوة الهجوم": "Attack strength",
+  "قوة الهجوم من الأرض": "Attack strength from land",
+  "غزو بحري (يحتاج ميناء)": "Naval invasion (needs a port)",
+  "غزوات بحرية": "Naval invasions",
+  "الأسطول والغزو البحري": "Fleet and naval invasion",
+  "قوة الإنزال": "Landing force",
+  "صاروخ كروز": "Cruise missile",
+  "🚀 صاروخ كروز": "🚀 Cruise missile",
+  "سلاح نووي": "Nuclear weapon",
+  "☢ سلاح نووي": "☢ Nuclear weapon",
+  "استخدام سلاح نووي": "Use a nuclear weapon",
+  "منصة صواريخ تحوّل الأرض إلى خرائب لا يعبرها الجيش.":
+    "A missile platform turns land into ruins no army can cross.",
+  "منصة صواريخ تفتح صاروخ كروز (يضرب أي مكان ويحوّل الأرض إلى خرائب).":
+    "A missile platform unlocks the cruise missile (hits anywhere and leaves ruins).",
+  "تطلق صواريخ كروز على أي هدف في الخريطة.": "Fires cruise missiles at any target on the map.",
+  "الدفاع الجوي يعترض الصواريخ القريبة.": "Anti-air intercepts nearby missiles.",
+  "الدفاع الجوي يعترض صواريخ العدو القريبة.": "Anti-air intercepts incoming missiles nearby.",
+  "يعترض الصواريخ حوله ويخفف الأضرار.": "Intercepts missiles around it and softens the damage.",
+  "المخبأ يبطئ الهجوم على حدودك 9% لكل مستوى.": "A bunker slows attacks on your border by 9% per level.",
+  "يقوّي الدفاع على حدودك. يبطئ أي هجوم عليك 9%.": "Strengthens your border. Slows any attack on you by 9%.",
+  "مدينة ترفع سقف الجيش": "A city raises the army cap",
+  "ينتج نقاط بحث. +0.55 نقطة/ثانية للمستوى.": "Produces research. +0.55 points/sec per level.",
+  "يدفع الذهب كل ثانية. +16 ذهب للمستوى.": "Pays gold every second. +16 gold per level.",
+  "تسرّع تجنيد الجنود. +40 جندي/ثانية للمستوى.": "Speeds up recruiting. +40 soldiers/sec per level.",
+  "ترفع سقف الجيش والذهب. كل مستوى +12 ألف جندي.":
+    "Raises the army cap and gold. +12,000 soldiers per level.",
+  "يقوّي الدفاع على حدودك": "Strengthens your border defence",
+  "يفتح الغزو البحري ويضيف ذهبًا وتجارة.": "Unlocks naval invasion and adds gold and trade.",
+  "ميناء يفتح الغزو البحري لأي ساحل في العالم.": "A port opens naval invasion to any coast in the world.",
+  "الدفاع الجوي يعترض الصواريخ القريبة": "Anti-air intercepts nearby missiles",
+  "ابنِ مصنعًا ومدينة في أول 30 ثانية.": "Build a factory and a city in the first 30 seconds.",
+  "ابنِ ميناء (4)": "Build a port (4)",
+  "ابنِ ميناء (مفتاح": "Build a port (key",
+  "ابنِ مدنًا ومصانع قبل أن تبدأ الحرب.": "Build cities and factories before the war starts.",
+
+  // ---------------------------------------------------------- research path
+  "الوصول لأعلى مستوى في أي بحث": "Max out any research path",
+  "كل بحث يرفع قوة جيشك أو اقتصادك بشكل دائم.": "Every research permanently raises your army or economy.",
+  "نقاط البحث تُنتجها مختبرات الأبحاث. كل مسار حتى 5 مستويات.":
+    "Research labs produce research points. Each path goes to 5 levels.",
+  "دفاعك +9% لكل مستوى": "Defence +9% per level",
+  "قوة هجومك +10% لكل مستوى": "Attack +10% per level",
+  "قوة الضربات +15%": "Strike power +15%",
+  "ذهبك +12%": "Gold +12%",
+  "سقف جيشك +12%": "Army cap +12%",
+  "سقف السكان +10%": "Population cap +10%",
+  "تحصين الحدود +30% دفاع لمدة 20 ثانية": "Fortify borders: +30% defence for 20 seconds",
+
+  // --------------------------------------------------------------- ranks
+  "مجنّد": "Recruit",
+  "جندي": "Soldier",
+  "رقيب": "Sergeant",
+  "ملازم": "Lieutenant",
+  "نقيب": "Captain",
+  "رائد": "Major",
+  "عقيد": "Colonel",
+  "عميد": "Brigadier",
+  "لواء": "General",
+  "فريق أول": "Field marshal",
+  "قائد": "Commander",
+  "حاكم العالم": "World ruler",
+  "قوة عظمى": "Superpower",
+  "إمبراطور": "Emperor",
+  "الإمبراطور": "Emperor",
+  "الفاتح": "The Conqueror",
+  "الصامد": "The Unbroken",
+  "دبلوماسي": "Diplomat",
+  "المعماري": "The Architect",
+  "الحكيم": "The Sage",
+  "أمير البحر": "Lord of the Sea",
+  "مثابر": "Persistent",
+  "جيش لا يُهزم": "Unbeatable army",
+  "أول ضربة": "First strike",
+  "كمّاشة": "Pincer",
+
+  // -------------------------------------------------------------- campaign
+  "الحملة": "Campaign",
+  "الإسكندر": "Alexander",
+  "الإسكندر الأكبر": "Alexander the Great",
+  "صعود روما": "The Rise of Rome",
+  "جنكيز خان": "Genghis Khan",
+  "سقوط القسطنطينية": "The Fall of Constantinople",
+  "فتح العالم الجديد": "Opening the New World",
+  "الإمبراطورية البريطانية": "The British Empire",
+  "نابليون": "Napoleon",
+  "من مقدونيا إلى حدود الهند. وحّد الشرق القديم في عشر سنوات.":
+    "From Macedon to the edge of India. Unite the ancient East in ten years.",
+  "أقصى اتساع للإمبراطورية الرومانية: من ضفاف الفرات إلى أسكتلندا.":
+    "The widest reach of Rome: from the Euphrates to Scotland.",
+  "أكبر إمبراطورية متصلة في التاريخ، من سهوب منغوليا إلى الشام.":
+    "The largest contiguous empire in history, from the Mongolian steppe to the Levant.",
+  "السلطان محمد الفاتح يفتح المدينة التي عصت على ألف عام.":
+    "Sultan Mehmed the Conqueror takes the city that defied a thousand years.",
+  "اسبانيا تعبر الأطلسي. مهمتك: إخضاع الأزتك والإنكا.":
+    "Spain crosses the Atlantic. Your job: subdue the Aztecs and the Inca.",
+  "الإمبراطورية التي لا تغيب عنها الشمس، من الهند إلى كندا.":
+    "The empire on which the sun never sets, from India to Canada.",
+  "من تولون إلى موسكو. اجعل أوروبا كلها تحت راية واحدة.":
+    "From Toulon to Moscow. Put all of Europe under one flag.",
+  "قُد إسكندر أو روما أو جنكيز خان من حدودهم التاريخية.":
+    "Lead Alexander, Rome or Genghis Khan from their historic borders.",
+  "اختر حملة من القائمة لرؤية تفاصيلها": "Pick a campaign from the list to see its details",
+  "اختر حملة وابدأ من حدودها التاريخية": "Pick a campaign and start from its historic borders",
+  "هذه الحملة تحتاج خرائط أخرى": "This campaign needs different maps",
+  "دولة تبدأ معك": "You start as",
+  "دولتك سقطت": "Your nation has fallen",
+  "سقطت دولتك… انتهت الحملة": "Your nation fell… the campaign is over",
+  "→ كل الحملات": "→ All campaigns",
+  "تحدي اليوم": "Today's challenge",
+  "مدة الحملة": "Campaign length",
+
+  // ---------------------------------------------------------------- actions
+  "تجنيد": "Recruit",
+  "تجنيد فوري": "Instant recruit",
+  "تحويل الجيش إلى ذهب": "Convert army to gold",
+  "تحويل الجيش لذهب": "Convert army to gold",
+  "تشغيل": "On",
+  "إيقاف": "Off",
+  "تصغير": "Zoom out",
+  "تكبير": "Zoom in",
+  "تحريك •": "Move •",
+  "اختيار مبنى •": "Pick a building •",
+  "العاصمة •": "Capital •",
+  "عاصمتي": "My capital",
+  "وقف إطلاق النار": "Ceasefire",
+  "وقف إطلاق نار": "Ceasefire",
+  "تحالف": "Alliance",
+  "تحالفًا": "an alliance",
+  "هدية": "Gift",
+  "قبول": "Accept",
+  "رفض": "Decline",
+  "مرفوض": "Declined",
+  "انضم": "Join",
+  "انضم ›": "Join ›",
+  "انسحاب — خسرت 25% من القوة": "Retreat — you lose 25% of the force",
+  "انتصار": "Victory",
+  "استسلام": "Surrender",
+  "الاستسلام (أونلاين)": "Surrender (online)",
+  "حملة جديدة": "New campaign",
+  "مباراة جديدة": "New match",
+
+  // -------------------------------------------------------------- how to play
+  "اضغط دولة لفتح قائمتها، ضغطة مزدوجة للهجوم، سحب للتحريك، قرص للتكبير.":
+    "Tap a nation to open its panel, double-tap to attack, drag to pan, pinch to zoom.",
+  "اضغط على دولة مجاورة مرة لتحديدها، ومرتين لبدء الهجوم (أو زر الهجوم).":
+    "Tap a neighbouring nation once to select it, twice to attack (or use the attack button).",
+  "اضغط مرتين للهجوم": "Double-tap to attack",
+  "اضغط Shift على مبنى لترقيته للمستوى التالي.": "Press Shift on a building to upgrade it.",
+  "Shift + اضغط على أي مبنى في الخريطة لترويته. الترقية تصل حتى المستوى 5.":
+    "Shift + click any building on the map to upgrade it. Upgrades go to level 5.",
+  "Shift + اضغط على أي مبنى في الخريطة لترقيته. الترقية تصل حتى المستوى 5.":
+    "Shift + click any building on the map to upgrade it. Upgrades go to level 5.",
+  "⇧ ترقية المبانٍ": "⇧ Upgrade buildings",
+  "اضغط F للعودة إلى عاصمتك.": "Press F to jump back to your capital.",
+  "شريط «قوة الهجوم» يحدد كم من جيشك يشارك في كل هجوم.":
+    "The attack-strength slider decides how much of your army joins each attack.",
+  "شريط قوة الهجوم 50% يكفي غالبًا — لا ترسل كل جيشك.":
+    "An attack strength of 50% is usually enough — do not send everything.",
+  "كل هجوم يفتح جبهة على طول الحدود المشتركة. إذا كانت قوتك أقل بكثير تتوقف الجبهة.":
+    "Each attack opens a front along the shared border. If your strength is far lower, the front stalls.",
+  "جيشك يتجدد أسرع عندما يكون أقل من السقف — لا ترمِ كل شيء دفعة واحدة.":
+    "Your army refills faster below the cap — do not throw everything at once.",
+  "الجيش يتجدد أسرع عندما يكون أقل من السقف.": "The army refills faster below the cap.",
+  "الخرائب لا يمكن للجيوش عبورها — أعد استعادتها بسرعة قبل العدو.":
+    "Armies cannot cross ruins — reclaim them before the enemy does.",
+  "خيانة التحالف تجعل الجميع يكرهك.": "Betraying an alliance makes everyone hate you.",
+  "يمين الفأرة (أو ضغطة طويلة على الجوال) على أي دولة يفتح قائمة الدبلوماسية: هدنة، تحالف، هدية.":
+    "Right-click (or long-press on mobile) any nation to open diplomacy: truce, alliance, gift.",
+  "أول 25 ثانية هدنة: ابنِ مدنًا ومصانع قبل أن تبدأ الحرب.":
+    "The first 25 seconds are a truce: build cities and factories before war starts.",
+  "لوحة المفاتيح": "Keyboard",
+  "الجوال": "Mobile",
+  "اختر الهدف على الخريطة بعد الضغط على الزر.": "Pick the target on the map after pressing the button.",
+  "اختر هدف الضربة على الخريطة": "Pick the strike target on the map",
+  "اضغط للبناء/التحديد": "Click to build/select",
+
+  // --------------------------------------------------------------- toasts/feed
+  "الذهب غير كافٍ": "Not enough gold",
+  "لا يوجد ذهب كافٍ": "Not enough gold",
+  "ذهبك غير كافٍ": "Not enough gold",
+  "لا يوجد احتياطي كافٍ": "No reserve left",
+  "جيشك صغير جدًا": "Your army is too small",
+  "احتياطيك منخفض — انتظر تجنيداً أو اسحب قواتك":
+    "Your reserve is low — wait for recruits or pull your troops back",
+  "نقاط البحث غير كافية": "Not enough research points",
+  "لا يوجد مبنى هنا — استخدم Shift مع مبنى للترقية":
+    "No building here — use Shift on a building to upgrade",
+  "يوجد مبنى هنا": "There is a building here",
+  "يجب البناء داخل أرضك": "You must build inside your own land",
+  "دولة غير صالحة": "Invalid nation",
+  "دولة غير متاحة": "Nation unavailable",
+  "دولة غير موجودة": "Nation not found",
+  "لا توجد دولة بهذا الاسم": "No nation with that name",
+  "الدولة محجوزة": "That nation is taken",
+  "لا يمكنك مهاجمة حليفك": "You cannot attack your ally",
+  "حليفك — لا يمكن مهاجمته": "Your ally — cannot be attacked",
+  "لا يمكنك تحالف أكثر من دولتين": "You cannot ally with more than two nations",
+  "أنتما حلفاء بالفعل": "You are already allies",
+  "التحصين فعّال بالفعل": "Fortification is already active",
+  "تم تحصين الحدود": "Borders fortified",
+  "تم إرسال عرض التحالف": "Alliance offer sent",
+  "تم إرسال عرض الهدنة": "Ceasefire offer sent",
+  "أُرسلت الهدية": "Gift sent",
+  "أعلن الحرب": "Declared war",
+  "أعلنت الحرب": "declared war",
+  "إعلان حرب…": "Declaring war…",
+  "أُطلق صاروخ كروز": "Cruise missile launched",
+  "أُطلق سلاح نووي!": "Nuclear weapon launched!",
+  "الصاروخ قيد التجهيز": "Missile is still being prepared",
+  "تحتاج منصة صواريخ": "You need a missile platform",
+  "تحتاج ميناء للغزو البحري": "You need a port for a naval invasion",
+  "لا يوجد ساحل يمكن الوصول إليه": "No reachable coast",
+  "هذه الدولة بعيدة عن موانئك": "That nation is far from your ports",
+  "ليست على حدودك — تحتاج ميناء لغزو بحري":
+    "Not on your border — you need a port for a naval invasion",
+  "لا يوجد هدف": "No target",
+  "لا يوجد هدف على حدودك": "No target on your border",
+  "ليس كل اللاعبين جاهزين": "Not every player is ready",
+  "المباراة بدأت": "The match has started",
+  "المباراة بدأت بالفعل": "The match has already started",
+  "المباراة بدأت — لا يمكن تغيير الدولة": "The match has started — you cannot change nation",
+  "رسالة فارغة": "Empty message",
+  "لا يوجد احتياطي": "No reserve",
+  "الخادم غير متاح — الأونلاين يحتاج تشغيل node server.js":
+    "Server unavailable — online needs node server.js running",
+  "تعذر الاتصال بالخادم": "Could not reach the server",
+  "تعذر الاتصال — شغّل الخادم: node server.js":
+    "Could not connect — start the server: node server.js",
+  "تعذر تحميل الحفظ": "Could not load the save",
+  "تعذر تحميل حالة المباراة": "Could not load the match state",
+  "جاري الاتصال…": "Connecting…",
+  "غير متصل": "Offline",
+  "متصل بالخادم": "Connected to the server",
+  "انقطع الاتصال — جارٍ إعادة الاتصال": "Disconnected — reconnecting",
+  "انقطع الاتصال — جارٍ استعادة المباراة": "Disconnected — restoring your match",
+  "عاد الاتصال": "Reconnected",
+  "عاد الاتصال بمباراتك": "Reconnected to your match",
+  "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل":
+    "The online server is not responding — try again shortly",
+  "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل. اللعب الفردي يعمل دائمًا":
+    "The online server is not responding — try again shortly. Single player always works.",
+  "خطأ في شبكة الاتصال": "Network error",
+  "تعذر إنشاء اتصال": "Could not open a connection",
+  "انتهت مهلة الاتصال بالخادم": "Timed out connecting to the server",
+  "تعذر استعادة الاتصال بالمباراة. أعد تحميل الصفحة للدخول من جديد":
+    "Could not restore your match. Reload the page to rejoin.",
+  "لم يختر دولة": "No nation chosen",
+  "لم ينضم أي حليف — لا تملك تحالفات حيّة": "No allies joined — you have no live alliances",
+  "لا توجد حرب": "No war",
+  "لا حروب مفتوحة": "No open wars",
+  "لا حروب مفتوحة حاليًا": "No open wars right now",
+  "لا توجد غرفة": "Room not found",
+  "لا توجد مباراة أونلاين": "No online match",
+  "مقعد غير موجود": "Seat not found",
+  "طلب غير معروف": "Unknown request",
+  "بحث غير معروف": "Unknown research",
+  "الغرفة غير موجودة": "Room not found",
+  "الغرفة ممتلئة": "The room is full",
+  "أنت في غرفة بالفعل": "You are already in a room",
+  "المباراة بدأت — انتظر جولة جديدة": "The match has started — wait for the next round",
+  "تحتاج لاعبين اثنين على الأقل": "You need at least two players",
+  "الجبهة متعثرة": "The front is stalling",
+  "الجبهة متعثرة</b>` :": "The front is stalling</b>` :",
+  "استعادة أرض خربة": "Reclaimed ruined land",
+  "الأرض الخربة بعيدة عن حدودك": "That ruin is far from your border",
+  "ليست أرضًا خربة": "That is not ruin",
+  "تم حفظ اللعبة": "Game saved",
+  "فشل الحفظ": "Save failed",
+  "إصابة مباشرة!": "Direct hit!",
+  "اعترض الدفاع الجوي الصاروخ!": "Anti-air intercepted the missile!",
+  "ضربة صاروخية على أرضك!": "Missile strike on your land!",
+  "بدأت المباراة!": "The match has begun!",
+  "بدء المباراة:": "Match start:",
+  "مباراة جديدة — الجميع جاهز؟": "New match — is everyone ready?",
+  "سقطت دولتك — يمكنك متابعة الآخرين أو انتظار مباراة جديدة.":
+    "Your nation fell — watch the rest or wait for a new match.",
+  "استسلمت — يمكنك الانتقام في مباراة جديدة.": "You surrendered — take revenge in a new match.",
+  "تحالف انكسر… خيانة!": "An alliance broke… betrayal!",
+  "الهدنة سارية — ابنِ قبل أن تبدأ الحرب": "Truce is active — build before war starts",
+  "الهدف:": "Goal:",
+  "هدف": "goal",
+
+  // ------------------------------------------------------------------ online
+  "العب مع أصدقائك على نفس الخادم — كل لاعب يدير دولة حقيقية":
+    "Play with friends on the same server — each player runs a real nation",
+  "عوالم مفتوحة — بلا كود": "Open worlds — no code",
+  "اختر عالمًا من القائمة والعب فورًا، أو اضغط «العب الآن» لندخلك أنت وأصدقاؤك في أول عالم متاح.":
+    "Pick a world from the list and play at once, or hit “Play now” to drop you and your friends into the first open world.",
+  "⚡ العب الآن": "⚡ Play now",
+  "↻ تحديث القائمة": "↻ Refresh list",
+  "…جارٍ البحث عن عوالم": "…Searching for worlds",
+  "…جارٍ البحث": "…Searching",
+  "لا توجد عوالم مفتوحة الآن — اضغط «العب الآن» لتفتح عالمًا":
+    "No open worlds right now — press “Play now” to open one",
+  "إنشاء غرفة خاصة": "Create a private room",
+  "ستحصل على كود من 4 أحرف تشاركه مع أصدقائك.":
+    "You get a 4-letter code to share with your friends.",
+  "اسمك": "Your name",
+  "الوضع": "Mode",
+  "الخصوم (AI)": "Opponents (AI)",
+  "إنشاء الغرفة": "Create room",
+  "الانضمام بكود": "Join with a code",
+  "لو وصلك كود من صاحب الغرفة، اكتبه هنا.": "If the host gave you a code, type it here.",
+  "كود الغرفة": "Room code",
+  "اكتب كود الغرفة": "Enter the room code",
+  "حتى 8 لاعبين في الغرفة.": "Up to 8 players per room.",
+  "الخادم هو الحكم — لا مجال للغش من المتصفح.":
+    "The server is the referee — no cheating from the browser.",
+  "لو انقطع لاعب، يدير الذكاء الاصطناعي دولته حتى يعود.":
+    "If a player drops, the AI runs their nation until they return.",
+  "غرفة": "Room",
+  "غرفة ----": "Room ----",
+  "بانتظار اللاعبين…": "Waiting for players…",
+  "شارك الكود مع صديق للبدء": "Share the code with a friend to start",
+  "الجميع جاهز — يمكن البدء": "Everyone is ready — you can start",
+  "بانتظار جاهزية اللاعبين…": "Waiting for players to ready up…",
+  "أنت المضيف — تبدأ المباراة عندما يكون الجميع جاهزًا.":
+    "You are the host — the match starts when everyone is ready.",
+  "انتظر المضيف لبدء المباراة.": "Wait for the host to start the match.",
+  "انتظر المضيف لبدء مباراة جديدة…": "Waiting for the host to start a new match…",
+  "ملاحظة": "Note",
+  "إلغاء الجاهزية": "Cancel ready",
+  "ابدأ المباراة": "Start the match",
+  "الخروج من الغرفة": "Leave the room",
+  "ادعُ حلفاءك للانضمام": "Invite your friends",
+  "⚔ ادعُ الحلفاء": "⚔ Invite allies",
+  "اكتب رسالة…": "Type a message…",
+  "رسالة…": "Message…",
+  "اختر دولتك": "Choose your nation",
+  "الخريطة للعرض — اختر دولتك من القائمة": "The map is a preview — choose your nation from the list",
+  "دولتك ليست على هذه الخريطة — اختر دولة أخرى من القائمة":
+    "Your nation is not on this map — choose another from the list",
+  "فتح عادي — كل لاعب لنفسه": "Free-for-all — every player for themselves",
+  "تحالف — فريق واحد ضد العالم": "Alliance — one team against the world",
+  "معركة أخيرة — آخر لاعب صامد": "Last stand — last player standing",
+  "كل لاعب لنفسه": "Every player for themselves",
+  "آخر صامد": "Last player standing",
+  "لاعبون": "Players",
+  "لاعب": "player",
+  "لاعبين": "players",
+
+  // -------------------------------------------------------------- end screens
+  "النصر!": "Victory!",
+  "🏆 النصر!": "🏆 Victory!",
+  "🏆 النصر! سيطرت على الأرض": "🏆 Victory! You took the world",
+  "🏆 فزت بالمباراة!": "🏆 You won the match!",
+  "💀 الهزيمة": "💀 Defeat",
+  "💀 خرجت من المباراة": "💀 You left the match",
+  "💀 خسرت المباراة": "💀 You lost the match",
+  "سيطرت على الأرض قبل الجميع.": "You took the world before anyone else.",
+  "القائمة الرئيسية": "Main menu",
+  "ألعب مرة أخرى": "Play again",
+
+  // ----------------------------------------------------------------- medals
+  "احتلال أول دولة": "Conquer your first nation",
+  "احتلال 3 دول في أول 3 دقائق": "Conquer 3 nations in the first 3 minutes",
+  "احتلال 5 دول": "Conquer 5 nations",
+  "احتلال 10 دول": "Conquer 10 nations",
+  "احتلال دولة في أقل من 60 ثانية": "Conquer a nation in under 60 seconds",
+  "احتلال دولة كبرى (أكثر من 1000 خلية)": "Conquer a major nation (more than 1000 cells)",
+  "إسقاط 3 عواصم": "Take 3 capitals",
+  "بناء 25 مبنى": "Build 25 buildings",
+  "امتلاك مليون جندي": "Command a million soldiers",
+  "الوصول إلى 50% من الأرض": "Reach 50% of the world",
+  "الوصول لأعلى رتبة": "Reach the top rank",
+  "صد 10 هجمات": "Repel 10 attacks",
+  "عقد تحالفين": "Make two alliances",
+  "إنهاء 3 حروب بوقف إطلاق النار": "End 3 wars with a ceasefire",
+  "نجاح 3 غزوات بحرية": "Complete 3 naval invasions",
+  "سلسلة 3 أيام في التحدي اليومي": "A 3-day daily-challenge streak",
+  "الفوز بعد خسارة نصف أرضك": "Win after losing half your land",
+  "دول محتلة": "Nations conquered",
+  "يوم البحرية": "Navy day",
+  "حرب خاطفة": "Blitzkrieg",
+  "جيش لا يُهزم": "Unbeatable army",
+  "نقطة": "points",
+  "0 نقطة": "0 points",
+
+  // --------------------------------------------------------------- settings
+  "المؤثرات الصوتية": "Sound effects",
+  "أسماء الدول على الخريطة": "Nation names on the map",
+  "سرعة المحاكاة": "Simulation speed",
+  "سريع": "Fast",
+  "سريع جدًا": "Very fast",
+  "الحركة عند السحب": "Drag to pan",
+  "اللغة": "Language",
+  "العربية": "Arabic",
+  "الإنجليزية": "English",
+
+  // ------------------------------------------------------------ misc/labels
+  "كم² تقريبًا": "km² approx.",
+  "مساحة (خلية)": "Area (cells)",
+  "الخصوم:": "Opponents:",
+  "البداية": "Start",
+  "الفكرة": "The idea",
+  "الجبهة": "Front",
+  "العلاقات": "Relations",
+  "دعم": "support",
+  "ذهب/ث": "gold/s",
+  "بحث/ث": "research/s",
+  "ث": "s",
+  "د": "m",
+  "/ث": "/s",
+  "/د": "/m",
+  "+0/ث": "+0/s",
+  "؟": "?",
+  "و": "and",
+  "أنت": "You",
+  "(أنت)": "(you)",
+  "(أونلاين)": "(online)",
+  "مم": "mm",
+  "عرض": "View",
+  "التالي": "Next",
+  "السابق": "Previous",
+  "إغلاق": "Close",
+  "حسناً": "OK",
+  "حسنا": "OK",
+  "نعم": "Yes",
+  "لا": "No",
+  "جزر": "Islands",
+  "جزيرة — لا حدود برية": "Island — no land borders",
+  "حدود برية": "Land borders",
+  "برّي": "Land",
+  "برق": "Lightning",
+  "الفطر": "Fungus",
+  "مدة": "Duration",
+
+  // ---- small fragments that appear as text nodes in composite markup
+  ">كونكوست": ">Conquest",
+  "الأسطول</span><span class=": "Fleet</span><span class=",
+  "مضيف</span>' :": "Host</span>' :",
+  "تحالف</button>` :": "Alliance</button>` :",
+  "حرب</button>` : `<button data-call=": "War</button>` : `<button data-call=",
+  "هدنة</button>` :": "Truce</button>` :",
+  "قبول</button><button data-dec=": "Accept</button><button data-dec=",
+  // --- HUD, menu and medals: short labels that the DOM walk sees on its own
+  "بحث": "Research",
+  "بحث/ث": "research/s",
+  "اقتصاد": "Economy",
+  "الاقتصاد": "Economy",
+  "استئناف": "Resume",
+  "حفظ اللعبة": "Save game",
+  "عالِم": "Scientist",
+  "بلا رحمة": "No Mercy",
+  // --- units and short counters
+  "مبنى": "buildings",
+  "ث": "s",
+  "هدنة": "Ceasefire",
+  "أوقيانوسيا": "Oceania",
+  "ق.م": "BCE",
+  "م": "CE",
+  "ذهب غير كافٍ": "Not enough gold",
+  // --- economy tab and research tooltips
+  "/ث": "/s",
+  "/د": "/min",
+  "المستوى": "Level",
+  "دخل الذهب": "Gold income",
+  "مدن (سقف": "Cities (cap",
+  "تجنيد": "Recruit",
+  "بيع الجنود": "sell troops",
+  "اضغط على أي مبنى في الخريطة لترقيته. الترقية تصل حتى المستوى 5.":
+    "click any building on the map to upgrade it. Upgrades go up to level 5.",
+  "بحري": "naval",
+  "برّي": "ground",
+  "• إنزال…": "• landing…",
+  "الجبهة متعثرة": "front is stalling",
+  "كمّاشة": "pincer",
+  "جاهز للإطلاق": "Ready to launch",
+  "ترقية": "Upgrade",
+};
+
+
+
+__exp.__done = true;
+return { EN };
+});
+
+__def("js/i18n.js", function (__req, __exp, __reexport) {
+// Localisation. Arabic is the source language of this game, so rather than
+// threading keys through ~750 call sites, the Arabic text itself is the key
+// and this module maps it to English. Three wins:
+//
+//   • t("ابدأ اللعب") replaces a literal with no other change, and a missing
+//     translation falls back to Arabic instead of showing a key like
+//     "btn.start" to a player.
+//   • Text that reaches the DOM without going through t() is still covered:
+//     translateDom() walks the rendered document and the title/placeholder/
+//     aria attributes, so static markup is translated too.
+//   • A MutationObserver keeps watching after boot, so lists, toasts, the HUD
+//     and anything else re-rendered during play is translated as it appears.
+//     That is what makes the ~150 template literals with numbers inside work
+//     without a hand edit per string: they arrive as one text node and get
+//     matched against the PATTERNS table below.
+const { EN } = __req("js/i18n-en.js");
+
+const STORE_KEY = "conquest.lang";
+
+let lang = "en"; // the game starts in English; see setLang()
+const reverse = new Map(); // English → Arabic, for switching back
+
+function getLang() {
+  return lang;
+}
+
+function isRTL() {
+  return lang === "ar";
+}
+
+function setLang(next, { remember = true } = {}) {
+  const l = next === "ar" ? "ar" : "en";
+  if (l === lang && remember) return lang;
+  lang = l;
+  if (remember) {
+    try {
+      localStorage.setItem(STORE_KEY, l);
+    } catch {
+      /* private mode: the choice simply will not persist */
+    }
+  }
+  const root = typeof document !== "undefined" ? document.documentElement : null;
+  if (root) {
+    root.lang = l;
+    root.dir = l === "ar" ? "rtl" : "ltr";
+    if (typeof document !== "undefined" && document.body) {
+      document.body.classList.toggle("lang-en", l === "en");
+      document.body.classList.toggle("lang-ar", l === "ar");
+    }
+  }
+  return lang;
+}
+
+// Saved choice, or the default (English). Called once at boot.
+function loadLang() {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(STORE_KEY);
+  } catch {
+    saved = null;
+  }
+  return setLang(saved === "ar" ? "ar" : "en", { remember: false });
+}
+
+// Resolve the language at import time, not at boot. The data tables in
+// data.js and the campaign list translate themselves while their modules are
+// being evaluated, which happens before boot() runs — so reading the saved
+// choice here is what keeps a returning Arabic player from seeing English
+// labels until the next reload.
+let eager = false;
+function initLang() {
+  if (eager) return lang;
+  eager = true;
+  return loadLang();
+}
+initLang();
+
+// ---------------------------------------------------------------- translate ---
+// t("نص عربي") → English when the language is English.
+// Accepts an optional {placeholder} map: t("بعد {n} ثانية", { n: 5 }).
+// Also accepts a composed sentence: the caller builds the Arabic sentence with
+// the value substituted, and the pattern table translates it if it matches.
+function t(ar, vars) {
+  const key = String(ar ?? "");
+  let out = lang === "en" ? translateCore(key) : key;
+  if (vars) {
+    out = out.replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined ? String(vars[k]) : m));
+  }
+  return out;
+}
+
+// Translate a value that may already be English: used for fields that come
+// from game data in both languages (nations) and for labels we get from the
+// server. Anything unknown passes straight through.
+function tBack(text) {
+  if (lang !== "en" || !text) return text;
+  buildReverse();
+  return reverse.get(String(text)) || EN[String(text)] || String(text);
+}
+
+function buildReverse() {
+  if (reverse.size) return;
+  for (const [ar, en] of Object.entries(EN)) {
+    if (!reverse.has(en)) reverse.set(en, ar);
+  }
+}
+
+// ------------------------------------------------------------------ patterns ---
+// Sentences the game builds by interpolating a number or a name into Arabic
+// text. Word order differs in English, so these need a rule, not a lookup.
+// `\u0660-\u0669` are Arabic-Indic digits, which arNum() uses in Arabic mode.
+const NUM = "([0-9\\u0660-\\u0669][0-9\\u0660-\\u0669,.]*)";
+const RULES = [
+  ["دولة", `of the world`],
+];
+
+const PATTERNS = [
+  // --- dates: "3000 ق.م" → "3000 BCE", "1200 م" → "1200 CE" (whole node only)
+  [/^(.+) ق\.م$/, (m) => `${m[1]} BCE`],
+  [/^(.+) م$/, (m) => `${m[1]} CE`],
+
+  // --- country picker / HUD
+  [/^أرضك: (.+) خلية • جيران: (.+)$/, (m) => `Your land: ${m[1]} cells • Neighbours: ${m[2]}`],
+  [/^(.+) دولة$/, (m) => `${m[1]} countries`],
+  [/^(.+) دولة تبدأ معك$/, (m) => `${m[1]} countries start with you`],
+  [/^(.+) لاعبين$/, (m) => `${m[1]} players`],
+  [/^(.+) لاعب$/, (m) => `${m[1]} player`],
+  [/^(.+) خلية$/, (m) => `${m[1]} cells`],
+  [/^(.+) مبنى$/, (m) => `${m[1]} buildings`],
+  [/^(.+) أسطول$/, (m) => `${m[1]} fleets`],
+  [/^(.+) حليف يقوّي دفاعك$/, (m) => `${m[1]} allies boost your defence`],
+  [/^(.+) نقطة$/, (m) => `${m[1]} points`],
+  [/^بدء المباراة: (.+)$/, (m) => `Match start: ${m[1]}`],
+  [/^مباراة أونلاين — (.+) لاعبين$/, (m) => `Online match — ${m[1]} players`],
+  [/^سيطر على (.+) من الأرض$/, (m) => `Control ${m[1]} of the world`],
+  [/^(.+) من الأرض$/, (m) => `${m[1]} of the world`],
+  [/^الهدف: (.+)$/, (m) => `Goal: ${m[1]}`],
+  [/^الخريطة: (.+)$/, (m) => `Map: ${m[1]}`],
+  [/^العصر: (.+)$/, (m) => `Era: ${m[1]}`],
+  [/^الوضع: (.+)$/, (m) => `Mode: ${m[1]}`],
+  [/^الخصوم: (.+)$/, (m) => `Opponents: ${m[1]}`],
+  [/^غرفة (.+)$/, (m) => `Room ${m[1]}`],
+  [/^عالم (.+)$/, (m) => `World ${m[1]}`],
+  [/^مباراة أونلاين — (.+) لاعبين$/, (m) => `Online match — ${m[1]} players`],
+  [/^جارٍ إعادة الاتصال… \(محاولة (.+)\)$/, (m) => `Reconnecting… (attempt ${m[1]})`],
+  [/^عاد الاتصال — عالم (.+)$/, (m) => `Reconnected — world ${m[1]}`],
+  [/^الهدنة سارية — تبقى (.+) ثانية$/, (m) => `Ceasefire holds — ${m[1]} seconds left`],
+  [/^بحث (.+) → المستوى (.+)$/, (m) => `Research ${m[1]} → level ${m[2]}`],
+  [/^تم احتلال (.+) بالكامل$/, (m) => `${m[1]} has been fully conquered`],
+  [/^تم احتلال (.+) — خرج صاحبها من اللعبة$/, (m) => `${m[1]} was captured — its player is out`],
+  [/^تم بناء (.+)$/, (m) => `Built ${m[1]}`],
+  [/^تمت ترقية (.+) مبنى$/, (m) => `Upgraded ${m[1]} buildings`],
+  [/^(.+) أصبح المستوى (.+)$/, (m) => `${m[1]} reached level ${m[2]}`],
+  [/^هجوم على (.+) بـ (.+) جندي$/, (m) => `Attack on ${m[1]} with ${m[2]} troops`],
+  [/^(.+) تهجم عليك!$/, (m) => `${m[1]} is attacking you!`],
+  [/^(.+) تتقدم على حدودك \(\+(.+) خسائر\)$/, (m) => `${m[1]} pushes on your border (+${m[2]} losses)`],
+  [/^(.+) استسلمت!$/, (m) => `${m[1]} surrendered!`],
+  [/^(.+) أعلنت الحرب على (.+)$/, (m) => `${m[1]} declared war on ${m[2]}`],
+  [/^(.+) تدخلت في الحرب إلى جانب حليفها (.+)$/, (m) => `${m[1]} joined the war on the side of its ally ${m[2]}`],
+  [/^(.+) أرسلت لك (.+)$/, (m) => `${m[1]} sent you ${m[2]}`],
+  [/^(.+) انضمت إلى حربك ضد (.+) وفتحت جبهة$/, (m) => `${m[1]} joined your war against ${m[2]} and opened a front`],
+  [/^(.+) أعلنت الحرب على (.+) دعماً لك$/, (m) => `${m[1]} declared war on ${m[2]} in support of you`],
+  [/^حلفاؤك في الحرب، لكن (.+) منهم بعيدون عن جبهة (.+)$/, (m) => `Your allies are in the war, but ${m[1]} of them are far from the ${m[2]} front`],
+  [/^حلفاؤك انضموا إلى الحرب ضد (.+)$/, (m) => `Your allies joined the war against ${m[1]}`],
+  [/^تحالف بين (.+) و(.+) — دفاع مشترك$/, (m) => `Alliance between ${m[1]} and ${m[2]} — mutual defence`],
+  [/^وقف إطلاق النار بين (.+) و(.+)$/, (m) => `Ceasefire between ${m[1]} and ${m[2]}`],
+  [/^أرسلت هدية إلى (.+)$/, (m) => `Sent a gift to ${m[1]}`],
+  [/^رفضت عرض (.+)$/, (m) => `You rejected ${m[1]}'s offer`],
+  [/^(.+) رفضت التحالف$/, (m) => `${m[1]} rejected the alliance`],
+  [/^(.+) رفضت وقف إطلاق النار$/, (m) => `${m[1]} rejected the ceasefire`],
+  [/^سقطت عاصمة (.+)! خسر (.+) جندي$/, (m) => `The capital of ${m[1]} has fallen! ${m[2]} troops lost`],
+  [/^صدّيت هجوم (.+)!$/, (m) => `You repelled ${m[1]}'s attack!`],
+  [/^نجح الإنزال البحري على سواحل (.+)!$/, (m) => `The naval landing on ${m[1]}'s coast succeeded!`],
+  [/^إنزال بحري من (.+) على سواحلك!$/, (m) => `Naval landing by ${m[1]} on your coast!`],
+  [/^توقف الهجوم على (.+) — أرسل تعزيزات أو انسحب$/, (m) => `The attack on ${m[1]} has stalled — send reinforcements or withdraw`],
+  [/^توقف الهجوم على (.+)$/, (m) => `The attack on ${m[1]} has stalled`],
+  [/^نفدت قوات الهجوم على (.+)$/, (m) => `Your attacking force against ${m[1]} is spent`],
+  [/^أسطولك يتجه إلى (.+)$/, (m) => `Your fleet is heading for ${m[1]}`],
+  [/^اضغط مرة أخرى لبدء الهجوم على (.+)$/, (m) => `Press again to attack ${m[1]}`],
+  [/^غزو بحري على (.+)!$/, (m) => `Naval invasion of ${m[1]}!`],
+  [/^إنزال على (.+)$/, (m) => `Land on ${m[1]}`],
+  [/^كمّاشة على (.+)$/, (m) => `Pincer on ${m[1]}`],
+  [/^سيطرت على (.+) من الأرض في (.+) دقيقة\.$/, (m) => `You controlled ${m[1]} of the world in ${m[2]} minutes.`],
+  [/^وصلت إلى (.+) من الأرض\. حاول مرة أخرى!$/, (m) => `You reached ${m[1]} of the world. Try again!`],
+  [/^وصلت إلى (.+) من الأرض\. حاول مرة أخرى$/, (m) => `You reached ${m[1]} of the world. Try again!`],
+  [/^(.+) سيطرت على الأرض أولًا — جرّب مرة أخرى\.$/, (m) => `${m[1]} took the world first — try again.`],
+  [/^ابدأ (.+)$/, (m) => `Start ${m[1]}`],
+  [/^(.+) — عاد (.+) جندي إلى الاحتياط$/, (m) => `${m[1]} — ${m[2]} troops returned to reserve`],
+  [/^(.+) اختار (.+)$/, (m) => `${m[1]} chose ${m[2]}`],
+  [/^(.+) أعلنت الحرب على (.+)$/, (m) => `${m[1]} declared war on ${m[2]}`],
+  [/^(.+) \(أنت\)$/, (m) => `${m[1]} (you)`],
+];
+
+// Inputs arrive as one composed Arabic sentence ("روسيا أعلنت الحرب على أوكرانيا"),
+// so each rule captures the variable parts and reorders them in English.
+// Same rules, but allowed to match in the middle of a longer string. Two places
+// need this: a text node that mixes markup-derived pieces ("1 ◈ 0 مبنى Raises
+// the army cap…") and a parent element whose innerHTML was written after its
+// children were already visited by the observer.
+// Rules that can safely fire inside a longer string. Only the ones where the
+// Arabic is "number + noun" in a position English also accepts, so a partial
+// rewrite never reorders a sentence it does not fully understand.
+const INLINE = [
+  [/([0-9\u0660-\u0669][0-9\u0660-\u0669,.]*)\s+مبنى/g, (m) => `${m[1]} buildings`],
+  [/([0-9\u0660-\u0669][0-9\u0660-\u0669,.]*)\s+خلية/g, (m) => `${m[1]} cells`],
+  [/([0-9\u0660-\u0669][0-9\u0660-\u0669,.]*)\s+جندي/g, (m) => `${m[1]} troops`],
+];
+
+function swapInline(text) {
+  let s = String(text);
+  for (const [re, fn] of INLINE) s = s.replace(re, (...a) => fn(a.slice(0, -2)));
+  return s;
+}
+
+function swapPatternsWithin(text) {
+  let s = swapInline(String(text));
+  const replaceOnce = (re, fn) => {
+    const flags = re.flags.includes("g") ? re.flags : re.flags + "g";
+    const global = new RegExp(re.source, flags);
+    let changed = false;
+    s = s.replace(global, (...args) => {
+      const m = args.slice(0, -2); // drop offset + input
+      changed = true;
+      try {
+        return fn(m);
+      } catch {
+        return m[0];
+      }
+    });
+    return changed;
+  };
+  for (const [re, fn] of PATTERNS) {
+    // anchored rules only make sense for a whole node; run them on the whole
+    // string first (handled by swapPatterns) and skip them here
+    if (re.source.startsWith("^")) {
+      const whole = s.match(re);
+      if (whole) {
+        const out = swapPatterns(s);
+        if (out !== s) s = out;
+      }
+      continue;
+    }
+    replaceOnce(re, fn);
+  }
+  // anchored forms embedded in a bigger string are rare; try them per sentence
+  return s;
+}
+
+function swapPatterns(text) {
+  const s = String(text);
+  for (const [re, fn] of PATTERNS) {
+    const m = s.match(re);
+    if (m) {
+      try {
+        return fn(m);
+      } catch {
+        return s;
+      }
+    }
+  }
+  return s;
+}
+
+// ------------------------------------------------------------- the sentence ---
+// One entry point for "turn this Arabic into English". Used by t() at every
+// call site and by translateText() for text that reached the DOM on its own,
+// so the two paths can never drift apart.
+function translateCore(text) {
+  const core = String(text);
+  if (!core) return core;
+
+  const hit = EN[core]; // exact dictionary entry wins
+  if (hit !== undefined) return hit;
+
+  const nat = nationIn(core); // a nametag, tooltip or feed fragment
+  if (nat) return nat;
+
+  // Sentence rules, then inline number+noun rules, then any nation names left
+  // inside the result: "بدء المباراة: روسيا" needs the rule for the frame and
+  // the nation table for the tail.
+  let out = swapPatterns(core);
+  if (out === core) out = swapPatternsWithin(core);
+  out = replaceNations(out);
+  return out;
+}
+
+// ------------------------------------------------------------------- nations ---
+// Country names are data, not copy: the map bundle carries both spellings. The
+// only thing missing at the DOM layer is knowing which Arabic name is which
+// country, so main.js hands that table over once at boot. That is what lets a
+// bare "روسيا" — a nametag, a feed line, a tooltip — come out as "Russia".
+let nations = new Map(); // Arabic name → English name
+let nationRe = null; // cached alternation, rebuilt when the table changes
+
+function registerNationNames(pairs) {
+  nations = new Map(pairs.filter(([ar, en]) => {
+    // NB: filter() passes three arguments, so with a tuple destructure the
+    // third would arrive as `en` if this were not a plain two-element check.
+    // Keep it explicit: both spellings present and different.
+    return !!ar && !!en && String(ar) !== String(en);
+  }));
+  nationRe = null;
+}
+
+function nationIn(text) {
+  if (lang !== "en") return null;
+  return nations.get(text) || null;
+}
+
+// ------------------------------------------------------------------ the DOM ---
+const ATTRS = ["placeholder", "title", "aria-label", "alt"];
+
+// One text node, one decision. Returns the replacement string, or null to keep
+// the node as it is. Exact dictionary hits win; then the pattern table; then a
+// mixed sentence is not touched (partial rewrites read worse than Arabic).
+function translateText(raw) {
+  const lead = raw.match(/^(\s*)/)[1];
+  const trail = raw.match(/\s*$/)[0];
+  const core = raw.trim();
+  if (!core) return null;
+  const out = translateCore(core);
+  if (out === core) return null;
+  return lead + out + trail;
+}
+
+function translateNodeText(node, reverseMode) {
+  const raw = node.textContent;
+  if (!raw || !raw.trim()) return;
+  if (reverseMode) {
+    buildReverse();
+    const lead = raw.match(/^(\s*)/)[1];
+    const trail = raw.match(/\s*$/)[0];
+    const core = raw.trim();
+    const ar = reverse.get(core);
+    if (ar && ar !== core) node.textContent = lead + ar + trail;
+    return;
+  }
+  const next = translateText(raw);
+  if (next !== null && next !== raw) node.textContent = next;
+}
+
+function translateAttrs(el, reverseMode) {
+  if (!el.getAttribute) return;
+  for (const attr of ATTRS) {
+    const v = el.getAttribute(attr);
+    if (!v) continue;
+    if (reverseMode) {
+      buildReverse();
+      const ar = reverse.get(v);
+      if (ar) el.setAttribute(attr, ar);
+    } else {
+      const en = EN[v] ?? swapPatterns(v);
+      if (en !== v) el.setAttribute(attr, en);
+    }
+  }
+}
+
+// The longest name first, so "الولايات المتحدة" is not damaged by a shorter
+// neighbouring match, and the replacement is done in one pass.
+function replaceNations(text) {
+  if (lang !== "en" || !nations.size) return text;
+  if (!nationRe) {
+    const names = [...nations.keys()].sort((a, b) => b.length - a.length);
+    nationRe = new RegExp("(" + names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")", "g");
+  }
+  return text.replace(nationRe, (m) => nations.get(m) || m);
+}
+
+const SKIP = new Set(["SCRIPT", "STYLE", "TEXTAREA", "CODE", "PRE"]);
+
+function translateTree(root, reverseMode) {
+  if (!root) return;
+  const visit = (node) => {
+    if (node.nodeType === 1) {
+      if (SKIP.has(node.nodeName)) return;
+      translateAttrs(node, reverseMode);
+    }
+    if (node.nodeType === 3) {
+      const p = node.parentNode;
+      if (p && !SKIP.has(p.nodeName)) translateNodeText(node, reverseMode);
+      return;
+    }
+    for (let c = node.firstChild; c; c = c.nextSibling) visit(c);
+  };
+  visit(root);
+}
+
+function translateDom(root = typeof document !== "undefined" ? document.body : null) {
+  if (!root) return;
+  translateTree(root, lang !== "en");
+}
+
+// Keep translating after boot. Every innerHTML write, list rebuild and toast
+// lands here, so gameplay text follows the language without extra call sites.
+let observer = null;
+
+function watchDom(root = typeof document !== "undefined" ? document.body : null) {
+  if (!root || typeof MutationObserver === "undefined") return;
+  if (lang !== "en") return; // Arabic is the source text: nothing to rewrite
+  if (observer) return;
+  observer = new MutationObserver((records) => {
+    observer.disconnect(); // avoid re-entering our own writes
+    for (const rec of records) {
+      if (rec.type === "childList") {
+        for (const n of rec.addedNodes) translateTree(n, false);
+      } else if (rec.type === "characterData") {
+        translateNodeText(rec.target, false);
+      } else if (rec.type === "attributes") {
+        translateAttrs(rec.target, false);
+      }
+    }
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ATTRS,
+    });
+  });
+  observer.observe(root, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ATTRS,
+  });
+}
+
+function unwatchDom() {
+  if (observer) {
+    observer.disconnect();
+    observer = null;
+  }
+}
+
+
+__exp.__done = true;
+return { getLang, isRTL, setLang, loadLang, initLang, t, tBack, swapPatterns, registerNationNames, translateDom, watchDom, unwatchDom };
+});
+
 __def("js/data.js", function (__req, __exp, __reexport) {
 // Static game data: eras, buildings, research, ranks, medals, balance knobs.
-// All player-facing copy is Arabic-first with English fallbacks.
+// All player-facing copy is Arabic-first with English fallbacks. Every label
+// runs through t() so the whole table is translated once, at load time, by the
+// active language in i18n.js.
+const { t } = __req("js/i18n.js");
 
 const ERAS = {
   ancient: {
     id: "ancient",
-    ar: "العصور القديمة",
+    ar: t("العصور القديمة"),
     en: "Ancient",
-    years: "3000 ق.م",
+    years: t("3000 ق.م"),
     costMult: 0.55,
     armyMult: 1.0,
     tint: "ancient",
-    unit: { ar: "رماحون", en: "Spearmen" },
-    missile: { ar: "منجنيق", en: "Catapult" },
+    unit: { ar: t("رماحون"), en: "Spearmen" },
+    missile: { ar: t("منجنيق"), en: "Catapult" },
   },
   medieval: {
     id: "medieval",
-    ar: "العصور الوسطى",
+    ar: t("العصور الوسطى"),
     en: "Medieval",
-    years: "1200 م",
+    years: t("1200 م"),
     costMult: 0.7,
     armyMult: 1.15,
     tint: "medieval",
-    unit: { ar: "فرسان", en: "Knights" },
-    missile: { ar: "مدفع حجري", en: "Bombard" },
+    unit: { ar: t("فرسان"), en: "Knights" },
+    missile: { ar: t("مدفع حجري"), en: "Bombard" },
   },
   sail: {
     id: "sail",
-    ar: "عصر الشراع",
+    ar: t("عصر الشراع"),
     en: "Age of Sail",
-    years: "1650 م",
+    years: t("1650 م"),
     costMult: 0.85,
     armyMult: 1.3,
     tint: "sail",
-    unit: { ar: "مشاة الخط", en: "Line Infantry" },
-    missile: { ar: "مدفع ميدان", en: "Field Cannon" },
+    unit: { ar: t("مشاة الخط"), en: "Line Infantry" },
+    missile: { ar: t("مدفع ميدان"), en: "Field Cannon" },
   },
   imperial: {
     id: "imperial",
-    ar: "العصر الإمبراطوري",
+    ar: t("العصر الإمبراطوري"),
     en: "Imperial",
-    years: "1850 م",
+    years: t("1850 م"),
     costMult: 1.0,
     armyMult: 1.5,
     tint: "imperial",
-    unit: { ar: "بنادق", en: "Riflemen" },
-    missile: { ar: "مدفعية", en: "Artillery" },
+    unit: { ar: t("بنادق"), en: "Riflemen" },
+    missile: { ar: t("مدفعية"), en: "Artillery" },
   },
   modern: {
     id: "modern",
-    ar: "العصر الحديث",
+    ar: t("العصر الحديث"),
     en: "Modern",
-    years: "2026 م",
+    years: t("2026 م"),
     costMult: 1.25,
     armyMult: 1.8,
     tint: "modern",
-    unit: { ar: "مشاة آلية", en: "Mech Infantry" },
-    missile: { ar: "صاروخ كروز", en: "Cruise Missile" },
+    unit: { ar: t("مشاة آلية"), en: "Mech Infantry" },
+    missile: { ar: t("صاروخ كروز"), en: "Cruise Missile" },
   },
 };
 
@@ -1505,9 +2641,9 @@ const BUILDINGS = [
     hotkey: "1",
     icon: "city",
     cost: 900,
-    ar: "مدينة",
+    ar: t("مدينة"),
     en: "City",
-    descAr: "ترفع سقف الجيش والذهب. كل مستوى +12 ألف جندي.",
+    descAr: t("ترفع سقف الجيش والذهب. كل مستوى +12 ألف جندي."),
     descEn: "Raises troop and treasury caps. +12k troops per level.",
     color: "#e6c86e",
   },
@@ -1516,9 +2652,9 @@ const BUILDINGS = [
     hotkey: "2",
     icon: "factory",
     cost: 620,
-    ar: "مصنع",
+    ar: t("مصنع"),
     en: "Factory",
-    descAr: "يدفع الذهب كل ثانية. +16 ذهب للمستوى.",
+    descAr: t("يدفع الذهب كل ثانية. +16 ذهب للمستوى."),
     descEn: "Produces gold every second. +16 gold per level.",
     color: "#c98a5c",
   },
@@ -1527,9 +2663,9 @@ const BUILDINGS = [
     hotkey: "3",
     icon: "lab",
     cost: 720,
-    ar: "مختبر أبحاث",
+    ar: t("مختبر أبحاث"),
     en: "Research Lab",
-    descAr: "ينتج نقاط بحث. +0.55 نقطة/ثانية للمستوى.",
+    descAr: t("ينتج نقاط بحث. +0.55 نقطة/ثانية للمستوى."),
     descEn: "Generates research points. +0.55/s per level.",
     color: "#7ad0e8",
   },
@@ -1538,9 +2674,9 @@ const BUILDINGS = [
     hotkey: "4",
     icon: "port",
     cost: 780,
-    ar: "ميناء",
+    ar: t("ميناء"),
     en: "Port",
-    descAr: "يفتح الغزو البحري ويضيف ذهبًا وتجارة.",
+    descAr: t("يفتح الغزو البحري ويضيف ذهبًا وتجارة."),
     descEn: "Enables naval invasions, adds trade gold.",
     color: "#6fa8d8",
   },
@@ -1549,9 +2685,9 @@ const BUILDINGS = [
     hotkey: "5",
     icon: "base",
     cost: 560,
-    ar: "قاعدة عسكرية",
+    ar: t("قاعدة عسكرية"),
     en: "Army Base",
-    descAr: "تسرّع تجنيد الجنود. +40 جندي/ثانية للمستوى.",
+    descAr: t("تسرّع تجنيد الجنود. +40 جندي/ثانية للمستوى."),
     descEn: "Recruits troops faster. +40/s per level.",
     color: "#8fae7a",
   },
@@ -1560,9 +2696,9 @@ const BUILDINGS = [
     hotkey: "6",
     icon: "bunker",
     cost: 480,
-    ar: "مخبأ",
+    ar: t("مخبأ"),
     en: "Bunker",
-    descAr: "يقوّي الدفاع على حدودك. يبطئ أي هجوم عليك 9%.",
+    descAr: t("يقوّي الدفاع على حدودك. يبطئ أي هجوم عليك 9%."),
     descEn: "Fortifies borders. Slows attacks on you by 9%.",
     color: "#9aa4b5",
   },
@@ -1571,9 +2707,9 @@ const BUILDINGS = [
     hotkey: "7",
     icon: "silo",
     cost: 4200,
-    ar: "منصة صواريخ",
+    ar: t("منصة صواريخ"),
     en: "Missile Silo",
-    descAr: "تطلق صواريخ كروز على أي هدف في الخريطة.",
+    descAr: t("تطلق صواريخ كروز على أي هدف في الخريطة."),
     descEn: "Launches cruise missiles anywhere.",
     color: "#e07a7a",
   },
@@ -1582,9 +2718,9 @@ const BUILDINGS = [
     hotkey: "8",
     icon: "aa",
     cost: 3000,
-    ar: "دفاع جوي",
+    ar: t("دفاع جوي"),
     en: "Air Defense",
-    descAr: "يعترض الصواريخ حوله ويخفف الأضرار.",
+    descAr: t("يعترض الصواريخ حوله ويخفف الأضرار."),
     descEn: "Intercepts missiles near it.",
     color: "#b58fe0",
   },
@@ -1595,73 +2731,73 @@ const BUILDING_BY_KEY = Object.fromEntries(BUILDINGS.map((b) => [b.key, b]));
 // Era-specific display names for each slot (same ids/effects).
 const ERA_BUILDING_NAMES = {
   ancient: [
-    "قرية", "منجم", "معبد الكهنة", "مرسى سفن", "معسكر", "حصن", "منجنيق", "أبراج مراقبة",
+    t("قرية"), t("منجم"), t("معبد الكهنة"), t("مرسى سفن"), t("معسكر"), t("حصن"), t("منجنيق"), t("أبراج مراقبة"),
   ],
   medieval: [
-    "مدينة", "ورشة", "مكتبة", "ميناء", "ثكنة", "قلعة", "مدفع", "أبراج حراسة",
+    t("مدينة"), t("ورشة"), t("مكتبة"), t("ميناء"), t("ثكنة"), t("قلعة"), t("مدفع"), t("أبراج حراسة"),
   ],
   sail: [
-    "مدينة", "مصنع", "أكاديمية", "حوض بناء", "ثكنة", "حصن نجمي", "مدفعية", "بطاريات",
+    t("مدينة"), t("مصنع"), t("أكاديمية"), t("حوض بناء"), t("ثكنة"), t("حصن نجمي"), t("مدفعية"), t("بطاريات"),
   ],
   imperial: [
-    "مدينة", "مصنع", "جامعة", "ميناء", "ثكنة", "حصن", "مدفعية ثقيلة", "دفاعات",
+    t("مدينة"), t("مصنع"), t("جامعة"), t("ميناء"), t("ثكنة"), t("حصن"), t("مدفعية ثقيلة"), t("دفاعات"),
   ],
   modern: [
-    "مدينة", "مصنع", "مختبر أبحاث", "ميناء", "قاعدة عسكرية", "مخبأ", "منصة صواريخ", "دفاع جوي",
+    t("مدينة"), t("مصنع"), t("مختبر أبحاث"), t("ميناء"), t("قاعدة عسكرية"), t("مخبأ"), t("منصة صواريخ"), t("دفاع جوي"),
   ],
 };
 
 const RESEARCH = [
   {
     key: "weapons",
-    ar: "الأسلحة",
+    ar: t("الأسلحة"),
     en: "Weapons",
     icon: "⚔",
     per: 0.10,
-    descAr: "قوة هجومك +10% لكل مستوى",
+    descAr: t("قوة هجومك +10% لكل مستوى"),
   },
-  { key: "defense", ar: "الدفاعات", en: "Defense", icon: "🛡", per: 0.09, descAr: "دفاعك +9% لكل مستوى" },
-  { key: "logistics", ar: "اللوجستيات", en: "Logistics", icon: "🚚", per: 0.12, descAr: "سقف جيشك +12%" },
-  { key: "economy", ar: "الاقتصاد", en: "Economy", icon: "💰", per: 0.12, descAr: "ذهبك +12%" },
-  { key: "population", ar: "السكان", en: "Population", icon: "👥", per: 0.10, descAr: "سقف السكان +10%" },
-  { key: "artillery", ar: "المدفعية", en: "Artillery", icon: "🎯", per: 0.15, descAr: "قوة الضربات +15%" },
+  { key: "defense", ar: t("الدفاعات"), en: "Defense", icon: "🛡", per: 0.09, descAr: t("دفاعك +9% لكل مستوى") },
+  { key: "logistics", ar: t("اللوجستيات"), en: "Logistics", icon: "🚚", per: 0.12, descAr: t("سقف جيشك +12%") },
+  { key: "economy", ar: t("الاقتصاد"), en: "Economy", icon: "💰", per: 0.12, descAr: t("ذهبك +12%") },
+  { key: "population", ar: t("السكان"), en: "Population", icon: "👥", per: 0.10, descAr: t("سقف السكان +10%") },
+  { key: "artillery", ar: t("المدفعية"), en: "Artillery", icon: "🎯", per: 0.15, descAr: t("قوة الضربات +15%") },
 ];
 
 const MAX_TECH = 5;
 
 const RANKS = [
-  { ar: "مجنّد", en: "Recruit", xp: 0 },
-  { ar: "جندي", en: "Soldier", xp: 60 },
-  { ar: "رقيب", en: "Sergeant", xp: 180 },
-  { ar: "نقيب", en: "Captain", xp: 420 },
-  { ar: "رائد", en: "Major", xp: 900 },
-  { ar: "عقيد", en: "Colonel", xp: 1800 },
-  { ar: "عميد", en: "Brigadier", xp: 3400 },
-  { ar: "لواء", en: "General", xp: 6000 },
-  { ar: "فريق أول", en: "Field Marshal", xp: 10000 },
-  { ar: "إمبراطور", en: "Emperor", xp: 16000 },
+  { ar: t("مجنّد"), en: "Recruit", xp: 0 },
+  { ar: t("جندي"), en: "Soldier", xp: 60 },
+  { ar: t("رقيب"), en: "Sergeant", xp: 180 },
+  { ar: t("نقيب"), en: "Captain", xp: 420 },
+  { ar: t("رائد"), en: "Major", xp: 900 },
+  { ar: t("عقيد"), en: "Colonel", xp: 1800 },
+  { ar: t("عميد"), en: "Brigadier", xp: 3400 },
+  { ar: t("لواء"), en: "General", xp: 6000 },
+  { ar: t("فريق أول"), en: "Field Marshal", xp: 10000 },
+  { ar: t("إمبراطور"), en: "Emperor", xp: 16000 },
 ];
 
 const MEDALS = [
-  { id: "first_blood", ar: "أول ضربة", en: "First Blood", hintAr: "احتلال أول دولة" },
-  { id: "five_nations", ar: "الفاتح", en: "Conqueror", hintAr: "احتلال 5 دول" },
-  { id: "ten_nations", ar: "الإسكندر", en: "Alexander", hintAr: "احتلال 10 دول" },
-  { id: "quick_war", ar: "حرب خاطفة", en: "Blitz", hintAr: "احتلال دولة في أقل من 60 ثانية" },
-  { id: "billion_troops", ar: "جيش لا يُهزم", en: "Unstoppable", hintAr: "امتلاك مليون جندي" },
-  { id: "capital_hunter", ar: "قنّاص العواصم", en: "Capital Hunter", hintAr: "إسقاط 3 عواصم" },
-  { id: "nuke_them", ar: "الفطر", en: "Mushroom", hintAr: "استخدام سلاح نووي" },
-  { id: "alliance_king", ar: "دبلوماسي", en: "Diplomat", hintAr: "عقد تحالفين" },
-  { id: "survivor", ar: "الصامد", en: "Survivor", hintAr: "صد 10 هجمات" },
-  { id: "world_ruler", ar: "حاكم العالم", en: "World Ruler", hintAr: "الوصول إلى 50% من الأرض" },
-  { id: "builder", ar: "المعماري", en: "Architect", hintAr: "بناء 25 مبنى" },
-  { id: "tech_master", ar: "عالِم", en: "Scientist", hintAr: "الوصول لأعلى مستوى في أي بحث" },
-  { id: "no_mercy", ar: "بلا رحمة", en: "No Mercy", hintAr: "احتلال دولة كبرى (أكثر من 1000 خلية)" },
-  { id: "comeback", ar: "العودة", en: "Comeback", hintAr: "الفوز بعد خسارة نصف أرضك" },
-  { id: "daily_3", ar: "مثابر", en: "Persistent", hintAr: "سلسلة 3 أيام في التحدي اليومي" },
-  { id: "speed_demon", ar: "برق", en: "Lightning", hintAr: "احتلال 3 دول في أول 3 دقائق" },
-  { id: "peace", ar: "الحكيم", en: "The Wise", hintAr: "إنهاء 3 حروب بوقف إطلاق النار" },
-  { id: "navy", ar: "أمير البحر", en: "Sea Lord", hintAr: "نجاح 3 غزوات بحرية" },
-  { id: "emperor", ar: "الإمبراطور", en: "Emperor", hintAr: "الوصول لأعلى رتبة" },
+  { id: "first_blood", ar: t("أول ضربة"), en: "First Blood", hintAr: t("احتلال أول دولة") },
+  { id: "five_nations", ar: t("الفاتح"), en: "Conqueror", hintAr: t("احتلال 5 دول") },
+  { id: "ten_nations", ar: t("الإسكندر"), en: "Alexander", hintAr: t("احتلال 10 دول") },
+  { id: "quick_war", ar: t("حرب خاطفة"), en: "Blitz", hintAr: t("احتلال دولة في أقل من 60 ثانية") },
+  { id: "billion_troops", ar: t("جيش لا يُهزم"), en: "Unstoppable", hintAr: t("امتلاك مليون جندي") },
+  { id: "capital_hunter", ar: t("قنّاص العواصم"), en: "Capital Hunter", hintAr: t("إسقاط 3 عواصم") },
+  { id: "nuke_them", ar: t("الفطر"), en: "Mushroom", hintAr: t("استخدام سلاح نووي") },
+  { id: "alliance_king", ar: t("دبلوماسي"), en: "Diplomat", hintAr: t("عقد تحالفين") },
+  { id: "survivor", ar: t("الصامد"), en: "Survivor", hintAr: t("صد 10 هجمات") },
+  { id: "world_ruler", ar: t("حاكم العالم"), en: "World Ruler", hintAr: t("الوصول إلى 50% من الأرض") },
+  { id: "builder", ar: t("المعماري"), en: "Architect", hintAr: t("بناء 25 مبنى") },
+  { id: "tech_master", ar: "عالِم", en: "Scientist", hintAr: t("الوصول لأعلى مستوى في أي بحث") },
+  { id: "no_mercy", ar: "بلا رحمة", en: "No Mercy", hintAr: t("احتلال دولة كبرى (أكثر من 1000 خلية)") },
+  { id: "comeback", ar: t("العودة"), en: "Comeback", hintAr: t("الفوز بعد خسارة نصف أرضك") },
+  { id: "daily_3", ar: t("مثابر"), en: "Persistent", hintAr: t("سلسلة 3 أيام في التحدي اليومي") },
+  { id: "speed_demon", ar: t("برق"), en: "Lightning", hintAr: t("احتلال 3 دول في أول 3 دقائق") },
+  { id: "peace", ar: t("الحكيم"), en: "The Wise", hintAr: t("إنهاء 3 حروب بوقف إطلاق النار") },
+  { id: "navy", ar: t("أمير البحر"), en: "Sea Lord", hintAr: t("نجاح 3 غزوات بحرية") },
+  { id: "emperor", ar: t("الإمبراطور"), en: "Emperor", hintAr: t("الوصول لأعلى رتبة") },
 ];
 
 const BALANCE = {
@@ -1729,32 +2865,32 @@ const BALANCE = {
 
 // Difficulty presets for the player's rivals.
 const AI_LEVELS = {
-  easy: { ar: "سهل", aggression: 0.55, skill: 0.55, buildRate: 0.6 },
-  normal: { ar: "عادي", aggression: 0.8, skill: 0.8, buildRate: 1.0 },
-  hard: { ar: "صعب", aggression: 1.05, skill: 1.0, buildRate: 1.35 },
-  brutal: { ar: "وحشي", aggression: 1.35, skill: 1.2, buildRate: 1.7 },
+  easy: { ar: t("سهل"), aggression: 0.55, skill: 0.55, buildRate: 0.6 },
+  normal: { ar: t("عادي"), aggression: 0.8, skill: 0.8, buildRate: 1.0 },
+  hard: { ar: t("صعب"), aggression: 1.05, skill: 1.0, buildRate: 1.35 },
+  brutal: { ar: t("وحشي"), aggression: 1.35, skill: 1.2, buildRate: 1.7 },
 };
 
 const MODES = [
   {
     id: "world",
-    ar: "فتح العالم",
+    ar: t("فتح العالم"),
     en: "World Conquest",
-    descAr: "اختر أي دولة على خريطة العالم وابدأ من حدودها الحقيقية.",
+    descAr: t("اختر أي دولة على خريطة العالم وابدأ من حدودها الحقيقية."),
     icon: "globe",
   },
   {
     id: "history",
-    ar: "الحملات التاريخية",
+    ar: t("الحملات التاريخية"),
     en: "History",
-    descAr: "قُد إسكندر أو روما أو جنكيز خان من حدودهم التاريخية.",
+    descAr: t("قُد إسكندر أو روما أو جنكيز خان من حدودهم التاريخية."),
     icon: "scroll",
   },
   {
     id: "daily",
-    ar: "التحدي اليومي",
+    ar: t("التحدي اليومي"),
     en: "Daily Challenge",
-    descAr: "دولة واحدة للجميع كل يوم، وهدف متغيّر. الفوز يبني سلسلتك.",
+    descAr: t("دولة واحدة للجميع كل يوم، وهدف متغيّر. الفوز يبني سلسلتك."),
     icon: "star",
   },
 ];
@@ -2099,6 +3235,7 @@ __def("js/state.js", function (__req, __exp, __reexport) {
 // Game simulation: nations, economy, front-line combat, strikes, diplomacy,
 // victory conditions and serialisation. No DOM access in this file.
 const { BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MAX_TECH, RANKS, RESEARCH } = __req("js/data.js");
+const { t } = __req("js/i18n.js");
 const { gridToRle, rleToGrid } = __req("js/world.js");
 
 // Relative strength of every nation, used by the online lobby screen.
@@ -2397,7 +3534,7 @@ class Game {
 
   relationLabel(a, b) {
     const r = this.rel(a, b);
-    return { ally: "حليف", war: "حرب", peace: "هدنة", neutral: "محايد" }[r];
+    return { ally: t("حليف"), war: t("حرب"), peace: t("هدنة"), neutral: t("محايد") }[r];
   }
 
   capacityOf(n) {
@@ -2564,7 +3701,7 @@ class Game {
     }
     if (n.isPlayer) {
       this.finish("lose");
-      this.log("سقطت دولتك… انتهت الحملة", "bad");
+      this.log(t("سقطت دولتك… انتهت الحملة"), "bad");
     } else {
       this.log(`تم احتلال ${n.ar} بالكامل`, "good", { nation: n.id, conquered: n.id });
       this.stats.conquered++;
@@ -2582,10 +3719,10 @@ class Game {
   // ---------------------------------------------------------------- build ---
 
   canBuild(n, key, cell) {
-    if (!n.alive) return "دولتك سقطت";
-    if (this.owners[cell] !== n.id) return "يجب البناء داخل أرضك";
-    if (n.gold < this.buildingCost(key, 1)) return "الذهب غير كافٍ";
-    if (n.buildings.some((b) => b.cell === cell)) return "يوجد مبنى هنا";
+    if (!n.alive) return t("دولتك سقطت");
+    if (this.owners[cell] !== n.id) return t("يجب البناء داخل أرضك");
+    if (n.gold < this.buildingCost(key, 1)) return t("الذهب غير كافٍ");
+    if (n.buildings.some((b) => b.cell === cell)) return t("يوجد مبنى هنا");
     return null;
   }
 
@@ -2656,9 +3793,9 @@ class Game {
   }
 
   upgradeBuilding(n, b) {
-    if (b.level >= 5) return "المستوى الأقصى";
+    if (b.level >= 5) return t("المستوى الأقصى");
     const cost = this.buildingCost(b.key, b.level + 1);
-    if (n.gold < cost) return "الذهب غير كافٍ";
+    if (n.gold < cost) return t("الذهب غير كافٍ");
     n.gold -= cost;
     b.level++;
     this.refreshAgg(n);
@@ -2693,7 +3830,7 @@ class Game {
     if (a.ally.has(b.id)) {
       a.ally.delete(b.id);
       b.ally.delete(a.id);
-      if (a.isPlayer || b.isPlayer) this.log("تحالف انكسر… خيانة!", "bad");
+      if (a.isPlayer || b.isPlayer) this.log(t("تحالف انكسر… خيانة!"), "bad");
     }
     a.war.add(b.id);
     b.war.add(a.id);
@@ -2749,13 +3886,13 @@ class Game {
   }
 
   launchAttack(attacker, defender, fraction) {
-    if (!attacker.alive || !defender.alive) return "دولة غير موجودة";
-    if (attacker.ally.has(defender.id)) return "لا يمكنك مهاجمة حليفك";
-    if (attacker.army < 200) return "جيشك صغير جدًا";
+    if (!attacker.alive || !defender.alive) return t("دولة غير موجودة");
+    if (attacker.ally.has(defender.id)) return t("لا يمكنك مهاجمة حليفك");
+    if (attacker.army < 200) return t("جيشك صغير جدًا");
     if (this.ceasefireLeft > 0) return `الهدنة سارية — تبقى ${Math.ceil(this.ceasefireLeft)} ثانية`;
     const naval = !this.adjacent(attacker, defender);
-    if (naval && !this.hasPort(attacker)) return "تحتاج ميناء للغزو البحري";
-    if (naval && !this.canReach(attacker, defender)) return "هذه الدولة بعيدة عن موانئك";
+    if (naval && !this.hasPort(attacker)) return t("تحتاج ميناء للغزو البحري");
+    if (naval && !this.canReach(attacker, defender)) return t("هذه الدولة بعيدة عن موانئك");
     // Never let a nation commit its last soldiers: keep a garrison floor, so a
     // single over-committed offensive can't leave the homeland defenceless.
     const cap = this.capacityOf ? this.capacityOf(attacker) : attacker.cap || attacker.army;
@@ -2763,8 +3900,8 @@ class Game {
     const available = Math.floor(attacker.army - garrison);
     if (available < 200) {
       return attacker.isPlayer
-        ? "احتياطيك منخفض — انتظر تجنيداً أو اسحب قواتك"
-        : "لا يوجد احتياطي كافٍ";
+        ? t("احتياطيك منخفض — انتظر تجنيداً أو اسحب قواتك")
+        : t("لا يوجد احتياطي كافٍ");
     }
     const existing = this.attacks.find((a) => a.attacker === attacker && a.defender === defender && a.active);
     if (existing) {
@@ -2780,7 +3917,7 @@ class Game {
     if (!attacker.war.has(defender.id)) this.declareWar(attacker, defender);
     if (!attacker.isPlayer && this.attacks.length > 150) return "الحد الأقصى للهجمات";
     const troops = Math.min(available, Math.floor(attacker.army * fraction));
-    if (troops < 100) return "جيشك صغير جدًا";
+    if (troops < 100) return t("جيشك صغير جدًا");
     attacker.army -= troops;
     const atk = new Attack(attacker, defender, troops, { naval });
     atk.createdAt = this.time;
@@ -2789,7 +3926,7 @@ class Game {
       atk.landingAt = this.findLandingCell(attacker, defender);
       if (atk.landingAt < 0) {
         attacker.army += troops;
-        return "لا يوجد ساحل يمكن الوصول إليه";
+        return t("لا يوجد ساحل يمكن الوصول إليه");
       }
     }
     this.attacks.push(atk);
@@ -2853,7 +3990,7 @@ class Game {
     a.attacker.army += back;
     a.active = false;
     a.troops = 0;
-    if (a.attacker.isPlayer) this.log("انسحاب — خسرت 25% من القوة", "warn");
+    if (a.attacker.isPlayer) this.log(t("انسحاب — خسرت 25% من القوة"), "warn");
     this.attacks = this.attacks.filter((x) => x !== a);
   }
 
@@ -3185,11 +4322,11 @@ class Game {
 
   fortify(n) {
     const cost = 650;
-    if (n.gold < cost) return "الذهب غير كافٍ";
-    if ((n.fortifyUntil || 0) > this.time) return "التحصين فعّال بالفعل";
+    if (n.gold < cost) return t("الذهب غير كافٍ");
+    if ((n.fortifyUntil || 0) > this.time) return t("التحصين فعّال بالفعل");
     n.gold -= cost;
     n.fortifyUntil = this.time + 20;
-    if (n.isPlayer) this.log("تحصين الحدود +30% دفاع لمدة 20 ثانية", "good");
+    if (n.isPlayer) this.log(t("تحصين الحدود +30% دفاع لمدة 20 ثانية"), "good");
     return null;
   }
 
@@ -3222,19 +4359,19 @@ class Game {
   // --------------------------------------------------------------- strikes ---
 
   canStrike(n) {
-    if (!n.agg || !n.agg.silo) return "تحتاج منصة صواريخ";
+    if (!n.agg || !n.agg.silo) return t("تحتاج منصة صواريخ");
     const ready = n.buildings.filter((b) => b.key === "silo" && b.cd <= 0).length;
-    if (ready <= 0) return "الصاروخ قيد التجهيز";
-    if (n.gold < B.missileCost) return "الذهب غير كافٍ";
+    if (ready <= 0) return t("الصاروخ قيد التجهيز");
+    if (n.gold < B.missileCost) return t("الذهب غير كافٍ");
     return null;
   }
 
   launchStrike(n, cell, kind = "missile") {
     const cost = kind === "nuke" ? B.nukeCost : B.missileCost;
-    if (!n.agg || !n.agg.silo) return "تحتاج منصة صواريخ";
-    if (n.gold < cost) return "الذهب غير كافٍ";
+    if (!n.agg || !n.agg.silo) return t("تحتاج منصة صواريخ");
+    if (n.gold < cost) return t("الذهب غير كافٍ");
     const silo = n.buildings.find((b) => b.key === "silo" && b.cd <= 0);
-    if (!silo) return "الصاروخ قيد التجهيز";
+    if (!silo) return t("الصاروخ قيد التجهيز");
     silo.cd = kind === "nuke" ? B.missileChargeTime * 2 : B.missileChargeTime;
     n.gold -= cost;
     n.stats.strikes++;
@@ -3251,7 +4388,7 @@ class Game {
       x1: cell % this.world.w,
       y1: (cell / this.world.w) | 0,
     });
-    if (n.isPlayer) this.log(kind === "nuke" ? "أُطلق سلاح نووي!" : "أُطلق صاروخ كروز", "warn");
+    if (n.isPlayer) this.log(kind === "nuke" ? t("أُطلق سلاح نووي!") : t("أُطلق صاروخ كروز"), "warn");
     return null;
   }
 
@@ -3328,11 +4465,11 @@ class Game {
       by: strike.from,
     });
     if (by && by.isPlayer) {
-      this.log(blocked ? "اعترض الدفاع الجوي الصاروخ!" : "إصابة مباشرة!", blocked ? "warn" : "good");
+      this.log(blocked ? t("اعترض الدفاع الجوي الصاروخ!") : t("إصابة مباشرة!"), blocked ? "warn" : "good");
       if (strike.kind === "nuke") this.checkMedal("nuke");
     }
     const victim = this.nations.get(this.owners[strike.cell]);
-    if (victim && victim.isPlayer) this.log("ضربة صاروخية على أرضك!", "bad");
+    if (victim && victim.isPlayer) this.log(t("ضربة صاروخية على أرضك!"), "bad");
   }
 
   // ------------------------------------------------------------ diplomacy ---
@@ -3341,10 +4478,10 @@ class Game {
     // offer: {type:'ceasefire'|'alliance'|'peace', from, to, cost}
     const from = this.byId[offer.from];
     const to = this.byId[offer.to];
-    if (!from || !to || !from.alive || !to.alive) return "دولة غير متاحة";
+    if (!from || !to || !from.alive || !to.alive) return t("دولة غير متاحة");
     if (offer.type === "ceasefire") {
-      if (!from.war.has(to.id)) return "لا توجد حرب";
-      if (from.gold < B.ceasefireCost) return "الذهب غير كافٍ";
+      if (!from.war.has(to.id)) return t("لا توجد حرب");
+      if (from.gold < B.ceasefireCost) return t("الذهب غير كافٍ");
       from.gold -= B.ceasefireCost;
       if (to.isPlayer) {
         this.offers.push({ ...offer, id: uidCounter++, at: this.time });
@@ -3357,10 +4494,10 @@ class Game {
         return null;
       }
       this.log(`${to.ar} رفضت وقف إطلاق النار`, "warn");
-      return "مرفوض";
+      return t("مرفوض");
     }
     if (offer.type === "gift") {
-      if (from.gold < B.giftCost) return "الذهب غير كافٍ";
+      if (from.gold < B.giftCost) return t("الذهب غير كافٍ");
       from.gold -= B.giftCost;
       to.gold += B.giftCost;
       if (from.isPlayer) this.log(`أرسلت هدية إلى ${to.ar}`, "good");
@@ -3368,9 +4505,9 @@ class Game {
       return null;
     }
     if (offer.type === "alliance") {
-      if (from.ally.has(to.id)) return "أنتما حلفاء بالفعل";
-      if (from.ally.size >= 2) return "لا يمكنك تحالف أكثر من دولتين";
-      if (from.gold < 1000) return "الذهب غير كافٍ";
+      if (from.ally.has(to.id)) return t("أنتما حلفاء بالفعل");
+      if (from.ally.size >= 2) return t("لا يمكنك تحالف أكثر من دولتين");
+      if (from.gold < 1000) return t("الذهب غير كافٍ");
       from.gold -= 1000;
       if (to.isPlayer) {
         this.offers.push({ ...offer, id: uidCounter++, at: this.time });
@@ -3378,11 +4515,11 @@ class Game {
         this.formAlliance(from, to);
       } else {
         this.log(`${to.ar} رفضت التحالف`, "warn");
-        return "مرفوض";
+        return t("مرفوض");
       }
       return null;
     }
-    return "طلب غير معروف";
+    return t("طلب غير معروف");
   }
 
   aiAcceptsCeasefire(ai, other) {
@@ -3432,7 +4569,7 @@ class Game {
   // Called on the player's behalf: ask allies to join the war on a target.
   callAllies(target) {
     const p = this.player();
-    if (!p || !p.alive || !target || !target.alive) return "لا يوجد هدف";
+    if (!p || !p.alive || !target || !target.alive) return t("لا يوجد هدف");
     let joined = 0;
     let strikes = 0;
     for (const id of [...p.ally]) {
@@ -3476,7 +4613,7 @@ class Game {
         { nation: ally.id }
       );
     }
-    if (!joined) return "لم ينضم أي حليف — لا تملك تحالفات حيّة";
+    if (!joined) return t("لم ينضم أي حليف — لا تملك تحالفات حيّة");
     if (!strikes) return null;
     // Silence is bad UX: report that they joined but are far from the front.
     this.log(`حلفاؤك في الحرب، لكن ${strikes} منهم بعيدون عن جبهة ${target.ar}`, "info");
@@ -3519,7 +4656,7 @@ class Game {
 
   reclaim(n, cell) {
     const { world, owners } = this;
-    if (owners[cell] !== RUIN) return "ليست أرضًا خربة";
+    if (owners[cell] !== RUIN) return t("ليست أرضًا خربة");
     // must be reachable from the player's territory
     const x = cell % world.w;
     const y = (cell / world.w) | 0;
@@ -3528,7 +4665,7 @@ class Game {
       (x < world.w - 1 && owners[cell + 1] === n.id) ||
       (y > 0 && owners[cell - world.w] === n.id) ||
       (y < world.h - 1 && owners[cell + world.w] === n.id);
-    if (!near) return "الأرض الخربة بعيدة عن حدودك";
+    if (!near) return t("الأرض الخربة بعيدة عن حدودك");
     // reclaim a small blob around the click
     let claimed = 0;
     for (let dy = -2; dy <= 2 && claimed < 16; dy++) {
@@ -3543,7 +4680,7 @@ class Game {
         }
       }
     }
-    if (claimed && n.isPlayer) this.log("استعادة أرض خربة", "good");
+    if (claimed && n.isPlayer) this.log(t("استعادة أرض خربة"), "good");
     return null;
   }
 
@@ -3555,10 +4692,10 @@ class Game {
   }
 
   doResearch(n, key) {
-    if (!(key in n.tech)) return "بحث غير معروف";
-    if (n.tech[key] >= MAX_TECH) return "أعلى مستوى";
+    if (!(key in n.tech)) return t("بحث غير معروف");
+    if (n.tech[key] >= MAX_TECH) return t("أعلى مستوى");
     const cost = this.researchCost(key, n);
-    if (n.research < cost) return "نقاط البحث غير كافية";
+    if (n.research < cost) return t("نقاط البحث غير كافية");
     n.research -= cost;
     n.tech[key]++;
     if (n.isPlayer) {
@@ -3653,7 +4790,7 @@ class Game {
       rank: this.rankName(p),
     };
     this.summary = stats;
-    this.log(result === "win" ? "🏆 النصر! سيطرت على الأرض" : "💀 الهزيمة", result === "win" ? "good" : "bad");
+    this.log(result === "win" ? t("🏆 النصر! سيطرت على الأرض") : t("💀 الهزيمة"), result === "win" ? "good" : "bad");
     if (this.onEnd) this.onEnd(stats);
   }
 
@@ -4060,18 +5197,18 @@ class Game {
 
   setSeatReady(seat, ready) {
     const st = this.lobby && this.lobby.seats.find((x) => x.id === seat);
-    if (!st) return "مقعد غير موجود";
+    if (!st) return t("مقعد غير موجود");
     st.ready = !!ready;
     return null;
   }
 
   setSeatNation(seat, nationId) {
     const st = this.lobby && this.lobby.seats.find((x) => x.id === seat);
-    if (!st) return "مقعد غير موجود";
-    if (this.onlinePhase !== "lobby") return "المباراة بدأت";
+    if (!st) return t("مقعد غير موجود");
+    if (this.onlinePhase !== "lobby") return t("المباراة بدأت");
     const nation = this.byId[nationId];
-    if (!nation || !nation.def) return "دولة غير صالحة";
-    if (this.lobby.seats.some((x) => x.id !== seat && x.nationId === nationId)) return "الدولة محجوزة";
+    if (!nation || !nation.def) return t("دولة غير صالحة");
+    if (this.lobby.seats.some((x) => x.id !== seat && x.nationId === nationId)) return t("الدولة محجوزة");
     const old = this.byId[st.nationId];
     st.nationId = nationId;
     st.ready = false;
@@ -4128,8 +5265,8 @@ class Game {
   }
 
   startOnline() {
-    if (this.onlinePhase !== "lobby") return "المباراة بدأت بالفعل";
-    if (this.lobby.seats.some((st) => !st.ready && !st.disconnected)) return "ليس كل اللاعبين جاهزين";
+    if (this.onlinePhase !== "lobby") return t("المباراة بدأت بالفعل");
+    if (this.lobby.seats.some((st) => !st.ready && !st.disconnected)) return t("ليس كل اللاعبين جاهزين");
     this.onlinePhase = "playing";
     this.startCeasefire(this.lobby.ceasefire ?? 25);
     for (const st of this.lobby.seats) {
@@ -4137,12 +5274,12 @@ class Game {
       if (n && n.ai) n.ai = null;
       st.ready = true;
     }
-    this.log("بدأت المباراة!", "good");
+    this.log(t("بدأت المباراة!"), "good");
     return null;
   }
 
   onlineRematch() {
-    if (!this.lobby) return "لا توجد مباراة أونلاين";
+    if (!this.lobby) return t("لا توجد مباراة أونلاين");
     this.result = null;
     this.winners = null;
     this.attacks = [];
@@ -4181,16 +5318,16 @@ class Game {
     }
     this.computeAllFrontiers();
     this.ownerVersion++;
-    this.log("مباراة جديدة — الجميع جاهز؟", "info");
+    this.log(t("مباراة جديدة — الجميع جاهز؟"), "info");
     return null;
   }
 
   addChat(seat, text) {
-    if (!this.lobby) return "لا توجد غرفة";
+    if (!this.lobby) return t("لا توجد غرفة");
     const st = this.lobby.seats.find((x) => x.id === seat);
-    if (!st) return "مقعد غير موجود";
+    if (!st) return t("مقعد غير موجود");
     const clean = String(text || "").slice(0, 240).replace(/[<>]/g, "");
-    if (!clean.trim()) return "رسالة فارغة";
+    if (!clean.trim()) return t("رسالة فارغة");
     this.lobby.chat = this.lobby.chat || [];
     this.lobby.chat.push({ seat, name: st.name, text: clean, t: Math.round(this.time) });
     if (this.lobby.chat.length > 60) this.lobby.chat.shift();
@@ -5290,13 +6427,15 @@ return { Renderer };
 __def("js/campaigns.js", function (__req, __exp, __reexport) {
 // Historical campaigns. Each one pins a playable nation, an era, a starting
 // territory set (the empire's real historical borders, expressed as the modern
-// countries that covered that land) and a victory goal.
+// countries that covered that land) and a victory goal. Copy goes through t()
+// so the campaign list follows the selected language.
+const { t } = __req("js/i18n.js");
 const CAMPAIGNS = [
   {
     id: "alexander",
     ar: "الإسكندر الأكبر",
     en: "Alexander the Great",
-    year: "336 ق.م",
+    year: t("336 ق.م"),
     era: "ancient",
     country: "Macedonia",
     goal: 0.16,
@@ -5313,7 +6452,7 @@ const CAMPAIGNS = [
     id: "rome",
     ar: "صعود روما",
     en: "Rise of Rome",
-    year: "117 م",
+    year: t("117 م"),
     era: "ancient",
     country: "Italy",
     goal: 0.17,
@@ -5332,7 +6471,7 @@ const CAMPAIGNS = [
     id: "genghis",
     ar: "جنكيز خان",
     en: "Genghis Khan",
-    year: "1227 م",
+    year: t("1227 م"),
     era: "medieval",
     country: "Mongolia",
     goal: 0.45,
@@ -5350,7 +6489,7 @@ const CAMPAIGNS = [
     id: "constantinople",
     ar: "سقوط القسطنطينية",
     en: "Fall of Constantinople",
-    year: "1453 م",
+    year: t("1453 م"),
     era: "medieval",
     country: "Turkey",
     goal: 0.14,
@@ -5368,7 +6507,7 @@ const CAMPAIGNS = [
     id: "new_world",
     ar: "فتح العالم الجديد",
     en: "Conquest of the New World",
-    year: "1532 م",
+    year: t("1532 م"),
     era: "sail",
     country: "Spain",
     goal: 0.2,
@@ -5387,7 +6526,7 @@ const CAMPAIGNS = [
     id: "british",
     ar: "الإمبراطورية البريطانية",
     en: "The British Empire",
-    year: "1920 م",
+    year: t("1920 م"),
     era: "imperial",
     country: "United Kingdom",
     goal: 0.4,
@@ -5410,7 +6549,7 @@ const CAMPAIGNS = [
     id: "napoleon",
     ar: "نابليون",
     en: "Napoleon",
-    year: "1805 م",
+    year: t("1805 م"),
     era: "sail",
     country: "France",
     goal: 0.4,
@@ -6507,6 +7646,7 @@ const { CAMPAIGNS, dailyChallenge } = __req("js/campaigns.js");
 const { Rng } = __req("js/rng.js");
 const { sfx } = __req("js/audio.js");
 const { net, NetMirror } = __req("js/net.js");
+const { t, tBack, setLang, getLang, loadLang, translateDom, watchDom, registerNationNames } = __req("js/i18n.js");
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -6521,8 +7661,26 @@ const fmt = (n) => {
 const pct = (v) => (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+// Nation names carry both languages: `ar` is the Arabic name, `name` the
+// English one. Every place that prints a nation goes through nationName() so
+// the UI never mixes scripts. Search keeps matching BOTH, so a player can type
+// whichever they know.
+const nationName = (c) => (getLang() === "en" ? c && (c.name || c.ar) : c && (c.ar || c.name)) || "—";
+const campName = (c) => (getLang() === "en" ? c.en || c.ar : c.ar || c.en);
+const matchName = (c, q) => {
+  if (!q) return true;
+  const needle = q.toLowerCase();
+  return (
+    String(c.ar || "").includes(q) ||
+    String(c.name || "").toLowerCase().includes(needle) ||
+    String(c.iso || "").toUpperCase() === q.toUpperCase()
+  );
+};
+
 const ARABIC = "٠١٢٣٤٥٦٧٨٩";
-const arNum = (n) => String(n).replace(/\d/g, (d) => ARABIC[+d]);
+// Arabic-Indic digits are an Arabic-mode nicety; English mode keeps 0-9 so the
+// numbers match the rest of the sentence.
+const arNum = (n) => (getLang() === "ar" ? String(n).replace(/\d/g, (d) => ARABIC[+d]) : String(n));
 
 // ------------------------------------------------------------- persistence ---
 
@@ -6622,27 +7780,27 @@ function buildMenu() {
   const cards = [
     {
       id: "world",
-      ar: "فتح العالم",
+      ar: t("فتح العالم"),
       ico: "🌍",
-      desc: "اختر أي دولة من 236 دولة على خريطة العالم وابدأ من حدودها الحقيقية.",
+      desc: t("اختر أي دولة من 236 دولة على خريطة العالم وابدأ من حدودها الحقيقية."),
     },
     {
       id: "history",
-      ar: "الحملات التاريخية",
+      ar: t("الحملات التاريخية"),
       ico: "📜",
-      desc: "7 حملات: الإسكندر، روما، جنكيز خان، القسطنطينية، العالم الجديد، بريطانيا، نابليون.",
+      desc: t("7 حملات: الإسكندر، روما، جنكيز خان، القسطنطينية، العالم الجديد، بريطانيا، نابليون."),
     },
     {
       id: "daily",
-      ar: "التحدي اليومي",
+      ar: t("التحدي اليومي"),
       ico: "⭐",
-      desc: "دولة واحدة للجميع كل يوم، ومعها تعديل خاص. الفوز يبني سلسلتك.",
+      desc: t("دولة واحدة للجميع كل يوم، ومعها تعديل خاص. الفوز يبني سلسلتك."),
     },
     {
       id: "online",
-      ar: "أونلاين",
+      ar: t("أونلاين"),
       ico: "🌐",
-      desc: "العب مع أصدقائك: غرفة بكود، كل لاعب يدير دولة حقيقية على نفس الخريطة.",
+      desc: t("العب مع أصدقائك: غرفة بكود، كل لاعب يدير دولة حقيقية على نفس الخريطة."),
     },
   ];
   for (const m of cards) {
@@ -6662,7 +7820,9 @@ function buildMenu() {
   cont.hidden = !save;
   if (save) {
     const p = save.nations?.find((n) => n.isPlayer);
-    cont.querySelector("small").textContent = p ? `${p.ar} • ${new Date(save.savedAt).toLocaleString("ar")}` : "";
+    cont.querySelector("small").textContent = p
+      ? `${escapeHtml(nationName(p))} • ${new Date(save.savedAt).toLocaleString(getLang() === "ar" ? "ar" : "en")}`
+      : "";
   }
 }
 
@@ -6718,15 +7878,15 @@ async function openOnlineHome() {
   $("#online-home").hidden = false;
   $("#online-lobby").hidden = true;
   $("#online-name").value = profile.settings.name || "";
-  setOnlineStatus(net.status === "online" ? "متصل بالخادم" : "جاري الاتصال…", net.status === "online" ? "ok" : "");
+  setOnlineStatus(net.status === "online" ? t("متصل بالخادم") : t("جاري الاتصال…"), net.status === "online" ? "ok" : "");
   const ok = await net.connect(profile.settings.name || "");
   if (!ok) {
     // On the published page the server is remote, so "run node server.js" is
     // the wrong advice — say what is actually happening.
     setOnlineStatus(
       net.remote
-        ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل. اللعب الفردي يعمل دائمًا"
-        : "تعذر الاتصال — شغّل الخادم: node server.js",
+        ? t("خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل. اللعب الفردي يعمل دائمًا")
+        : t("تعذر الاتصال — شغّل الخادم: node server.js"),
       "bad"
     );
     return;
@@ -6865,7 +8025,7 @@ function renderNationList() {
 
   const list = world
     .playable()
-    .filter((c) => !q || c.ar.includes(q) || (c.name || "").toLowerCase().includes(q.toLowerCase()))
+    .filter((c) => matchName(c, q))
     .sort((a, b) => (a.ar || "").localeCompare(b.ar || "", "ar"));
 
   if (!list.length) {
@@ -6879,7 +8039,7 @@ function renderNationList() {
       const cls = `nation-row${picked ? " picked" : ""}${taken ? " taken" : ""}`;
       return `<button class="${cls}" data-nation="${c.id}" ${taken ? "disabled" : ""}>
         <i class="swatch" style="background:rgb(${c.color.r},${c.color.g},${c.color.b})"></i>
-        <span class="nm">${escapeHtml(c.ar)}</span>
+        <span class="nm">${escapeHtml(nationName(c))}</span>
         <span class="meta">${c.cells.toLocaleString("ar-EG")} خلية</span>
         <span class="stars">${nationStars(world, c.id)}</span>
       </button>`;
@@ -6903,7 +8063,7 @@ function bindNationSearch() {
 function pickLobbyNation(nationId) {
   if (!net.room) return;
   if (net.lobby && net.lobby.phase !== "lobby") {
-    toast("المباراة بدأت — لا يمكن تغيير الدولة");
+    toast(t("المباراة بدأت — لا يمكن تغيير الدولة"));
     return;
   }
   sfx.click();
@@ -6918,25 +8078,25 @@ function renderLobby(view) {
   $("#dock-room").textContent = view.room;
   const isHost = view.hostSeat === net.seat;
   const everyone = view.seats.length >= 2 && view.seats.every((s) => s.ready || !s.connected);
-  $("#btn-ready").textContent = online.ready ? "إلغاء الجاهزية" : "جاهز ✓";
+  $("#btn-ready").textContent = online.ready ? t("إلغاء الجاهزية") : t("جاهز ✓");
   $("#btn-ready").className = "btn " + (online.ready ? "green" : "ghost");
   $("#btn-start-online").hidden = !isHost;
   $("#btn-start-online").disabled = !everyone || view.seats.length < 2;
   $("#lobby-sub").textContent =
     view.seats.length < 2
-      ? "شارك الكود مع صديق للبدء"
+      ? t("شارك الكود مع صديق للبدء")
       : everyone
-        ? "الجميع جاهز — يمكن البدء"
-        : "بانتظار جاهزية اللاعبين…";
+        ? t("الجميع جاهز — يمكن البدء")
+        : t("بانتظار جاهزية اللاعبين…");
   $("#lobby-note").textContent = isHost
-    ? "أنت المضيف — تبدأ المباراة عندما يكون الجميع جاهزًا."
-    : "انتظر المضيف لبدء المباراة.";
+    ? t("أنت المضيف — تبدأ المباراة عندما يكون الجميع جاهزًا.")
+    : t("انتظر المضيف لبدء المباراة.");
 
   $("#lobby-chips").innerHTML = [
     `الخريطة: ${PRESETS.find((p) => p.id === view.map)?.ar || view.map}`,
     `العصر: ${ERAS[view.era]?.ar || view.era}`,
     `الهدف: ${Math.round(view.goal * 100)}%`,
-    `الوضع: ${{ normal: "كل لاعب لنفسه", coop: "تحالف", ffa: "آخر صامد" }[view.mode] || view.mode}`,
+    `الوضع: ${{ normal: t("كل لاعب لنفسه"), coop: t("تحالف"), ffa: t("آخر صامد") }[view.mode] || view.mode}`,
   ]
     .map((t) => `<span class="chip">${t}</span>`)
     .join("");
@@ -6944,11 +8104,11 @@ function renderLobby(view) {
   const seatsEl = $("#lobby-seats");
   seatsEl.innerHTML = view.seats
     .map((s) => {
-      const st = s.eliminated ? "خرج" : s.ready ? "جاهز" : "بانتظار";
+      const st = s.eliminated ? t("خرج") : s.ready ? t("جاهز") : t("بانتظار");
       return `<div class="seat-row ${s.seat === net.seat ? "you" : ""} ${s.connected ? "" : "off"}">
         <i class="swatch" style="background:${s.color ? `rgb(${s.color.r},${s.color.g},${s.color.b})` : "#333"}"></i>
-        <span class="nm">${escapeHtml(s.name)}${s.seat === net.seat ? " (أنت)" : ""}<br>
-          <small style="color:var(--muted)">${s.nation || "لم يختر دولة"}${s.iso ? " · " + s.iso : ""}</small></span>
+        <span class="nm">${escapeHtml(tBack(nationName({ ar: s.nation, name: s.name })))}${s.seat === net.seat ? " (you)" : ""}<br>
+          <small style="color:var(--muted)">${s.nation || t("لم يختر دولة")}${s.iso ? " · " + s.iso : ""}</small></span>
         ${s.seat === view.hostSeat ? '<span class="st host">مضيف</span>' : ""}
         <span class="st ${s.ready ? "ready" : ""}">${st}</span>
       </div>`;
@@ -6965,7 +8125,7 @@ function renderLobby(view) {
   // starting me somewhere else (which is what used to happen).
   const mySeat = view.seats.find((s) => s.seat === net.seat);
   if (mySeat && mySeat.nationId != null && !app.pickWorld.active[mySeat.nationId]) {
-    toast("دولتك ليست على هذه الخريطة — اختر دولة أخرى من القائمة", "bad");
+    toast(t("دولتك ليست على هذه الخريطة — اختر دولة أخرى من القائمة"), "bad");
   }
 }
 
@@ -7000,7 +8160,7 @@ async function applyNetState(state) {
         });
       })().catch((err) => {
         console.error("[online] mirror failed", err);
-        toast("تعذر تحميل حالة المباراة", "bad");
+        toast(t("تعذر تحميل حالة المباراة"), "bad");
         return null;
       });
     }
@@ -7049,10 +8209,10 @@ function openCountrySelect(daily) {
     app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
     attachPickInput();
   }
-  $("#select-title").textContent = daily ? "تحدي اليوم" : app.mode === "history" ? "الحملة" : "اختر دولتك";
+  $("#select-title").textContent = daily ? t("تحدي اليوم") : app.mode === "history" ? t("الحملة") : t("اختر دولتك");
   $("#select-sub").textContent = daily
     ? `${app.daily.ar} — ${app.daily.arBlurb}`
-    : "كل دولة لها حدودها الحقيقية وصعوبتها الخاصة";
+    : t("كل دولة لها حدودها الحقيقية وصعوبتها الخاصة");
   $("#era-select").disabled = daily;
   if (app.pickRenderer) app.pickRenderer.campaign = null;
   const filters = document.querySelector(".filters");
@@ -7081,7 +8241,7 @@ function fillFilters() {
     .map(([k, v]) => `<option value="${k}" ${k === app.aiLevel ? "selected" : ""}>الخصوم: ${v.ar}</option>`)
     .join("");
   const goalSel = $("#goal-select");
-  const goalLabels = { 0.3: "الهدف: 30% — حملة سريعة", 0.5: "الهدف: 50% — فتح العالم", 0.75: "الهدف: 75% — سيطرة كاملة" };
+  const goalLabels = { 0.3: t("الهدف: 30% — حملة سريعة"), 0.5: t("الهدف: 50% — فتح العالم"), 0.75: t("الهدف: 75% — سيطرة كاملة") };
   goalSel.innerHTML = [0.3, 0.5, 0.75]
     .map((g) => `<option value="${g}" ${g === app.goal ? "selected" : ""}>${goalLabels[g]}</option>`)
     .join("");
@@ -7148,14 +8308,14 @@ function buildCountryList() {
   const list = $("#country-list");
   const items = w
     .playable()
-    .filter((c) => !q || c.ar.includes(q) || c.name.toLowerCase().includes(q.toLowerCase()) || (c.iso || "").includes(q.toUpperCase()))
+    .filter((c) => matchName(c, q))
     .sort((a, b) => b.cells - a.cells);
   list.innerHTML = items
     .map((c) => {
       const col = c.color;
       return `<button class="list-item ${app.selectedId === c.id ? "active" : ""}" data-id="${c.id}">
         <i class="swatch" style="background:rgb(${col.r},${col.g},${col.b})"></i>
-        <span class="nm">${c.ar}</span>
+        <span class="nm">${escapeHtml(nationName(c))}</span>
         <span class="stars">${"★".repeat(c.difficulty)}</span>
       </button>`;
     })
@@ -7181,7 +8341,7 @@ function renderCountryCard(id) {
     <button class="card-close" id="card-close">✕</button>
     <div class="cc-head">
       <div class="cc-flag" style="background:rgb(${col.r},${col.g},${col.b})"></div>
-      <div><h3>${c.ar}</h3><small>${c.name} • ${c.iso || "—"}</small></div>
+      <div><h3>${escapeHtml(nationName(c))}</h3><small>${c.iso || "—"} • ${c.cells.toLocaleString("en")} cells</small></div>
     </div>
     <div class="diff-row"><span>الصعوبة</span><span class="stars">${"★".repeat(c.difficulty)}${"☆".repeat(5 - c.difficulty)}</span></div>
     <div class="stat-grid">
@@ -7192,9 +8352,9 @@ function renderCountryCard(id) {
     </div>
     <div class="cc-sub" style="font-size:11.5px;color:var(--muted);margin-bottom:4px">الجيران:</div>
     <div class="neigh-list">${
-      neigh.length ? neigh.map((n) => `<span class="chip">${n.ar}</span>`).join("") : '<span class="chip">جزيرة — لا حدود برية</span>'
+      neigh.length ? neigh.map((n) => `<span class="chip">${escapeHtml(nationName(n))}</span>`).join("") : '<span class="chip">جزيرة — لا حدود برية</span>'
     }</div>
-    ${sea.length ? `<div class="neigh-list">${sea.map((n) => `<span class="chip">⛵ ${n.ar}</span>`).join("")}</div>` : ""}
+    ${sea.length ? `<div class="neigh-list">${sea.map((n) => `<span class="chip">⛵ ${escapeHtml(nationName(n))}</span>`).join("")}</div>` : ""}
     ${daily ? `<p class="hint">${app.daily.arBlurb}</p>` : ""}
     <div class="card-actions">
       <button class="btn gold" id="btn-start-game">ابدأ الحملة</button>
@@ -7305,8 +8465,8 @@ function attachPickInput() {
 
 function openCampaignList() {
   const grid = $("#mode-grid");
-  $("#select-title").textContent = "الحملات التاريخية";
-  $("#select-sub").textContent = "اختر حملة وابدأ من حدودها التاريخية";
+  $("#select-title").textContent = t("الحملات التاريخية");
+  $("#select-sub").textContent = t("اختر حملة وابدأ من حدودها التاريخية");
   document.querySelector(".filters").style.display = "flex";
   fillFilters();
   ensureCampaignModal();
@@ -7369,16 +8529,16 @@ function chooseCampaign(id) {
   card.classList.remove("collapsed");
   card.innerHTML = `
     <button class="card-close" id="card-close">✕</button>
-    <h3 style="margin:0 0 4px">${camp.ar}</h3>
+    <h3 style="margin:0 0 4px">${campName(camp)}</h3>
     <small style="color:var(--muted)">${camp.en} • ${camp.year} • ${ERAS[camp.era].ar}</small>
-    <p style="font-size:12.5px;line-height:1.7;color:var(--muted)">${camp.arBlurb}</p>
+    <p style="font-size:12.5px;line-height:1.7;color:var(--muted)">${t(camp.arBlurb)}</p>
     <div class="stat-grid">
-      <div class="stat"><b>${arNum(camp.include.length)}</b><small>دولة تبدأ معك</small></div>
-      <div class="stat"><b>${camp.goal * 100}%</b><small>هدف الأرض</small></div>
+      <div class="stat"><b>${arNum(camp.include.length)}</b><small>${t("دولة تبدأ معك")}</small></div>
+      <div class="stat"><b>${camp.goal * 100}%</b><small>${t("هدف الأرض")}</small></div>
     </div>
     <div class="card-actions">
-      <button class="btn gold" id="btn-start-campaign">ابدأ ${camp.ar}</button>
-      <button class="btn ghost" id="btn-camp-back">→ كل الحملات</button>
+      <button class="btn gold" id="btn-start-campaign">${t("ابدأ")} ${campName(camp)}</button>
+      <button class="btn ghost" id="btn-camp-back">→ ${t("كل الحملات")}</button>
     </div>`;
   card.querySelector("#card-close").onclick = () => card.classList.add("collapsed");
   card.querySelector("#btn-start-campaign").onclick = () => startCampaign(camp);
@@ -7462,7 +8622,7 @@ function startCampaign(camp) {
   const world = new World("world", camp.era);
   const playerDef = world.countries.find((c) => c.name === camp.country);
   if (!playerDef) {
-    toast("هذه الحملة تحتاج خرائط أخرى");
+    toast(t("هذه الحملة تحتاج خرائط أخرى"));
     return;
   }
   // Empire start: the campaign's historical territory becomes one nation.
@@ -7551,8 +8711,8 @@ function bootGame(game, prebuiltWorld) {
     app.renderer.lastBaseAt = 0;
     app.renderer.renderBase(true);
     updateHud(true);
-    if (game.mode === "daily") toast(`${game.daily?.ar || "تحدي اليوم"}: ${app.daily?.arBlurb || ""}`);
-    if (game.ceasefireLeft > 0) toast("الهدنة سارية — ابنِ قبل أن تبدأ الحرب");
+    if (game.mode === "daily") toast(`${game.daily?.ar || t("تحدي اليوم")}: ${app.daily?.arBlurb || ""}`);
+    if (game.ceasefireLeft > 0) toast(t("الهدنة سارية — ابنِ قبل أن تبدأ الحرب"));
   });
   if (!app.raf) loop();
   if (!game.remote) store.del(STORE_KEY);
@@ -7760,7 +8920,7 @@ function handleClick(cell, e) {
   if (owner === p.id && e.shiftKey) {
     const b = p.buildings.find((bb) => bb.cell === cell);
     if (!b) {
-      toast("لا يوجد مبنى هنا — استخدم Shift مع مبنى للترقية");
+      toast(t("لا يوجد مبنى هنا — استخدم Shift مع مبنى للترقية"));
       return;
     }
     if (netAct("upgrade", { cell })) {
@@ -7799,7 +8959,7 @@ function handleClick(cell, e) {
     R.renderBase();
     if (game.adjacent(p, n)) {
       if (game.rel(p, n) === "ally") {
-        toast("حليفك — لا يمكن مهاجمته", "bad");
+        toast(t("حليفك — لا يمكن مهاجمته"), "bad");
         return;
       }
       const lastSel = app.lastAttackSel;
@@ -7808,19 +8968,19 @@ function handleClick(cell, e) {
       } else {
         app.lastAttackSel = owner;
         app.lastAttackAt = performance.now();
-        toast(`اضغط مرة أخرى لبدء الهجوم على ${n.ar}`);
+        toast(t("اضغط مرة أخرى لبدء الهجوم على") + " " + nationName(n));
       }
     } else if (game.hasPort(p)) {
       if (netAct("attack", { target: n.id, frac: game.attackFraction })) {
-        toast(`غزو بحري على ${n.ar}!`, "good");
+        toast(t("غزو بحري على") + " " + nationName(n) + "!");
         sfx.attack();
         return;
       }
       const err = game.launchAttack(p, n, game.attackFraction);
       if (err) toast(err, "bad");
-      else toast(`غزو بحري على ${n.ar}!`, "good");
+      else toast(t("غزو بحري على") + " " + nationName(n) + "!");
     } else {
-      toast("ليست على حدودك — تحتاج ميناء لغزو بحري");
+      toast(t("ليست على حدودك — تحتاج ميناء لغزو بحري"));
     }
   }
 }
@@ -7876,7 +9036,7 @@ function openAttackSheet() {
   if (game.hasPort(p)) {
     for (const id of game.navalReach(p)) consider(game.byId[id]);
   }
-  if (!list.length) return toast("لا يوجد هدف على حدودك", "warn");
+  if (!list.length) return toast(t("لا يوجد هدف على حدودك"), "warn");
   list.sort((a, b) => b.ratio - a.ratio);
   const target =
     app.selected != null && list.find((x) => x.n.id === app.selected)
@@ -8107,15 +9267,15 @@ function updateHud(force) {
   if (game && game.remote && app.netMirror) p = app.netMirror.me || p;
   if (!p) return;
   const rate = game.resourceRate(p);
-  setRes("#res-gold", p.gold, "+" + fmt(rate.gold) + "/ث");
+  setRes("#res-gold", p.gold, "+" + fmt(rate.gold) + t("/ث"));
   setRes("#res-army", p.army, pct(p.army / Math.max(1, p.cap)));
-  setRes("#res-research", p.research, "+" + rate.research.toFixed(1) + "/ث");
+  setRes("#res-research", p.research, "+" + rate.research.toFixed(1) + t("/ث"));
   $("#nation-name").textContent = p.ar;
   $("#rank-name").textContent = game.rankName(p) + (game.xpTotal > 1 ? ` • ${Math.round(game.xpTotal)} XP` : "");
   const col = p.def.color;
   const flag = $("#flag");
   flag.style.background = `rgb(${col.r},${col.g},${col.b})`;
-  flag.textContent = (p.def.iso || "؟").slice(0, 2);
+  flag.textContent = (p.def.iso || t("؟")).slice(0, 2);
   const share = game.playerShare ? game.playerShare() : 0;
   $("#goal-pct").textContent = pct(share);
   $("#goal-bar").style.width = clamp((share / game.goal) * 100, 0, 100) + "%";
@@ -8148,7 +9308,7 @@ function updateHud(force) {
       if (r.coordinated > 1) coord = true;
     }
     const bits = [];
-    if (best) bits.push(`<span class="tac pincer">🗡 كمّاشة على ${best.t.ar} ×${best.pincer.toFixed(2)}</span>`);
+    if (best) bits.push(`<span class="tac pincer">🗡 ${t("كمّاشة على")} ${escapeHtml(nationName(best.t))} ×${best.pincer.toFixed(2)}</span>`);
     if (coord) bits.push(`<span class="tac coord">🤝 هجوم منسّق مع حلفاء</span>`);
     if (allies.length) bits.push(`<span class="tac ally">🛡 ${arNum(allies.length)} حليف يقوّي دفاعك</span>`);
     tac.innerHTML = bits.join("");
@@ -8156,7 +9316,7 @@ function updateHud(force) {
   const cez = game.ceasefireLeft;
   const badge = $("#ceasefire-badge");
   if (cez > 0) {
-    badge.textContent = "هدنة " + Math.ceil(cez) + "ث";
+    badge.textContent = t("هدنة") + " " + Math.ceil(cez) + t("ث");
     badge.style.display = "";
     badge.style.background = "rgba(142,217,138,0.16)";
     badge.style.color = "var(--green)";
@@ -8165,8 +9325,9 @@ function updateHud(force) {
     badge.style.background = "rgba(255,125,116,0.16)";
     badge.style.color = "var(--red)";
   }
-  const t = Math.max(0, Math.floor(game.time - (game.openedAt || 0)));
-  $("#clock").textContent = `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  // NB: `t` is the translation helper — a local of that name would shadow it.
+  const elapsed = Math.max(0, Math.floor(game.time - (game.openedAt || 0)));
+  $("#clock").textContent = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
   $("#force-val").textContent = Math.round(game.attackFraction * 100) + "%";
   $("#force-slider").value = Math.round(game.attackFraction * 100);
   renderFeed();
@@ -8192,18 +9353,18 @@ function updateHud(force) {
 }
 
 const TIPS = [
-  "ابنِ مصنعًا ومدينة في أول 30 ثانية.",
-  "شريط قوة الهجوم 50% يكفي غالبًا — لا ترسل كل جيشك.",
-  "المخبأ يبطئ الهجوم على حدودك 9% لكل مستوى.",
-  "اضغط Shift على مبنى لترقيته للمستوى التالي.",
-  "ميناء يفتح الغزو البحري لأي ساحل في العالم.",
+  t("ابنِ مصنعًا ومدينة في أول 30 ثانية."),
+  t("شريط قوة الهجوم 50% يكفي غالبًا — لا ترسل كل جيشك."),
+  t("المخبأ يبطئ الهجوم على حدودك 9% لكل مستوى."),
+  t("اضغط Shift على مبنى لترقيته للمستوى التالي."),
+  t("ميناء يفتح الغزو البحري لأي ساحل في العالم."),
   "Gift الذهب لجارك ليبقى محايدًا أطول.",
-  "منصة صواريخ تحوّل الأرض إلى خرائب لا يعبرها الجيش.",
-  "الجيش يتجدد أسرع عندما يكون أقل من السقف.",
-  "الدفاع الجوي يعترض صواريخ العدو القريبة.",
+  t("منصة صواريخ تحوّل الأرض إلى خرائب لا يعبرها الجيش."),
+  t("الجيش يتجدد أسرع عندما يكون أقل من السقف."),
+  t("الدفاع الجوي يعترض صواريخ العدو القريبة."),
   "التحصين يمنح +30% دفاع لمدة 20 ثانية.",
-  "اضغط F للعودة إلى عاصمتك.",
-  "كل بحث يرفع قوة جيشك أو اقتصادك بشكل دائم.",
+  t("اضغط F للعودة إلى عاصمتك."),
+  t("كل بحث يرفع قوة جيشك أو اقتصادك بشكل دائم."),
 ];
 let tipIdx = 0;
 let tipAt = 0;
@@ -8265,9 +9426,9 @@ function updateEvents() {
     rows.push(`<div class="ev ${incoming ? "top" : ""}">
       <div class="ev-row">
         <b>${mine ? "➤ هجومك على " + other.ar : "⚠ " + other.ar + " تهجم عليك"}</b>
-        <button class="mini" data-retreat="${a.id}">${mine ? "انسحاب" : "تحصين"}</button>
+        <button class="mini" data-retreat="${a.id}">${mine ? t("انسحاب") : t("تحصين")}</button>
       </div>
-      <div class="ev-sub">${fmt(a.troops)} جندي • ${a.naval ? "بحري" : "برّي"} ${a.landingTimer > 0 ? "• إنزال…" : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">الجبهة متعثرة</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">كمّاشة</b>` : ""}</div>
+      <div class="ev-sub">${fmt(a.troops)} ${t("جندي")} • ${a.naval ? t("بحري") : t("برّي")} ${a.landingTimer > 0 ? "• إنزال…" : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">الجبهة متعثرة</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">كمّاشة</b>` : ""}</div>
       <div class="bar ${mine ? "adv" : ""}"><i style="width:${pct2}%"></i></div>
     </div>`);
   }
@@ -8275,10 +9436,10 @@ function updateEvents() {
     if (o.to !== p.id) continue;
     const from = game.byId[o.from];
     rows.push(`<div class="ev top">
-      <div class="ev-row"><b>عرض من ${from?.ar || "؟"}</b>
+      <div class="ev-row"><b>عرض من ${from?.ar || t("؟")}</b>
         <span><button class="mini" data-accept="${o.id}">قبول</button>
         <button class="mini" data-decline="${o.id}">رفض</button></span></div>
-      <div class="ev-sub">${o.type === "ceasefire" ? "وقف إطلاق نار" : "تحالف"}</div>
+      <div class="ev-sub">${o.type === "ceasefire" ? t("وقف إطلاق نار") : t("تحالف")}</div>
     </div>`);
   }
   const sig = rows.join("");
@@ -8295,7 +9456,7 @@ function updateEvents() {
       } else {
         if (!netAct("fortify", {}) || !online.lastState) {
           const err = game.fortify(p);
-          toast(err || "تم تحصين الحدود", err ? "bad" : "good");
+          toast(err || t("تم تحصين الحدود"), err ? "bad" : "good");
         }
       }
       updateEvents();
@@ -8335,9 +9496,9 @@ function updateTab() {
       return `<div class="bcard ${app.brush === def.key ? "active" : ""} ${cant ? "locked" : ""}" data-b="${def.key}">
         <span class="hk">${i + 1}</span>
         <div class="bh"><i class="bi" style="background:${def.color}">${ICONS[def.key] || "★"}</i>${eraName(def.key)}</div>
-        <div class="cost">${fmt(cost)} ◈ <span>${owned} مبنى</span></div>
+        <div class="cost">${fmt(cost)} ◈ <span>${owned} ${t("مبنى")}</span></div>
         <div class="desc">${def.descAr}</div>
-        <button class="pick">${cant ? "ذهب غير كافٍ" : "ابنِ"}</button>
+        <button class="pick">${cant ? t("الذهب غير كافٍ") : t("ابنِ")}</button>
       </div>`;
     }).join("");
     body.querySelectorAll(".bcard").forEach((el) => {
@@ -8349,18 +9510,18 @@ function updateTab() {
     const cities = p.agg?.city || 0;
     body.innerHTML = `
       <div class="mil-row">
-        <div class="mil-box"><b>${fmt(rate.gold)}/ث</b><small>دخل الذهب</small></div>
+        <div class="mil-box"><b>${fmt(rate.gold)}${t("/ث")}</b><small>${t("دخل الذهب")}</small></div>
         <div class="mil-box"><b>${fmt(p.gold)}</b><small>الخزينة</small></div>
-        <div class="mil-box"><b>${cities}</b><small>مدن (سقف ${fmt(p.cap)})</small></div>
+        <div class="mil-box"><b>${cities}</b><small>${t("مدن (سقف")} ${fmt(p.cap)})</small></div>
         <div class="mil-box"><b>${factories}</b><small>مصانع</small></div>
-        <div class="mil-box"><b>${Math.round(rate.research * 10) / 10}/ث</b><small>بحث</small></div>
-        <div class="mil-box"><b>${fmt(game.troopRate(p) * 60)}/د</b><small>تجنيد</small></div>
+        <div class="mil-box"><b>${Math.round(rate.research * 10) / 10}${t("/ث")}</b><small>${t("بحث")}</small></div>
+        <div class="mil-box"><b>${fmt(game.troopRate(p) * 60)}${t("/د")}</b><small>${t("تجنيد")}</small></div>
         <div class="mil-actions">
           <button class="btn ghost" id="btn-up-all">⇧ ترقية المبانٍ</button>
-          <button class="btn ghost" id="btn-melt2">${game.melt ? "إيقاف" : "تشغيل"} بيع الجنود</button>
+          <button class="btn ghost" id="btn-melt2">${game.melt ? t("إيقاف") : t("تشغيل")} ${t("بيع الجنود")}</button>
         </div>
       </div>
-      <div class="hint">Shift + اضغط على أي مبنى في الخريطة لترقيته. الترقية تصل حتى المستوى 5.</div>`;
+      <div class="hint">Shift + ${t("اضغط على أي مبنى في الخريطة لترقيته. الترقية تصل حتى المستوى 5.")}</div>`;
     body.querySelector("#btn-up-all").onclick = () => {
       let n = 0;
       for (const b of [...p.buildings]) {
@@ -8368,7 +9529,7 @@ function updateTab() {
         if (game.upgradeBuilding(p, b) === null) n++;
         if (p.gold < 400) break;
       }
-      toast(n ? `تمت ترقية ${n} مبنى` : "لا يوجد ذهب كافٍ", n ? "good" : "bad");
+      toast(n ? `${t("تمت ترقية")} ${n} ${t("مبنى")}` : t("لا يوجد ذهب كافٍ"), n ? "good" : "bad");
       app.renderer.renderBase(true);
       updateTab();
     };
@@ -8384,7 +9545,7 @@ function updateTab() {
       <div class="mil-row">
         <div class="mil-box"><b>${fmt(p.army)}</b><small>الجيش</small></div>
         <div class="mil-box"><b>${fmt(p.cap)}</b><small>السقف</small></div>
-        <div class="mil-box"><b>+${fmt(rate)}/ث</b><small>تجنيد</small></div>
+        <div class="mil-box"><b>+${fmt(rate)}${t("/ث")}</b><small>${t("تجنيد")}</small></div>
         <div class="mil-box"><b>${game.attackMult(p).toFixed(2)}×</b><small>قوة الهجوم</small></div>
         <div class="mil-box"><b>${(p.agg?.base || 0)}</b><small>قواعد</small></div>
         <div class="mil-actions">
@@ -8399,18 +9560,18 @@ function updateTab() {
     };
     body.querySelector("#btn-rally").onclick = () => {
       if (app.game.remote) return toast("التجنيد الفوري غير متاح أونلاين", "bad");
-      if (p.gold < 1800) return toast("الذهب غير كافٍ", "bad");
+      if (p.gold < 1800) return toast(t("الذهب غير كافٍ"), "bad");
       p.gold -= 1800;
       p.army = Math.min(p.cap, p.army + 9000);
       updateTab();
     };
     body.querySelector("#btn-war").onclick = () => {
-      if (!wars.length) return toast("لا حروب مفتوحة");
+      if (!wars.length) return toast(t("لا حروب مفتوحة"));
       app.tab = "wars";
       updateTab();
     };
     const warChips = wars
-      .map((wn) => `<button class="btn ghost" data-focus="${wn.id}">⚔ ${wn.ar} · ${fmt(wn.army)}</button>`)
+      .map((wn) => `<button class="btn ghost" data-focus="${wn.id}">⚔ ${escapeHtml(nationName(wn))} · ${fmt(wn.army)}</button>`)
       .join("");
     body.insertAdjacentHTML(
       "beforeend",
@@ -8443,7 +9604,7 @@ function updateTab() {
         ports
           ? `<div class="mil-actions">${targets
               .slice(0, 8)
-              .map((n) => `<button class="btn ghost" data-naval="${n.id}">⛵ إنزال على ${n.ar}</button>`)
+              .map((n) => `<button class="btn ghost" data-naval="${n.id}">⛵ ${t("إنزال على")} ${escapeHtml(nationName(n))}</button>`)
               .join("")}</div>`
           : ""
       }`;
@@ -8464,7 +9625,7 @@ function updateTab() {
     body.innerHTML = `
       <div class="mil-row">
         <div class="mil-box"><b>${silos}</b><small>منصات صواريخ</small></div>
-        <div class="mil-box"><b>${ready}</b><small>جاهز للإطلاق</small></div>
+        <div class="mil-box"><b>${ready}</b><small>${t("جاهز للإطلاق")}</small></div>
         <div class="mil-box"><b>${fmt(BALANCE.missileCost)} ◈</b><small>صاروخ كروز</small></div>
         <div class="mil-actions">
           <button class="btn ghost" id="btn-missile" ${ready ? "" : "disabled"}>🚀 صاروخ كروز</button>
@@ -8475,7 +9636,7 @@ function updateTab() {
     const arm = (kind) => {
       app.strikeMode = kind;
       $("#map").classList.add("striking");
-      toast("اختر هدف الضربة على الخريطة");
+      toast(t("اختر هدف الضربة على الخريطة"));
     };
     body.querySelector("#btn-missile").onclick = () => arm("missile");
     body.querySelector("#btn-nuke").onclick = () => arm("nuke");
@@ -8484,11 +9645,11 @@ function updateTab() {
 
 function eraName(key) {
   const names = {
-    ancient: ["قرية", "منجم", "معبد الكهنة", "مرسى", "معسكر", "حصن", "منجنيق", "أبراج"],
-    medieval: ["مدينة", "ورشة", "مكتبة", "ميناء", "ثكنة", "قلعة", "مدفع", "حراسة"],
-    sail: ["مدينة", "مصنع", "أكاديمية", "حوض", "ثكنة", "حصن", "مدفعية", "بطاريات"],
-    imperial: ["مدينة", "مصنع", "جامعة", "ميناء", "ثكنة", "حصن", "مدفعية", "دفاعات"],
-    modern: ["مدينة", "مصنع", "مختبر", "ميناء", "قاعدة", "مخبأ", "منصة صواريخ", "دفاع جوي"],
+    ancient: [t("قرية"), t("منجم"), t("معبد الكهنة"), t("مرسى"), t("معسكر"), t("حصن"), t("منجنيق"), t("أبراج")],
+    medieval: [t("مدينة"), t("ورشة"), t("مكتبة"), t("ميناء"), t("ثكنة"), t("قلعة"), t("مدفع"), t("حراسة")],
+    sail: [t("مدينة"), t("مصنع"), t("أكاديمية"), t("حوض"), t("ثكنة"), t("حصن"), t("مدفعية"), t("بطاريات")],
+    imperial: [t("مدينة"), t("مصنع"), t("جامعة"), t("ميناء"), t("ثكنة"), t("حصن"), t("مدفعية"), t("دفاعات")],
+    modern: [t("مدينة"), t("مصنع"), t("مختبر"), t("ميناء"), t("قاعدة"), t("مخبأ"), t("منصة صواريخ"), t("دفاع جوي")],
   };
   const idx = BUILDINGS.findIndex((b) => b.key === key);
   return (names[app.era] || names.modern)[idx] || key;
@@ -8545,10 +9706,10 @@ function updateTooltip(clientX, clientY, cell) {
     <div class="tt-row"><span>الجيش</span><b>${fmt(n.army)}</b></div>
     <div class="tt-row"><span>الأرض</span><b>${fmt(n.cells)}</b></div>
     ${rel ? `<div class="tt-row"><span>العلاقة</span><b>${
-      { war: "⚔ حرب", ally: "🤝 حليف", peace: "🕊 هدنة", neutral: "• محايد" }[game.rel(p, n)]
+      { war: "⚔ حرب", ally: "🤝 حليف", peace: "🕊 هدنة", neutral: t("• محايد") }[game.rel(p, n)]
     }</b></div>` : ""}
-    ${b ? `<div class="tt-row"><span>مبنى</span><b>${eraName(b.key)} L${b.level}</b></div>` : ""}
-    ${owner !== p?.id ? `<div class="tt-hint">${game.adjacent(p, n) ? "اضغط مرتين للهجوم" : "غزو بحري (يحتاج ميناء)"}</div>` : '<div class="tt-hint">اضغط للبناء/التحديد</div>'}`;
+    ${b ? `<div class="tt-row"><span>${t("مبنى")}</span><b>${eraName(b.key)} L${b.level}</b></div>` : ""}
+    ${owner !== p?.id ? `<div class="tt-hint">${game.adjacent(p, n) ? t("اضغط مرتين للهجوم") : t("غزو بحري (يحتاج ميناء)")}</div>` : '<div class="tt-hint">اضغط للبناء/التحديد</div>'}`;
   tt.hidden = false;
   const rect = $("#screen-game").getBoundingClientRect();
   let x = clientX - rect.left + 14;
@@ -8567,7 +9728,7 @@ function showCountryTooltip(n) {
 function game2rel(n) {
   const game = app.game;
   const p = game.player();
-  if (!p || p === n) return "أرضك";
+  if (!p || p === n) return t("أرضك");
   return game.relationLabel(p, n);
 }
 
@@ -8585,8 +9746,8 @@ function updateResearch() {
     return `<div class="tech">
       <h4>${r.icon} ${r.ar}</h4>
       <div class="pips">${pips}</div>
-      <p>${r.descAr} (المستوى ${lvl}/5)</p>
-      <button data-tech="${r.key}" ${lvl >= 5 ? "disabled" : ""}>${lvl >= 5 ? "مكتمل" : `ترقية • ${cost} ✦`}</button>
+      <p>${t(r.descAr)} (${t("المستوى")} ${lvl}/5)</p>
+      <button data-tech="${r.key}" ${lvl >= 5 ? "disabled" : ""}>${lvl >= 5 ? t("مكتمل") : `${t("ترقية")} • ${cost} ✦`}</button>
     </div>`;
   }).join("");
   grid.querySelectorAll("[data-tech]").forEach((b) => {
@@ -8620,7 +9781,7 @@ function renderDiplo() {
     .filter((o) => o.to === p.id)
     .map((o) => {
       const from = game.byId[o.from];
-      return `<div class="offer"><span class="grow">${from?.ar} تعرض ${o.type === "ceasefire" ? "وقف إطلاق النار" : "تحالفًا"}</span>
+      return `<div class="offer"><span class="grow">${from?.ar} تعرض ${o.type === "ceasefire" ? t("وقف إطلاق النار") : t("تحالفًا")}</span>
         <button data-acc="${o.id}">قبول</button><button data-dec="${o.id}">رفض</button></div>`;
     })
     .join("");
@@ -8657,15 +9818,15 @@ function renderDiplo() {
   list.innerHTML = near
     .map((n) => {
       const rel = game.rel(p, n);
-      const relTxt = { war: "حرب", ally: "حليف", peace: "هدنة", neutral: "محايد" }[rel];
+      const relTxt = { war: t("حرب"), ally: t("حليف"), peace: t("هدنة"), neutral: t("محايد") }[rel];
       const adjacent = p.def.neighbors.includes(n.id);
       return `<div class="diplo-row">
         <i class="swatch" style="background:rgb(${n.def.color.r},${n.def.color.g},${n.def.color.b})"></i>
-        <span class="nm">${n.ar} ${adjacent ? "" : "⛵"}<br><small style="color:var(--muted)">${fmt(n.army)} جندي • ${relTxt}</small></span>
+        <span class="nm">${escapeHtml(nationName(n))} ${adjacent ? "" : "⛵"}<br><small style="color:var(--muted)">${fmt(n.army)} ${t("جندي")} • ${relTxt}</small></span>
         <span class="actions">
           ${rel === "war" ? `<button data-cease="${n.id}">هدنة</button>` : ""}
           ${rel !== "war" && rel !== "ally" ? `<button data-alliance="${n.id}">تحالف</button>` : ""}
-          ${rel !== "war" ? `<button data-dow="${n.id}">حرب</button>` : `<button data-call="${n.id}" title="ادعُ حلفاءك للانضمام">⚔ ادعُ الحلفاء</button>`}
+          ${rel !== "war" ? `<button data-dow="${n.id}">حرب</button>` : `<button data-call="${n.id}" title=t("ادعُ حلفاءك للانضمام")>⚔ ادعُ الحلفاء</button>`}
           <button data-gift="${n.id}">هدية</button>
         </span>
       </div>`;
@@ -8673,7 +9834,7 @@ function renderDiplo() {
     .join("");
   const search = document.createElement("input");
   search.className = "search";
-  search.placeholder = "ابحث عن دولة…";
+  search.placeholder = t("ابحث عن دولة…");
   search.value = q;
   search.style.marginBottom = "8px";
   search.oninput = () => {
@@ -8718,7 +9879,7 @@ function doDiplo(type, id) {
     return;
   }
   const err = game.propose({ type, from: p.id, to: id });
-  toast(err || (type === "ceasefire" ? "تم إرسال عرض الهدنة" : type === "gift" ? "أُرسلت الهدية" : "تم إرسال عرض التحالف"), err ? "bad" : "good");
+  toast(err || (type === "ceasefire" ? t("تم إرسال عرض الهدنة") : type === "gift" ? t("أُرسلت الهدية") : t("تم إرسال عرض التحالف")), err ? "bad" : "good");
   renderDiplo();
 }
 
@@ -8739,13 +9900,13 @@ function showOnlineOut(state) {
     .map((r) => {
       const me = r.seat === net.seat;
       return `<div class="row ${me ? "won" : ""}">
-        <span>${escapeHtml(r.name)}${me ? " (أنت)" : ""} — ${escapeHtml(r.nation || "—")}</span>
-        <b>${r.alive === false ? "خرج" : (r.cells / Math.max(1, app.game.totalCells) * 100).toFixed(1) + "%"}</b></div>`;
+        <span>${escapeHtml(r.name)}${me ? " (you)" : ""} — ${escapeHtml(tBack(r.nation) || "—")}</span>
+        <b>${r.alive === false ? t("خرج") : (r.cells / Math.max(1, app.game.totalCells) * 100).toFixed(1) + "%"}</b></div>`;
     })
     .join("");
-  $("#end-title").textContent = "💀 خرجت من المباراة";
+  $("#end-title").textContent = t("💀 خرجت من المباراة");
   $("#end-title").className = "lose";
-  $("#end-sub").textContent = "سقطت دولتك — يمكنك متابعة الآخرين أو انتظار مباراة جديدة.";
+  $("#end-sub").textContent = t("سقطت دولتك — يمكنك متابعة الآخرين أو انتظار مباراة جديدة.");
   $("#end-stats").innerHTML = "";
   const box = $("#end-online");
   box.hidden = false;
@@ -8768,20 +9929,20 @@ function showOnlineOut(state) {
 function showOnlineEnd(payload) {
   const me = (payload.results || []).find((r) => r.seat === net.seat);
   const won = !!(me && me.won);
-  $("#end-title").textContent = won ? "🏆 فزت بالمباراة!" : "💀 خسرت المباراة";
+  $("#end-title").textContent = won ? t("🏆 فزت بالمباراة!") : t("💀 خسرت المباراة");
   $("#end-title").className = won ? "win" : "lose";
   $("#end-sub").textContent = won
-    ? "سيطرت على الأرض قبل الجميع."
+    ? t("سيطرت على الأرض قبل الجميع.")
     : payload.reason === "ai"
-      ? `${payload.by || "دولة" } سيطرت على الأرض أولًا — جرّب مرة أخرى.`
+      ? `${payload.by || t("دولة") } سيطرت على الأرض أولًا — جرّب مرة أخرى.`
       : me && me.surrendered
-        ? "استسلمت — يمكنك الانتقام في مباراة جديدة."
+        ? t("استسلمت — يمكنك الانتقام في مباراة جديدة.")
         : `وصلت إلى ${((me ? me.share : 0) * 100).toFixed(1)}% من الأرض. حاول مرة أخرى!`;
   const rows = (payload.results || [])
     .sort((a, b) => (b.won ? 1 : 0) - (a.won ? 1 : 0) || b.share - a.share)
     .map(
       (r) => `<div class="row ${r.won ? "won" : ""}">
-        <span>${r.won ? "🏆 " : ""}${escapeHtml(r.name)} — ${escapeHtml(r.nation)}</span>
+        <span>${r.won ? "🏆 " : ""}${escapeHtml(r.name)} — ${escapeHtml(tBack(r.nation))}</span>
         <b>${(r.share * 100).toFixed(1)}%${r.surrendered ? " · استسلم" : ""}</b></div>`
     )
     .join("");
@@ -8814,7 +9975,7 @@ function showOnlineEnd(payload) {
 }
 
 function showEnd(summary) {
-  $("#end-title").textContent = summary.result === "win" ? "🏆 النصر!" : "💀 الهزيمة";
+  $("#end-title").textContent = summary.result === "win" ? t("🏆 النصر!") : t("💀 الهزيمة");
   $("#end-title").className = summary.result === "win" ? "win" : "lose";
   $("#end-sub").textContent =
     summary.result === "win"
@@ -8903,9 +10064,23 @@ function howTo() {
 }
 
 async function boot() {
+  // Language first: the saved choice decides dir/lang on <html> before any
+  // screen is painted, so the first frame is already in the right language.
+  loadLang();
+  translateDom(document);
+  watchDom(document.body); // keeps lists, HUD and toasts translated while playing
   // The map data is loaded dynamically so the same World class can run on the
   // Node server for online matches (see js/online.js + server.js).
   await initWorld();
+  // The map bundle carries both spellings of every country, so the translator
+  // can render a bare Arabic nametag as English without a dictionary of 236
+  // entries. Registered before the first screen is built.
+  try {
+    const ref = new World("world", "modern");
+    registerNationNames(ref.countries.filter(Boolean).map((c) => [c.ar, c.name]));
+  } catch (err) {
+    console.warn("nation name table unavailable", err);
+  }
   buildMenu();
   renderMedals();
   $("#btn-play").onclick = () => {
@@ -8926,7 +10101,7 @@ async function boot() {
       bootGame(game);
     } catch (err) {
       console.error(err);
-      toast("تعذر تحميل الحفظ", "bad");
+      toast(t("تعذر تحميل الحفظ"), "bad");
     }
   };
   $("#btn-back-menu").onclick = () => {
@@ -8975,7 +10150,7 @@ async function boot() {
   $("#btn-create-room").onclick = async () => {
     const name = onlineName();
     const ok = await net.connect(name);
-    if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+    if (!ok) return setOnlineStatus(t("تعذر الاتصال بالخادم"), "bad");
     net.createRoom({
       map: $("#online-map").value,
       mode: $("#online-mode").value,
@@ -8991,7 +10166,7 @@ async function boot() {
       box.innerHTML = `<div class="room-empty">لا توجد عوالم مفتوحة الآن — اضغط «العب الآن» لتفتح عالمًا</div>`;
       return;
     }
-    const modeAr = { normal: "كل لاعب لنفسه", coop: "تحالف", ffa: "آخر صامد" };
+    const modeAr = { normal: t("كل لاعب لنفسه"), coop: t("تحالف"), ffa: t("آخر صامد") };
     box.innerHTML = list
       .map(
         (r) => `<button class="room-row" data-join="${r.code}">
@@ -9005,7 +10180,7 @@ async function boot() {
     box.querySelectorAll("[data-join]").forEach((b) => {
       b.onclick = async () => {
         const ok = await net.connect(onlineName());
-        if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+        if (!ok) return setOnlineStatus(t("تعذر الاتصال بالخادم"), "bad");
         net.joinRoom(b.dataset.join);
       };
     });
@@ -9017,8 +10192,8 @@ async function boot() {
       renderRoomList([]);
       setOnlineStatus(
         net.remote
-          ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل"
-          : "الخادم غير متاح — الأونلاين يحتاج تشغيل node server.js",
+          ? t("خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل")
+          : t("الخادم غير متاح — الأونلاين يحتاج تشغيل node server.js"),
         "bad"
       );
       return false;
@@ -9033,14 +10208,14 @@ async function boot() {
       const ok = await net.connect(onlineName());
       if (!ok) {
         return setOnlineStatus(
-          net.remote ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل" : "تعذر الاتصال بالخادم",
+          net.remote ? t("خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل") : t("تعذر الاتصال بالخادم"),
           "bad"
         );
       }
       const btn = $("#btn-quick-play");
       if (btn) {
         btn.disabled = true;
-        btn.textContent = "…جارٍ البحث";
+        btn.textContent = t("…جارٍ البحث");
       }
       net.quickJoin({
         map: $("#online-map") ? $("#online-map").value : "world",
@@ -9053,7 +10228,7 @@ async function boot() {
     const btn = $("#btn-quick-play");
     if (!btn) return;
     btn.disabled = !!on;
-    btn.textContent = on ? "…جارٍ البحث" : "⚡ العب الآن";
+    btn.textContent = on ? t("…جارٍ البحث") : t("⚡ العب الآن");
   });
   net.on("roomlist", renderRoomList);
   net.on("hello", () => net.listRooms());
@@ -9061,9 +10236,9 @@ async function boot() {
   $("#btn-join-room").onclick = async () => {
     const name = onlineName();
     const code = ($("#online-code").value || "").trim().toUpperCase();
-    if (code.length < 3) return setOnlineStatus("اكتب كود الغرفة", "bad");
+    if (code.length < 3) return setOnlineStatus(t("اكتب كود الغرفة"), "bad");
     const ok = await net.connect(name);
-    if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+    if (!ok) return setOnlineStatus(t("تعذر الاتصال بالخادم"), "bad");
     net.joinRoom(code);
   };
   $("#online-code").addEventListener("keydown", (e) => {
@@ -9104,7 +10279,7 @@ async function boot() {
 
   // ------------------------------------------------------------ net events
   net.on("status", (st) => {
-    const label = st === "online" ? "متصل بالخادم" : st === "connecting" ? "جاري الاتصال…" : "غير متصل";
+    const label = st === "online" ? t("متصل بالخادم") : st === "connecting" ? t("جاري الاتصال…") : t("غير متصل");
     setOnlineStatus(label, st === "online" ? "ok" : st === "offline" ? "bad" : "");
     const dot = $("#dock-ping");
     if (dot) dot.textContent = st === "online" ? "●" : "○";
@@ -9131,15 +10306,15 @@ async function boot() {
     $("#online-lobby").hidden = true;
   });
   net.on("disconnected", () => {
-    setOnlineStatus("انقطع الاتصال — جارٍ استعادة المباراة", "bad");
-    if (app.screen === "game") toast("انقطع الاتصال — جارٍ إعادة الاتصال", "bad");
+    setOnlineStatus(t("انقطع الاتصال — جارٍ استعادة المباراة"), "bad");
+    if (app.screen === "game") toast(t("انقطع الاتصال — جارٍ إعادة الاتصال"), "bad");
   });
   net.on("reconnecting", ({ attempt }) => {
     setOnlineStatus(`جارٍ إعادة الاتصال… (محاولة ${attempt})`, "bad");
   });
   net.on("reconnected", ({ room }) => {
-    setOnlineStatus(room ? `عاد الاتصال — عالم ${room}` : "عاد الاتصال", "ok");
-    toast(room ? "عاد الاتصال بمباراتك" : "عاد الاتصال", "good");
+    setOnlineStatus(room ? `عاد الاتصال — عالم ${room}` : t("عاد الاتصال"), "ok");
+    toast(room ? t("عاد الاتصال بمباراتك") : t("عاد الاتصال"), "good");
   });
   setInterval(() => {
     if (net.status === "online") {
@@ -9181,9 +10356,9 @@ async function boot() {
       const data = app.game.serialize();
       data.savedAt = Date.now();
       store.set(STORE_KEY, data);
-      toast("تم حفظ اللعبة", "good");
+      toast(t("تم حفظ اللعبة"), "good");
     } catch (e) {
-      toast("فشل الحفظ", "bad");
+      toast(t("فشل الحفظ"), "bad");
     }
   };
   $("#btn-settings").onclick = () => {
@@ -9223,6 +10398,15 @@ async function boot() {
     show("menu");
     buildMenu();
   };
+  $("#set-lang").value = getLang();
+  $("#set-lang").onchange = (e) => {
+    // A full re-render is the honest way to switch languages: it re-runs every
+    // label, list and card in the new one instead of leaving half the UI in the
+    // old language. Reloading keeps the match (it is saved/the server owns it).
+    setLang(e.target.value);
+    translateDom(document);
+    location.reload();
+  };
   $("#set-sound").checked = profile.settings.sound !== false;
   $("#set-labels").checked = profile.settings.labels !== false;
   $("#set-speed").value = String(profile.settings.speed || 1);
@@ -9256,9 +10440,9 @@ async function boot() {
     saveSettings();
   };
   $("#tabs").onclick = (e) => {
-    const t = e.target.closest(".tab");
-    if (!t) return;
-    app.tab = t.dataset.tab;
+    const tab = e.target.closest(".tab");
+    if (!tab) return;
+    app.tab = tab.dataset.tab;
     updateTab();
   };
   $("#force-slider").oninput = (e) => setForce(e.target.value / 100);

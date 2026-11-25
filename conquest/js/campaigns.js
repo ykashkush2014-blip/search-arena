@@ -1,12 +1,14 @@
 // Historical campaigns. Each one pins a playable nation, an era, a starting
 // territory set (the empire's real historical borders, expressed as the modern
-// countries that covered that land) and a victory goal.
+// countries that covered that land) and a victory goal. Copy goes through t()
+// so the campaign list follows the selected language.
+import { t } from "./i18n.js";
 export const CAMPAIGNS = [
   {
     id: "alexander",
     ar: "الإسكندر الأكبر",
     en: "Alexander the Great",
-    year: "336 ق.م",
+    year: t("336 ق.م"),
     era: "ancient",
     country: "Macedonia",
     goal: 0.16,
@@ -23,7 +25,7 @@ export const CAMPAIGNS = [
     id: "rome",
     ar: "صعود روما",
     en: "Rise of Rome",
-    year: "117 م",
+    year: t("117 م"),
     era: "ancient",
     country: "Italy",
     goal: 0.17,
@@ -42,7 +44,7 @@ export const CAMPAIGNS = [
     id: "genghis",
     ar: "جنكيز خان",
     en: "Genghis Khan",
-    year: "1227 م",
+    year: t("1227 م"),
     era: "medieval",
     country: "Mongolia",
     goal: 0.45,
@@ -60,7 +62,7 @@ export const CAMPAIGNS = [
     id: "constantinople",
     ar: "سقوط القسطنطينية",
     en: "Fall of Constantinople",
-    year: "1453 م",
+    year: t("1453 م"),
     era: "medieval",
     country: "Turkey",
     goal: 0.14,
@@ -78,7 +80,7 @@ export const CAMPAIGNS = [
     id: "new_world",
     ar: "فتح العالم الجديد",
     en: "Conquest of the New World",
-    year: "1532 م",
+    year: t("1532 م"),
     era: "sail",
     country: "Spain",
     goal: 0.2,
@@ -97,7 +99,7 @@ export const CAMPAIGNS = [
     id: "british",
     ar: "الإمبراطورية البريطانية",
     en: "The British Empire",
-    year: "1920 م",
+    year: t("1920 م"),
     era: "imperial",
     country: "United Kingdom",
     goal: 0.4,
@@ -120,7 +122,7 @@ export const CAMPAIGNS = [
     id: "napoleon",
     ar: "نابليون",
     en: "Napoleon",
-    year: "1805 م",
+    year: t("1805 م"),
     era: "sail",
     country: "France",
     goal: 0.4,

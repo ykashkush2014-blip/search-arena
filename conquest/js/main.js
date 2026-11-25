@@ -12,6 +12,7 @@ import { CAMPAIGNS, dailyChallenge } from "./campaigns.js";
 import { Rng } from "./rng.js";
 import { sfx } from "./audio.js";
 import { net, NetMirror } from "./net.js";
+import { t, tBack, setLang, getLang, loadLang, translateDom, watchDom, registerNationNames } from "./i18n.js";
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -26,8 +27,26 @@ const fmt = (n) => {
 const pct = (v) => (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+// Nation names carry both languages: `ar` is the Arabic name, `name` the
+// English one. Every place that prints a nation goes through nationName() so
+// the UI never mixes scripts. Search keeps matching BOTH, so a player can type
+// whichever they know.
+const nationName = (c) => (getLang() === "en" ? c && (c.name || c.ar) : c && (c.ar || c.name)) || "—";
+const campName = (c) => (getLang() === "en" ? c.en || c.ar : c.ar || c.en);
+const matchName = (c, q) => {
+  if (!q) return true;
+  const needle = q.toLowerCase();
+  return (
+    String(c.ar || "").includes(q) ||
+    String(c.name || "").toLowerCase().includes(needle) ||
+    String(c.iso || "").toUpperCase() === q.toUpperCase()
+  );
+};
+
 const ARABIC = "٠١٢٣٤٥٦٧٨٩";
-const arNum = (n) => String(n).replace(/\d/g, (d) => ARABIC[+d]);
+// Arabic-Indic digits are an Arabic-mode nicety; English mode keeps 0-9 so the
+// numbers match the rest of the sentence.
+const arNum = (n) => (getLang() === "ar" ? String(n).replace(/\d/g, (d) => ARABIC[+d]) : String(n));
 
 // ------------------------------------------------------------- persistence ---
 
@@ -127,27 +146,27 @@ function buildMenu() {
   const cards = [
     {
       id: "world",
-      ar: "فتح العالم",
+      ar: t("فتح العالم"),
       ico: "🌍",
-      desc: "اختر أي دولة من 236 دولة على خريطة العالم وابدأ من حدودها الحقيقية.",
+      desc: t("اختر أي دولة من 236 دولة على خريطة العالم وابدأ من حدودها الحقيقية."),
     },
     {
       id: "history",
-      ar: "الحملات التاريخية",
+      ar: t("الحملات التاريخية"),
       ico: "📜",
-      desc: "7 حملات: الإسكندر، روما، جنكيز خان، القسطنطينية، العالم الجديد، بريطانيا، نابليون.",
+      desc: t("7 حملات: الإسكندر، روما، جنكيز خان، القسطنطينية، العالم الجديد، بريطانيا، نابليون."),
     },
     {
       id: "daily",
-      ar: "التحدي اليومي",
+      ar: t("التحدي اليومي"),
       ico: "⭐",
-      desc: "دولة واحدة للجميع كل يوم، ومعها تعديل خاص. الفوز يبني سلسلتك.",
+      desc: t("دولة واحدة للجميع كل يوم، ومعها تعديل خاص. الفوز يبني سلسلتك."),
     },
     {
       id: "online",
-      ar: "أونلاين",
+      ar: t("أونلاين"),
       ico: "🌐",
-      desc: "العب مع أصدقائك: غرفة بكود، كل لاعب يدير دولة حقيقية على نفس الخريطة.",
+      desc: t("العب مع أصدقائك: غرفة بكود، كل لاعب يدير دولة حقيقية على نفس الخريطة."),
     },
   ];
   for (const m of cards) {
@@ -167,7 +186,9 @@ function buildMenu() {
   cont.hidden = !save;
   if (save) {
     const p = save.nations?.find((n) => n.isPlayer);
-    cont.querySelector("small").textContent = p ? `${p.ar} • ${new Date(save.savedAt).toLocaleString("ar")}` : "";
+    cont.querySelector("small").textContent = p
+      ? `${escapeHtml(nationName(p))} • ${new Date(save.savedAt).toLocaleString(getLang() === "ar" ? "ar" : "en")}`
+      : "";
   }
 }
 
@@ -223,15 +244,15 @@ async function openOnlineHome() {
   $("#online-home").hidden = false;
   $("#online-lobby").hidden = true;
   $("#online-name").value = profile.settings.name || "";
-  setOnlineStatus(net.status === "online" ? "متصل بالخادم" : "جاري الاتصال…", net.status === "online" ? "ok" : "");
+  setOnlineStatus(net.status === "online" ? t("متصل بالخادم") : t("جاري الاتصال…"), net.status === "online" ? "ok" : "");
   const ok = await net.connect(profile.settings.name || "");
   if (!ok) {
     // On the published page the server is remote, so "run node server.js" is
     // the wrong advice — say what is actually happening.
     setOnlineStatus(
       net.remote
-        ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل. اللعب الفردي يعمل دائمًا"
-        : "تعذر الاتصال — شغّل الخادم: node server.js",
+        ? t("خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل. اللعب الفردي يعمل دائمًا")
+        : t("تعذر الاتصال — شغّل الخادم: node server.js"),
       "bad"
     );
     return;
@@ -370,7 +391,7 @@ function renderNationList() {
 
   const list = world
     .playable()
-    .filter((c) => !q || c.ar.includes(q) || (c.name || "").toLowerCase().includes(q.toLowerCase()))
+    .filter((c) => matchName(c, q))
     .sort((a, b) => (a.ar || "").localeCompare(b.ar || "", "ar"));
 
   if (!list.length) {
@@ -384,7 +405,7 @@ function renderNationList() {
       const cls = `nation-row${picked ? " picked" : ""}${taken ? " taken" : ""}`;
       return `<button class="${cls}" data-nation="${c.id}" ${taken ? "disabled" : ""}>
         <i class="swatch" style="background:rgb(${c.color.r},${c.color.g},${c.color.b})"></i>
-        <span class="nm">${escapeHtml(c.ar)}</span>
+        <span class="nm">${escapeHtml(nationName(c))}</span>
         <span class="meta">${c.cells.toLocaleString("ar-EG")} خلية</span>
         <span class="stars">${nationStars(world, c.id)}</span>
       </button>`;
@@ -408,7 +429,7 @@ function bindNationSearch() {
 function pickLobbyNation(nationId) {
   if (!net.room) return;
   if (net.lobby && net.lobby.phase !== "lobby") {
-    toast("المباراة بدأت — لا يمكن تغيير الدولة");
+    toast(t("المباراة بدأت — لا يمكن تغيير الدولة"));
     return;
   }
   sfx.click();
@@ -423,25 +444,25 @@ function renderLobby(view) {
   $("#dock-room").textContent = view.room;
   const isHost = view.hostSeat === net.seat;
   const everyone = view.seats.length >= 2 && view.seats.every((s) => s.ready || !s.connected);
-  $("#btn-ready").textContent = online.ready ? "إلغاء الجاهزية" : "جاهز ✓";
+  $("#btn-ready").textContent = online.ready ? t("إلغاء الجاهزية") : t("جاهز ✓");
   $("#btn-ready").className = "btn " + (online.ready ? "green" : "ghost");
   $("#btn-start-online").hidden = !isHost;
   $("#btn-start-online").disabled = !everyone || view.seats.length < 2;
   $("#lobby-sub").textContent =
     view.seats.length < 2
-      ? "شارك الكود مع صديق للبدء"
+      ? t("شارك الكود مع صديق للبدء")
       : everyone
-        ? "الجميع جاهز — يمكن البدء"
-        : "بانتظار جاهزية اللاعبين…";
+        ? t("الجميع جاهز — يمكن البدء")
+        : t("بانتظار جاهزية اللاعبين…");
   $("#lobby-note").textContent = isHost
-    ? "أنت المضيف — تبدأ المباراة عندما يكون الجميع جاهزًا."
-    : "انتظر المضيف لبدء المباراة.";
+    ? t("أنت المضيف — تبدأ المباراة عندما يكون الجميع جاهزًا.")
+    : t("انتظر المضيف لبدء المباراة.");
 
   $("#lobby-chips").innerHTML = [
     `الخريطة: ${PRESETS.find((p) => p.id === view.map)?.ar || view.map}`,
     `العصر: ${ERAS[view.era]?.ar || view.era}`,
     `الهدف: ${Math.round(view.goal * 100)}%`,
-    `الوضع: ${{ normal: "كل لاعب لنفسه", coop: "تحالف", ffa: "آخر صامد" }[view.mode] || view.mode}`,
+    `الوضع: ${{ normal: t("كل لاعب لنفسه"), coop: t("تحالف"), ffa: t("آخر صامد") }[view.mode] || view.mode}`,
   ]
     .map((t) => `<span class="chip">${t}</span>`)
     .join("");
@@ -449,11 +470,11 @@ function renderLobby(view) {
   const seatsEl = $("#lobby-seats");
   seatsEl.innerHTML = view.seats
     .map((s) => {
-      const st = s.eliminated ? "خرج" : s.ready ? "جاهز" : "بانتظار";
+      const st = s.eliminated ? t("خرج") : s.ready ? t("جاهز") : t("بانتظار");
       return `<div class="seat-row ${s.seat === net.seat ? "you" : ""} ${s.connected ? "" : "off"}">
         <i class="swatch" style="background:${s.color ? `rgb(${s.color.r},${s.color.g},${s.color.b})` : "#333"}"></i>
-        <span class="nm">${escapeHtml(s.name)}${s.seat === net.seat ? " (أنت)" : ""}<br>
-          <small style="color:var(--muted)">${s.nation || "لم يختر دولة"}${s.iso ? " · " + s.iso : ""}</small></span>
+        <span class="nm">${escapeHtml(tBack(nationName({ ar: s.nation, name: s.name })))}${s.seat === net.seat ? " (you)" : ""}<br>
+          <small style="color:var(--muted)">${s.nation || t("لم يختر دولة")}${s.iso ? " · " + s.iso : ""}</small></span>
         ${s.seat === view.hostSeat ? '<span class="st host">مضيف</span>' : ""}
         <span class="st ${s.ready ? "ready" : ""}">${st}</span>
       </div>`;
@@ -470,7 +491,7 @@ function renderLobby(view) {
   // starting me somewhere else (which is what used to happen).
   const mySeat = view.seats.find((s) => s.seat === net.seat);
   if (mySeat && mySeat.nationId != null && !app.pickWorld.active[mySeat.nationId]) {
-    toast("دولتك ليست على هذه الخريطة — اختر دولة أخرى من القائمة", "bad");
+    toast(t("دولتك ليست على هذه الخريطة — اختر دولة أخرى من القائمة"), "bad");
   }
 }
 
@@ -505,7 +526,7 @@ async function applyNetState(state) {
         });
       })().catch((err) => {
         console.error("[online] mirror failed", err);
-        toast("تعذر تحميل حالة المباراة", "bad");
+        toast(t("تعذر تحميل حالة المباراة"), "bad");
         return null;
       });
     }
@@ -554,10 +575,10 @@ function openCountrySelect(daily) {
     app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
     attachPickInput();
   }
-  $("#select-title").textContent = daily ? "تحدي اليوم" : app.mode === "history" ? "الحملة" : "اختر دولتك";
+  $("#select-title").textContent = daily ? t("تحدي اليوم") : app.mode === "history" ? t("الحملة") : t("اختر دولتك");
   $("#select-sub").textContent = daily
     ? `${app.daily.ar} — ${app.daily.arBlurb}`
-    : "كل دولة لها حدودها الحقيقية وصعوبتها الخاصة";
+    : t("كل دولة لها حدودها الحقيقية وصعوبتها الخاصة");
   $("#era-select").disabled = daily;
   if (app.pickRenderer) app.pickRenderer.campaign = null;
   const filters = document.querySelector(".filters");
@@ -586,7 +607,7 @@ function fillFilters() {
     .map(([k, v]) => `<option value="${k}" ${k === app.aiLevel ? "selected" : ""}>الخصوم: ${v.ar}</option>`)
     .join("");
   const goalSel = $("#goal-select");
-  const goalLabels = { 0.3: "الهدف: 30% — حملة سريعة", 0.5: "الهدف: 50% — فتح العالم", 0.75: "الهدف: 75% — سيطرة كاملة" };
+  const goalLabels = { 0.3: t("الهدف: 30% — حملة سريعة"), 0.5: t("الهدف: 50% — فتح العالم"), 0.75: t("الهدف: 75% — سيطرة كاملة") };
   goalSel.innerHTML = [0.3, 0.5, 0.75]
     .map((g) => `<option value="${g}" ${g === app.goal ? "selected" : ""}>${goalLabels[g]}</option>`)
     .join("");
@@ -653,14 +674,14 @@ function buildCountryList() {
   const list = $("#country-list");
   const items = w
     .playable()
-    .filter((c) => !q || c.ar.includes(q) || c.name.toLowerCase().includes(q.toLowerCase()) || (c.iso || "").includes(q.toUpperCase()))
+    .filter((c) => matchName(c, q))
     .sort((a, b) => b.cells - a.cells);
   list.innerHTML = items
     .map((c) => {
       const col = c.color;
       return `<button class="list-item ${app.selectedId === c.id ? "active" : ""}" data-id="${c.id}">
         <i class="swatch" style="background:rgb(${col.r},${col.g},${col.b})"></i>
-        <span class="nm">${c.ar}</span>
+        <span class="nm">${escapeHtml(nationName(c))}</span>
         <span class="stars">${"★".repeat(c.difficulty)}</span>
       </button>`;
     })
@@ -686,7 +707,7 @@ function renderCountryCard(id) {
     <button class="card-close" id="card-close">✕</button>
     <div class="cc-head">
       <div class="cc-flag" style="background:rgb(${col.r},${col.g},${col.b})"></div>
-      <div><h3>${c.ar}</h3><small>${c.name} • ${c.iso || "—"}</small></div>
+      <div><h3>${escapeHtml(nationName(c))}</h3><small>${c.iso || "—"} • ${c.cells.toLocaleString("en")} cells</small></div>
     </div>
     <div class="diff-row"><span>الصعوبة</span><span class="stars">${"★".repeat(c.difficulty)}${"☆".repeat(5 - c.difficulty)}</span></div>
     <div class="stat-grid">
@@ -697,9 +718,9 @@ function renderCountryCard(id) {
     </div>
     <div class="cc-sub" style="font-size:11.5px;color:var(--muted);margin-bottom:4px">الجيران:</div>
     <div class="neigh-list">${
-      neigh.length ? neigh.map((n) => `<span class="chip">${n.ar}</span>`).join("") : '<span class="chip">جزيرة — لا حدود برية</span>'
+      neigh.length ? neigh.map((n) => `<span class="chip">${escapeHtml(nationName(n))}</span>`).join("") : '<span class="chip">جزيرة — لا حدود برية</span>'
     }</div>
-    ${sea.length ? `<div class="neigh-list">${sea.map((n) => `<span class="chip">⛵ ${n.ar}</span>`).join("")}</div>` : ""}
+    ${sea.length ? `<div class="neigh-list">${sea.map((n) => `<span class="chip">⛵ ${escapeHtml(nationName(n))}</span>`).join("")}</div>` : ""}
     ${daily ? `<p class="hint">${app.daily.arBlurb}</p>` : ""}
     <div class="card-actions">
       <button class="btn gold" id="btn-start-game">ابدأ الحملة</button>
@@ -810,8 +831,8 @@ function attachPickInput() {
 
 function openCampaignList() {
   const grid = $("#mode-grid");
-  $("#select-title").textContent = "الحملات التاريخية";
-  $("#select-sub").textContent = "اختر حملة وابدأ من حدودها التاريخية";
+  $("#select-title").textContent = t("الحملات التاريخية");
+  $("#select-sub").textContent = t("اختر حملة وابدأ من حدودها التاريخية");
   document.querySelector(".filters").style.display = "flex";
   fillFilters();
   ensureCampaignModal();
@@ -874,16 +895,16 @@ function chooseCampaign(id) {
   card.classList.remove("collapsed");
   card.innerHTML = `
     <button class="card-close" id="card-close">✕</button>
-    <h3 style="margin:0 0 4px">${camp.ar}</h3>
+    <h3 style="margin:0 0 4px">${campName(camp)}</h3>
     <small style="color:var(--muted)">${camp.en} • ${camp.year} • ${ERAS[camp.era].ar}</small>
-    <p style="font-size:12.5px;line-height:1.7;color:var(--muted)">${camp.arBlurb}</p>
+    <p style="font-size:12.5px;line-height:1.7;color:var(--muted)">${t(camp.arBlurb)}</p>
     <div class="stat-grid">
-      <div class="stat"><b>${arNum(camp.include.length)}</b><small>دولة تبدأ معك</small></div>
-      <div class="stat"><b>${camp.goal * 100}%</b><small>هدف الأرض</small></div>
+      <div class="stat"><b>${arNum(camp.include.length)}</b><small>${t("دولة تبدأ معك")}</small></div>
+      <div class="stat"><b>${camp.goal * 100}%</b><small>${t("هدف الأرض")}</small></div>
     </div>
     <div class="card-actions">
-      <button class="btn gold" id="btn-start-campaign">ابدأ ${camp.ar}</button>
-      <button class="btn ghost" id="btn-camp-back">→ كل الحملات</button>
+      <button class="btn gold" id="btn-start-campaign">${t("ابدأ")} ${campName(camp)}</button>
+      <button class="btn ghost" id="btn-camp-back">→ ${t("كل الحملات")}</button>
     </div>`;
   card.querySelector("#card-close").onclick = () => card.classList.add("collapsed");
   card.querySelector("#btn-start-campaign").onclick = () => startCampaign(camp);
@@ -967,7 +988,7 @@ function startCampaign(camp) {
   const world = new World("world", camp.era);
   const playerDef = world.countries.find((c) => c.name === camp.country);
   if (!playerDef) {
-    toast("هذه الحملة تحتاج خرائط أخرى");
+    toast(t("هذه الحملة تحتاج خرائط أخرى"));
     return;
   }
   // Empire start: the campaign's historical territory becomes one nation.
@@ -1056,8 +1077,8 @@ function bootGame(game, prebuiltWorld) {
     app.renderer.lastBaseAt = 0;
     app.renderer.renderBase(true);
     updateHud(true);
-    if (game.mode === "daily") toast(`${game.daily?.ar || "تحدي اليوم"}: ${app.daily?.arBlurb || ""}`);
-    if (game.ceasefireLeft > 0) toast("الهدنة سارية — ابنِ قبل أن تبدأ الحرب");
+    if (game.mode === "daily") toast(`${game.daily?.ar || t("تحدي اليوم")}: ${app.daily?.arBlurb || ""}`);
+    if (game.ceasefireLeft > 0) toast(t("الهدنة سارية — ابنِ قبل أن تبدأ الحرب"));
   });
   if (!app.raf) loop();
   if (!game.remote) store.del(STORE_KEY);
@@ -1265,7 +1286,7 @@ function handleClick(cell, e) {
   if (owner === p.id && e.shiftKey) {
     const b = p.buildings.find((bb) => bb.cell === cell);
     if (!b) {
-      toast("لا يوجد مبنى هنا — استخدم Shift مع مبنى للترقية");
+      toast(t("لا يوجد مبنى هنا — استخدم Shift مع مبنى للترقية"));
       return;
     }
     if (netAct("upgrade", { cell })) {
@@ -1304,7 +1325,7 @@ function handleClick(cell, e) {
     R.renderBase();
     if (game.adjacent(p, n)) {
       if (game.rel(p, n) === "ally") {
-        toast("حليفك — لا يمكن مهاجمته", "bad");
+        toast(t("حليفك — لا يمكن مهاجمته"), "bad");
         return;
       }
       const lastSel = app.lastAttackSel;
@@ -1313,19 +1334,19 @@ function handleClick(cell, e) {
       } else {
         app.lastAttackSel = owner;
         app.lastAttackAt = performance.now();
-        toast(`اضغط مرة أخرى لبدء الهجوم على ${n.ar}`);
+        toast(t("اضغط مرة أخرى لبدء الهجوم على") + " " + nationName(n));
       }
     } else if (game.hasPort(p)) {
       if (netAct("attack", { target: n.id, frac: game.attackFraction })) {
-        toast(`غزو بحري على ${n.ar}!`, "good");
+        toast(t("غزو بحري على") + " " + nationName(n) + "!");
         sfx.attack();
         return;
       }
       const err = game.launchAttack(p, n, game.attackFraction);
       if (err) toast(err, "bad");
-      else toast(`غزو بحري على ${n.ar}!`, "good");
+      else toast(t("غزو بحري على") + " " + nationName(n) + "!");
     } else {
-      toast("ليست على حدودك — تحتاج ميناء لغزو بحري");
+      toast(t("ليست على حدودك — تحتاج ميناء لغزو بحري"));
     }
   }
 }
@@ -1381,7 +1402,7 @@ function openAttackSheet() {
   if (game.hasPort(p)) {
     for (const id of game.navalReach(p)) consider(game.byId[id]);
   }
-  if (!list.length) return toast("لا يوجد هدف على حدودك", "warn");
+  if (!list.length) return toast(t("لا يوجد هدف على حدودك"), "warn");
   list.sort((a, b) => b.ratio - a.ratio);
   const target =
     app.selected != null && list.find((x) => x.n.id === app.selected)
@@ -1612,15 +1633,15 @@ function updateHud(force) {
   if (game && game.remote && app.netMirror) p = app.netMirror.me || p;
   if (!p) return;
   const rate = game.resourceRate(p);
-  setRes("#res-gold", p.gold, "+" + fmt(rate.gold) + "/ث");
+  setRes("#res-gold", p.gold, "+" + fmt(rate.gold) + t("/ث"));
   setRes("#res-army", p.army, pct(p.army / Math.max(1, p.cap)));
-  setRes("#res-research", p.research, "+" + rate.research.toFixed(1) + "/ث");
+  setRes("#res-research", p.research, "+" + rate.research.toFixed(1) + t("/ث"));
   $("#nation-name").textContent = p.ar;
   $("#rank-name").textContent = game.rankName(p) + (game.xpTotal > 1 ? ` • ${Math.round(game.xpTotal)} XP` : "");
   const col = p.def.color;
   const flag = $("#flag");
   flag.style.background = `rgb(${col.r},${col.g},${col.b})`;
-  flag.textContent = (p.def.iso || "؟").slice(0, 2);
+  flag.textContent = (p.def.iso || t("؟")).slice(0, 2);
   const share = game.playerShare ? game.playerShare() : 0;
   $("#goal-pct").textContent = pct(share);
   $("#goal-bar").style.width = clamp((share / game.goal) * 100, 0, 100) + "%";
@@ -1653,7 +1674,7 @@ function updateHud(force) {
       if (r.coordinated > 1) coord = true;
     }
     const bits = [];
-    if (best) bits.push(`<span class="tac pincer">🗡 كمّاشة على ${best.t.ar} ×${best.pincer.toFixed(2)}</span>`);
+    if (best) bits.push(`<span class="tac pincer">🗡 ${t("كمّاشة على")} ${escapeHtml(nationName(best.t))} ×${best.pincer.toFixed(2)}</span>`);
     if (coord) bits.push(`<span class="tac coord">🤝 هجوم منسّق مع حلفاء</span>`);
     if (allies.length) bits.push(`<span class="tac ally">🛡 ${arNum(allies.length)} حليف يقوّي دفاعك</span>`);
     tac.innerHTML = bits.join("");
@@ -1661,7 +1682,7 @@ function updateHud(force) {
   const cez = game.ceasefireLeft;
   const badge = $("#ceasefire-badge");
   if (cez > 0) {
-    badge.textContent = "هدنة " + Math.ceil(cez) + "ث";
+    badge.textContent = t("هدنة") + " " + Math.ceil(cez) + t("ث");
     badge.style.display = "";
     badge.style.background = "rgba(142,217,138,0.16)";
     badge.style.color = "var(--green)";
@@ -1670,8 +1691,9 @@ function updateHud(force) {
     badge.style.background = "rgba(255,125,116,0.16)";
     badge.style.color = "var(--red)";
   }
-  const t = Math.max(0, Math.floor(game.time - (game.openedAt || 0)));
-  $("#clock").textContent = `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  // NB: `t` is the translation helper — a local of that name would shadow it.
+  const elapsed = Math.max(0, Math.floor(game.time - (game.openedAt || 0)));
+  $("#clock").textContent = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
   $("#force-val").textContent = Math.round(game.attackFraction * 100) + "%";
   $("#force-slider").value = Math.round(game.attackFraction * 100);
   renderFeed();
@@ -1697,18 +1719,18 @@ function updateHud(force) {
 }
 
 const TIPS = [
-  "ابنِ مصنعًا ومدينة في أول 30 ثانية.",
-  "شريط قوة الهجوم 50% يكفي غالبًا — لا ترسل كل جيشك.",
-  "المخبأ يبطئ الهجوم على حدودك 9% لكل مستوى.",
-  "اضغط Shift على مبنى لترقيته للمستوى التالي.",
-  "ميناء يفتح الغزو البحري لأي ساحل في العالم.",
+  t("ابنِ مصنعًا ومدينة في أول 30 ثانية."),
+  t("شريط قوة الهجوم 50% يكفي غالبًا — لا ترسل كل جيشك."),
+  t("المخبأ يبطئ الهجوم على حدودك 9% لكل مستوى."),
+  t("اضغط Shift على مبنى لترقيته للمستوى التالي."),
+  t("ميناء يفتح الغزو البحري لأي ساحل في العالم."),
   "Gift الذهب لجارك ليبقى محايدًا أطول.",
-  "منصة صواريخ تحوّل الأرض إلى خرائب لا يعبرها الجيش.",
-  "الجيش يتجدد أسرع عندما يكون أقل من السقف.",
-  "الدفاع الجوي يعترض صواريخ العدو القريبة.",
+  t("منصة صواريخ تحوّل الأرض إلى خرائب لا يعبرها الجيش."),
+  t("الجيش يتجدد أسرع عندما يكون أقل من السقف."),
+  t("الدفاع الجوي يعترض صواريخ العدو القريبة."),
   "التحصين يمنح +30% دفاع لمدة 20 ثانية.",
-  "اضغط F للعودة إلى عاصمتك.",
-  "كل بحث يرفع قوة جيشك أو اقتصادك بشكل دائم.",
+  t("اضغط F للعودة إلى عاصمتك."),
+  t("كل بحث يرفع قوة جيشك أو اقتصادك بشكل دائم."),
 ];
 let tipIdx = 0;
 let tipAt = 0;
@@ -1770,9 +1792,9 @@ function updateEvents() {
     rows.push(`<div class="ev ${incoming ? "top" : ""}">
       <div class="ev-row">
         <b>${mine ? "➤ هجومك على " + other.ar : "⚠ " + other.ar + " تهجم عليك"}</b>
-        <button class="mini" data-retreat="${a.id}">${mine ? "انسحاب" : "تحصين"}</button>
+        <button class="mini" data-retreat="${a.id}">${mine ? t("انسحاب") : t("تحصين")}</button>
       </div>
-      <div class="ev-sub">${fmt(a.troops)} جندي • ${a.naval ? "بحري" : "برّي"} ${a.landingTimer > 0 ? "• إنزال…" : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">الجبهة متعثرة</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">كمّاشة</b>` : ""}</div>
+      <div class="ev-sub">${fmt(a.troops)} ${t("جندي")} • ${a.naval ? t("بحري") : t("برّي")} ${a.landingTimer > 0 ? "• إنزال…" : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">الجبهة متعثرة</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">كمّاشة</b>` : ""}</div>
       <div class="bar ${mine ? "adv" : ""}"><i style="width:${pct2}%"></i></div>
     </div>`);
   }
@@ -1780,10 +1802,10 @@ function updateEvents() {
     if (o.to !== p.id) continue;
     const from = game.byId[o.from];
     rows.push(`<div class="ev top">
-      <div class="ev-row"><b>عرض من ${from?.ar || "؟"}</b>
+      <div class="ev-row"><b>عرض من ${from?.ar || t("؟")}</b>
         <span><button class="mini" data-accept="${o.id}">قبول</button>
         <button class="mini" data-decline="${o.id}">رفض</button></span></div>
-      <div class="ev-sub">${o.type === "ceasefire" ? "وقف إطلاق نار" : "تحالف"}</div>
+      <div class="ev-sub">${o.type === "ceasefire" ? t("وقف إطلاق نار") : t("تحالف")}</div>
     </div>`);
   }
   const sig = rows.join("");
@@ -1800,7 +1822,7 @@ function updateEvents() {
       } else {
         if (!netAct("fortify", {}) || !online.lastState) {
           const err = game.fortify(p);
-          toast(err || "تم تحصين الحدود", err ? "bad" : "good");
+          toast(err || t("تم تحصين الحدود"), err ? "bad" : "good");
         }
       }
       updateEvents();
@@ -1840,9 +1862,9 @@ function updateTab() {
       return `<div class="bcard ${app.brush === def.key ? "active" : ""} ${cant ? "locked" : ""}" data-b="${def.key}">
         <span class="hk">${i + 1}</span>
         <div class="bh"><i class="bi" style="background:${def.color}">${ICONS[def.key] || "★"}</i>${eraName(def.key)}</div>
-        <div class="cost">${fmt(cost)} ◈ <span>${owned} مبنى</span></div>
+        <div class="cost">${fmt(cost)} ◈ <span>${owned} ${t("مبنى")}</span></div>
         <div class="desc">${def.descAr}</div>
-        <button class="pick">${cant ? "ذهب غير كافٍ" : "ابنِ"}</button>
+        <button class="pick">${cant ? t("الذهب غير كافٍ") : t("ابنِ")}</button>
       </div>`;
     }).join("");
     body.querySelectorAll(".bcard").forEach((el) => {
@@ -1854,18 +1876,18 @@ function updateTab() {
     const cities = p.agg?.city || 0;
     body.innerHTML = `
       <div class="mil-row">
-        <div class="mil-box"><b>${fmt(rate.gold)}/ث</b><small>دخل الذهب</small></div>
+        <div class="mil-box"><b>${fmt(rate.gold)}${t("/ث")}</b><small>${t("دخل الذهب")}</small></div>
         <div class="mil-box"><b>${fmt(p.gold)}</b><small>الخزينة</small></div>
-        <div class="mil-box"><b>${cities}</b><small>مدن (سقف ${fmt(p.cap)})</small></div>
+        <div class="mil-box"><b>${cities}</b><small>${t("مدن (سقف")} ${fmt(p.cap)})</small></div>
         <div class="mil-box"><b>${factories}</b><small>مصانع</small></div>
-        <div class="mil-box"><b>${Math.round(rate.research * 10) / 10}/ث</b><small>بحث</small></div>
-        <div class="mil-box"><b>${fmt(game.troopRate(p) * 60)}/د</b><small>تجنيد</small></div>
+        <div class="mil-box"><b>${Math.round(rate.research * 10) / 10}${t("/ث")}</b><small>${t("بحث")}</small></div>
+        <div class="mil-box"><b>${fmt(game.troopRate(p) * 60)}${t("/د")}</b><small>${t("تجنيد")}</small></div>
         <div class="mil-actions">
           <button class="btn ghost" id="btn-up-all">⇧ ترقية المبانٍ</button>
-          <button class="btn ghost" id="btn-melt2">${game.melt ? "إيقاف" : "تشغيل"} بيع الجنود</button>
+          <button class="btn ghost" id="btn-melt2">${game.melt ? t("إيقاف") : t("تشغيل")} ${t("بيع الجنود")}</button>
         </div>
       </div>
-      <div class="hint">Shift + اضغط على أي مبنى في الخريطة لترقيته. الترقية تصل حتى المستوى 5.</div>`;
+      <div class="hint">Shift + ${t("اضغط على أي مبنى في الخريطة لترقيته. الترقية تصل حتى المستوى 5.")}</div>`;
     body.querySelector("#btn-up-all").onclick = () => {
       let n = 0;
       for (const b of [...p.buildings]) {
@@ -1873,7 +1895,7 @@ function updateTab() {
         if (game.upgradeBuilding(p, b) === null) n++;
         if (p.gold < 400) break;
       }
-      toast(n ? `تمت ترقية ${n} مبنى` : "لا يوجد ذهب كافٍ", n ? "good" : "bad");
+      toast(n ? `${t("تمت ترقية")} ${n} ${t("مبنى")}` : t("لا يوجد ذهب كافٍ"), n ? "good" : "bad");
       app.renderer.renderBase(true);
       updateTab();
     };
@@ -1889,7 +1911,7 @@ function updateTab() {
       <div class="mil-row">
         <div class="mil-box"><b>${fmt(p.army)}</b><small>الجيش</small></div>
         <div class="mil-box"><b>${fmt(p.cap)}</b><small>السقف</small></div>
-        <div class="mil-box"><b>+${fmt(rate)}/ث</b><small>تجنيد</small></div>
+        <div class="mil-box"><b>+${fmt(rate)}${t("/ث")}</b><small>${t("تجنيد")}</small></div>
         <div class="mil-box"><b>${game.attackMult(p).toFixed(2)}×</b><small>قوة الهجوم</small></div>
         <div class="mil-box"><b>${(p.agg?.base || 0)}</b><small>قواعد</small></div>
         <div class="mil-actions">
@@ -1904,18 +1926,18 @@ function updateTab() {
     };
     body.querySelector("#btn-rally").onclick = () => {
       if (app.game.remote) return toast("التجنيد الفوري غير متاح أونلاين", "bad");
-      if (p.gold < 1800) return toast("الذهب غير كافٍ", "bad");
+      if (p.gold < 1800) return toast(t("الذهب غير كافٍ"), "bad");
       p.gold -= 1800;
       p.army = Math.min(p.cap, p.army + 9000);
       updateTab();
     };
     body.querySelector("#btn-war").onclick = () => {
-      if (!wars.length) return toast("لا حروب مفتوحة");
+      if (!wars.length) return toast(t("لا حروب مفتوحة"));
       app.tab = "wars";
       updateTab();
     };
     const warChips = wars
-      .map((wn) => `<button class="btn ghost" data-focus="${wn.id}">⚔ ${wn.ar} · ${fmt(wn.army)}</button>`)
+      .map((wn) => `<button class="btn ghost" data-focus="${wn.id}">⚔ ${escapeHtml(nationName(wn))} · ${fmt(wn.army)}</button>`)
       .join("");
     body.insertAdjacentHTML(
       "beforeend",
@@ -1948,7 +1970,7 @@ function updateTab() {
         ports
           ? `<div class="mil-actions">${targets
               .slice(0, 8)
-              .map((n) => `<button class="btn ghost" data-naval="${n.id}">⛵ إنزال على ${n.ar}</button>`)
+              .map((n) => `<button class="btn ghost" data-naval="${n.id}">⛵ ${t("إنزال على")} ${escapeHtml(nationName(n))}</button>`)
               .join("")}</div>`
           : ""
       }`;
@@ -1969,7 +1991,7 @@ function updateTab() {
     body.innerHTML = `
       <div class="mil-row">
         <div class="mil-box"><b>${silos}</b><small>منصات صواريخ</small></div>
-        <div class="mil-box"><b>${ready}</b><small>جاهز للإطلاق</small></div>
+        <div class="mil-box"><b>${ready}</b><small>${t("جاهز للإطلاق")}</small></div>
         <div class="mil-box"><b>${fmt(BALANCE.missileCost)} ◈</b><small>صاروخ كروز</small></div>
         <div class="mil-actions">
           <button class="btn ghost" id="btn-missile" ${ready ? "" : "disabled"}>🚀 صاروخ كروز</button>
@@ -1980,7 +2002,7 @@ function updateTab() {
     const arm = (kind) => {
       app.strikeMode = kind;
       $("#map").classList.add("striking");
-      toast("اختر هدف الضربة على الخريطة");
+      toast(t("اختر هدف الضربة على الخريطة"));
     };
     body.querySelector("#btn-missile").onclick = () => arm("missile");
     body.querySelector("#btn-nuke").onclick = () => arm("nuke");
@@ -1989,11 +2011,11 @@ function updateTab() {
 
 function eraName(key) {
   const names = {
-    ancient: ["قرية", "منجم", "معبد الكهنة", "مرسى", "معسكر", "حصن", "منجنيق", "أبراج"],
-    medieval: ["مدينة", "ورشة", "مكتبة", "ميناء", "ثكنة", "قلعة", "مدفع", "حراسة"],
-    sail: ["مدينة", "مصنع", "أكاديمية", "حوض", "ثكنة", "حصن", "مدفعية", "بطاريات"],
-    imperial: ["مدينة", "مصنع", "جامعة", "ميناء", "ثكنة", "حصن", "مدفعية", "دفاعات"],
-    modern: ["مدينة", "مصنع", "مختبر", "ميناء", "قاعدة", "مخبأ", "منصة صواريخ", "دفاع جوي"],
+    ancient: [t("قرية"), t("منجم"), t("معبد الكهنة"), t("مرسى"), t("معسكر"), t("حصن"), t("منجنيق"), t("أبراج")],
+    medieval: [t("مدينة"), t("ورشة"), t("مكتبة"), t("ميناء"), t("ثكنة"), t("قلعة"), t("مدفع"), t("حراسة")],
+    sail: [t("مدينة"), t("مصنع"), t("أكاديمية"), t("حوض"), t("ثكنة"), t("حصن"), t("مدفعية"), t("بطاريات")],
+    imperial: [t("مدينة"), t("مصنع"), t("جامعة"), t("ميناء"), t("ثكنة"), t("حصن"), t("مدفعية"), t("دفاعات")],
+    modern: [t("مدينة"), t("مصنع"), t("مختبر"), t("ميناء"), t("قاعدة"), t("مخبأ"), t("منصة صواريخ"), t("دفاع جوي")],
   };
   const idx = BUILDINGS.findIndex((b) => b.key === key);
   return (names[app.era] || names.modern)[idx] || key;
@@ -2050,10 +2072,10 @@ function updateTooltip(clientX, clientY, cell) {
     <div class="tt-row"><span>الجيش</span><b>${fmt(n.army)}</b></div>
     <div class="tt-row"><span>الأرض</span><b>${fmt(n.cells)}</b></div>
     ${rel ? `<div class="tt-row"><span>العلاقة</span><b>${
-      { war: "⚔ حرب", ally: "🤝 حليف", peace: "🕊 هدنة", neutral: "• محايد" }[game.rel(p, n)]
+      { war: "⚔ حرب", ally: "🤝 حليف", peace: "🕊 هدنة", neutral: t("• محايد") }[game.rel(p, n)]
     }</b></div>` : ""}
-    ${b ? `<div class="tt-row"><span>مبنى</span><b>${eraName(b.key)} L${b.level}</b></div>` : ""}
-    ${owner !== p?.id ? `<div class="tt-hint">${game.adjacent(p, n) ? "اضغط مرتين للهجوم" : "غزو بحري (يحتاج ميناء)"}</div>` : '<div class="tt-hint">اضغط للبناء/التحديد</div>'}`;
+    ${b ? `<div class="tt-row"><span>${t("مبنى")}</span><b>${eraName(b.key)} L${b.level}</b></div>` : ""}
+    ${owner !== p?.id ? `<div class="tt-hint">${game.adjacent(p, n) ? t("اضغط مرتين للهجوم") : t("غزو بحري (يحتاج ميناء)")}</div>` : '<div class="tt-hint">اضغط للبناء/التحديد</div>'}`;
   tt.hidden = false;
   const rect = $("#screen-game").getBoundingClientRect();
   let x = clientX - rect.left + 14;
@@ -2072,7 +2094,7 @@ function showCountryTooltip(n) {
 function game2rel(n) {
   const game = app.game;
   const p = game.player();
-  if (!p || p === n) return "أرضك";
+  if (!p || p === n) return t("أرضك");
   return game.relationLabel(p, n);
 }
 
@@ -2090,8 +2112,8 @@ function updateResearch() {
     return `<div class="tech">
       <h4>${r.icon} ${r.ar}</h4>
       <div class="pips">${pips}</div>
-      <p>${r.descAr} (المستوى ${lvl}/5)</p>
-      <button data-tech="${r.key}" ${lvl >= 5 ? "disabled" : ""}>${lvl >= 5 ? "مكتمل" : `ترقية • ${cost} ✦`}</button>
+      <p>${t(r.descAr)} (${t("المستوى")} ${lvl}/5)</p>
+      <button data-tech="${r.key}" ${lvl >= 5 ? "disabled" : ""}>${lvl >= 5 ? t("مكتمل") : `${t("ترقية")} • ${cost} ✦`}</button>
     </div>`;
   }).join("");
   grid.querySelectorAll("[data-tech]").forEach((b) => {
@@ -2125,7 +2147,7 @@ function renderDiplo() {
     .filter((o) => o.to === p.id)
     .map((o) => {
       const from = game.byId[o.from];
-      return `<div class="offer"><span class="grow">${from?.ar} تعرض ${o.type === "ceasefire" ? "وقف إطلاق النار" : "تحالفًا"}</span>
+      return `<div class="offer"><span class="grow">${from?.ar} تعرض ${o.type === "ceasefire" ? t("وقف إطلاق النار") : t("تحالفًا")}</span>
         <button data-acc="${o.id}">قبول</button><button data-dec="${o.id}">رفض</button></div>`;
     })
     .join("");
@@ -2162,15 +2184,15 @@ function renderDiplo() {
   list.innerHTML = near
     .map((n) => {
       const rel = game.rel(p, n);
-      const relTxt = { war: "حرب", ally: "حليف", peace: "هدنة", neutral: "محايد" }[rel];
+      const relTxt = { war: t("حرب"), ally: t("حليف"), peace: t("هدنة"), neutral: t("محايد") }[rel];
       const adjacent = p.def.neighbors.includes(n.id);
       return `<div class="diplo-row">
         <i class="swatch" style="background:rgb(${n.def.color.r},${n.def.color.g},${n.def.color.b})"></i>
-        <span class="nm">${n.ar} ${adjacent ? "" : "⛵"}<br><small style="color:var(--muted)">${fmt(n.army)} جندي • ${relTxt}</small></span>
+        <span class="nm">${escapeHtml(nationName(n))} ${adjacent ? "" : "⛵"}<br><small style="color:var(--muted)">${fmt(n.army)} ${t("جندي")} • ${relTxt}</small></span>
         <span class="actions">
           ${rel === "war" ? `<button data-cease="${n.id}">هدنة</button>` : ""}
           ${rel !== "war" && rel !== "ally" ? `<button data-alliance="${n.id}">تحالف</button>` : ""}
-          ${rel !== "war" ? `<button data-dow="${n.id}">حرب</button>` : `<button data-call="${n.id}" title="ادعُ حلفاءك للانضمام">⚔ ادعُ الحلفاء</button>`}
+          ${rel !== "war" ? `<button data-dow="${n.id}">حرب</button>` : `<button data-call="${n.id}" title=t("ادعُ حلفاءك للانضمام")>⚔ ادعُ الحلفاء</button>`}
           <button data-gift="${n.id}">هدية</button>
         </span>
       </div>`;
@@ -2178,7 +2200,7 @@ function renderDiplo() {
     .join("");
   const search = document.createElement("input");
   search.className = "search";
-  search.placeholder = "ابحث عن دولة…";
+  search.placeholder = t("ابحث عن دولة…");
   search.value = q;
   search.style.marginBottom = "8px";
   search.oninput = () => {
@@ -2223,7 +2245,7 @@ function doDiplo(type, id) {
     return;
   }
   const err = game.propose({ type, from: p.id, to: id });
-  toast(err || (type === "ceasefire" ? "تم إرسال عرض الهدنة" : type === "gift" ? "أُرسلت الهدية" : "تم إرسال عرض التحالف"), err ? "bad" : "good");
+  toast(err || (type === "ceasefire" ? t("تم إرسال عرض الهدنة") : type === "gift" ? t("أُرسلت الهدية") : t("تم إرسال عرض التحالف")), err ? "bad" : "good");
   renderDiplo();
 }
 
@@ -2244,13 +2266,13 @@ function showOnlineOut(state) {
     .map((r) => {
       const me = r.seat === net.seat;
       return `<div class="row ${me ? "won" : ""}">
-        <span>${escapeHtml(r.name)}${me ? " (أنت)" : ""} — ${escapeHtml(r.nation || "—")}</span>
-        <b>${r.alive === false ? "خرج" : (r.cells / Math.max(1, app.game.totalCells) * 100).toFixed(1) + "%"}</b></div>`;
+        <span>${escapeHtml(r.name)}${me ? " (you)" : ""} — ${escapeHtml(tBack(r.nation) || "—")}</span>
+        <b>${r.alive === false ? t("خرج") : (r.cells / Math.max(1, app.game.totalCells) * 100).toFixed(1) + "%"}</b></div>`;
     })
     .join("");
-  $("#end-title").textContent = "💀 خرجت من المباراة";
+  $("#end-title").textContent = t("💀 خرجت من المباراة");
   $("#end-title").className = "lose";
-  $("#end-sub").textContent = "سقطت دولتك — يمكنك متابعة الآخرين أو انتظار مباراة جديدة.";
+  $("#end-sub").textContent = t("سقطت دولتك — يمكنك متابعة الآخرين أو انتظار مباراة جديدة.");
   $("#end-stats").innerHTML = "";
   const box = $("#end-online");
   box.hidden = false;
@@ -2273,20 +2295,20 @@ function showOnlineOut(state) {
 function showOnlineEnd(payload) {
   const me = (payload.results || []).find((r) => r.seat === net.seat);
   const won = !!(me && me.won);
-  $("#end-title").textContent = won ? "🏆 فزت بالمباراة!" : "💀 خسرت المباراة";
+  $("#end-title").textContent = won ? t("🏆 فزت بالمباراة!") : t("💀 خسرت المباراة");
   $("#end-title").className = won ? "win" : "lose";
   $("#end-sub").textContent = won
-    ? "سيطرت على الأرض قبل الجميع."
+    ? t("سيطرت على الأرض قبل الجميع.")
     : payload.reason === "ai"
-      ? `${payload.by || "دولة" } سيطرت على الأرض أولًا — جرّب مرة أخرى.`
+      ? `${payload.by || t("دولة") } سيطرت على الأرض أولًا — جرّب مرة أخرى.`
       : me && me.surrendered
-        ? "استسلمت — يمكنك الانتقام في مباراة جديدة."
+        ? t("استسلمت — يمكنك الانتقام في مباراة جديدة.")
         : `وصلت إلى ${((me ? me.share : 0) * 100).toFixed(1)}% من الأرض. حاول مرة أخرى!`;
   const rows = (payload.results || [])
     .sort((a, b) => (b.won ? 1 : 0) - (a.won ? 1 : 0) || b.share - a.share)
     .map(
       (r) => `<div class="row ${r.won ? "won" : ""}">
-        <span>${r.won ? "🏆 " : ""}${escapeHtml(r.name)} — ${escapeHtml(r.nation)}</span>
+        <span>${r.won ? "🏆 " : ""}${escapeHtml(r.name)} — ${escapeHtml(tBack(r.nation))}</span>
         <b>${(r.share * 100).toFixed(1)}%${r.surrendered ? " · استسلم" : ""}</b></div>`
     )
     .join("");
@@ -2319,7 +2341,7 @@ function showOnlineEnd(payload) {
 }
 
 function showEnd(summary) {
-  $("#end-title").textContent = summary.result === "win" ? "🏆 النصر!" : "💀 الهزيمة";
+  $("#end-title").textContent = summary.result === "win" ? t("🏆 النصر!") : t("💀 الهزيمة");
   $("#end-title").className = summary.result === "win" ? "win" : "lose";
   $("#end-sub").textContent =
     summary.result === "win"
@@ -2408,9 +2430,23 @@ function howTo() {
 }
 
 async function boot() {
+  // Language first: the saved choice decides dir/lang on <html> before any
+  // screen is painted, so the first frame is already in the right language.
+  loadLang();
+  translateDom(document);
+  watchDom(document.body); // keeps lists, HUD and toasts translated while playing
   // The map data is loaded dynamically so the same World class can run on the
   // Node server for online matches (see js/online.js + server.js).
   await initWorld();
+  // The map bundle carries both spellings of every country, so the translator
+  // can render a bare Arabic nametag as English without a dictionary of 236
+  // entries. Registered before the first screen is built.
+  try {
+    const ref = new World("world", "modern");
+    registerNationNames(ref.countries.filter(Boolean).map((c) => [c.ar, c.name]));
+  } catch (err) {
+    console.warn("nation name table unavailable", err);
+  }
   buildMenu();
   renderMedals();
   $("#btn-play").onclick = () => {
@@ -2431,7 +2467,7 @@ async function boot() {
       bootGame(game);
     } catch (err) {
       console.error(err);
-      toast("تعذر تحميل الحفظ", "bad");
+      toast(t("تعذر تحميل الحفظ"), "bad");
     }
   };
   $("#btn-back-menu").onclick = () => {
@@ -2480,7 +2516,7 @@ async function boot() {
   $("#btn-create-room").onclick = async () => {
     const name = onlineName();
     const ok = await net.connect(name);
-    if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+    if (!ok) return setOnlineStatus(t("تعذر الاتصال بالخادم"), "bad");
     net.createRoom({
       map: $("#online-map").value,
       mode: $("#online-mode").value,
@@ -2496,7 +2532,7 @@ async function boot() {
       box.innerHTML = `<div class="room-empty">لا توجد عوالم مفتوحة الآن — اضغط «العب الآن» لتفتح عالمًا</div>`;
       return;
     }
-    const modeAr = { normal: "كل لاعب لنفسه", coop: "تحالف", ffa: "آخر صامد" };
+    const modeAr = { normal: t("كل لاعب لنفسه"), coop: t("تحالف"), ffa: t("آخر صامد") };
     box.innerHTML = list
       .map(
         (r) => `<button class="room-row" data-join="${r.code}">
@@ -2510,7 +2546,7 @@ async function boot() {
     box.querySelectorAll("[data-join]").forEach((b) => {
       b.onclick = async () => {
         const ok = await net.connect(onlineName());
-        if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+        if (!ok) return setOnlineStatus(t("تعذر الاتصال بالخادم"), "bad");
         net.joinRoom(b.dataset.join);
       };
     });
@@ -2522,8 +2558,8 @@ async function boot() {
       renderRoomList([]);
       setOnlineStatus(
         net.remote
-          ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل"
-          : "الخادم غير متاح — الأونلاين يحتاج تشغيل node server.js",
+          ? t("خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل")
+          : t("الخادم غير متاح — الأونلاين يحتاج تشغيل node server.js"),
         "bad"
       );
       return false;
@@ -2538,14 +2574,14 @@ async function boot() {
       const ok = await net.connect(onlineName());
       if (!ok) {
         return setOnlineStatus(
-          net.remote ? "خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل" : "تعذر الاتصال بالخادم",
+          net.remote ? t("خادم الأونلاين لا يستجيب الآن — أعد المحاولة بعد قليل") : t("تعذر الاتصال بالخادم"),
           "bad"
         );
       }
       const btn = $("#btn-quick-play");
       if (btn) {
         btn.disabled = true;
-        btn.textContent = "…جارٍ البحث";
+        btn.textContent = t("…جارٍ البحث");
       }
       net.quickJoin({
         map: $("#online-map") ? $("#online-map").value : "world",
@@ -2558,7 +2594,7 @@ async function boot() {
     const btn = $("#btn-quick-play");
     if (!btn) return;
     btn.disabled = !!on;
-    btn.textContent = on ? "…جارٍ البحث" : "⚡ العب الآن";
+    btn.textContent = on ? t("…جارٍ البحث") : t("⚡ العب الآن");
   });
   net.on("roomlist", renderRoomList);
   net.on("hello", () => net.listRooms());
@@ -2566,9 +2602,9 @@ async function boot() {
   $("#btn-join-room").onclick = async () => {
     const name = onlineName();
     const code = ($("#online-code").value || "").trim().toUpperCase();
-    if (code.length < 3) return setOnlineStatus("اكتب كود الغرفة", "bad");
+    if (code.length < 3) return setOnlineStatus(t("اكتب كود الغرفة"), "bad");
     const ok = await net.connect(name);
-    if (!ok) return setOnlineStatus("تعذر الاتصال بالخادم", "bad");
+    if (!ok) return setOnlineStatus(t("تعذر الاتصال بالخادم"), "bad");
     net.joinRoom(code);
   };
   $("#online-code").addEventListener("keydown", (e) => {
@@ -2609,7 +2645,7 @@ async function boot() {
 
   // ------------------------------------------------------------ net events
   net.on("status", (st) => {
-    const label = st === "online" ? "متصل بالخادم" : st === "connecting" ? "جاري الاتصال…" : "غير متصل";
+    const label = st === "online" ? t("متصل بالخادم") : st === "connecting" ? t("جاري الاتصال…") : t("غير متصل");
     setOnlineStatus(label, st === "online" ? "ok" : st === "offline" ? "bad" : "");
     const dot = $("#dock-ping");
     if (dot) dot.textContent = st === "online" ? "●" : "○";
@@ -2636,15 +2672,15 @@ async function boot() {
     $("#online-lobby").hidden = true;
   });
   net.on("disconnected", () => {
-    setOnlineStatus("انقطع الاتصال — جارٍ استعادة المباراة", "bad");
-    if (app.screen === "game") toast("انقطع الاتصال — جارٍ إعادة الاتصال", "bad");
+    setOnlineStatus(t("انقطع الاتصال — جارٍ استعادة المباراة"), "bad");
+    if (app.screen === "game") toast(t("انقطع الاتصال — جارٍ إعادة الاتصال"), "bad");
   });
   net.on("reconnecting", ({ attempt }) => {
     setOnlineStatus(`جارٍ إعادة الاتصال… (محاولة ${attempt})`, "bad");
   });
   net.on("reconnected", ({ room }) => {
-    setOnlineStatus(room ? `عاد الاتصال — عالم ${room}` : "عاد الاتصال", "ok");
-    toast(room ? "عاد الاتصال بمباراتك" : "عاد الاتصال", "good");
+    setOnlineStatus(room ? `عاد الاتصال — عالم ${room}` : t("عاد الاتصال"), "ok");
+    toast(room ? t("عاد الاتصال بمباراتك") : t("عاد الاتصال"), "good");
   });
   setInterval(() => {
     if (net.status === "online") {
@@ -2686,9 +2722,9 @@ async function boot() {
       const data = app.game.serialize();
       data.savedAt = Date.now();
       store.set(STORE_KEY, data);
-      toast("تم حفظ اللعبة", "good");
+      toast(t("تم حفظ اللعبة"), "good");
     } catch (e) {
-      toast("فشل الحفظ", "bad");
+      toast(t("فشل الحفظ"), "bad");
     }
   };
   $("#btn-settings").onclick = () => {
@@ -2728,6 +2764,15 @@ async function boot() {
     show("menu");
     buildMenu();
   };
+  $("#set-lang").value = getLang();
+  $("#set-lang").onchange = (e) => {
+    // A full re-render is the honest way to switch languages: it re-runs every
+    // label, list and card in the new one instead of leaving half the UI in the
+    // old language. Reloading keeps the match (it is saved/the server owns it).
+    setLang(e.target.value);
+    translateDom(document);
+    location.reload();
+  };
   $("#set-sound").checked = profile.settings.sound !== false;
   $("#set-labels").checked = profile.settings.labels !== false;
   $("#set-speed").value = String(profile.settings.speed || 1);
@@ -2761,9 +2806,9 @@ async function boot() {
     saveSettings();
   };
   $("#tabs").onclick = (e) => {
-    const t = e.target.closest(".tab");
-    if (!t) return;
-    app.tab = t.dataset.tab;
+    const tab = e.target.closest(".tab");
+    if (!tab) return;
+    app.tab = tab.dataset.tab;
     updateTab();
   };
   $("#force-slider").oninput = (e) => setForce(e.target.value / 100);

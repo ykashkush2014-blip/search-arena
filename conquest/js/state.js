@@ -1,6 +1,7 @@
 // Game simulation: nations, economy, front-line combat, strikes, diplomacy,
 // victory conditions and serialisation. No DOM access in this file.
 import { BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MAX_TECH, RANKS, RESEARCH } from "./data.js";
+import { t } from "./i18n.js";
 import { gridToRle, rleToGrid } from "./world.js";
 
 // Relative strength of every nation, used by the online lobby screen.
@@ -299,7 +300,7 @@ export class Game {
 
   relationLabel(a, b) {
     const r = this.rel(a, b);
-    return { ally: "حليف", war: "حرب", peace: "هدنة", neutral: "محايد" }[r];
+    return { ally: t("حليف"), war: t("حرب"), peace: t("هدنة"), neutral: t("محايد") }[r];
   }
 
   capacityOf(n) {
@@ -466,7 +467,7 @@ export class Game {
     }
     if (n.isPlayer) {
       this.finish("lose");
-      this.log("سقطت دولتك… انتهت الحملة", "bad");
+      this.log(t("سقطت دولتك… انتهت الحملة"), "bad");
     } else {
       this.log(`تم احتلال ${n.ar} بالكامل`, "good", { nation: n.id, conquered: n.id });
       this.stats.conquered++;
@@ -484,10 +485,10 @@ export class Game {
   // ---------------------------------------------------------------- build ---
 
   canBuild(n, key, cell) {
-    if (!n.alive) return "دولتك سقطت";
-    if (this.owners[cell] !== n.id) return "يجب البناء داخل أرضك";
-    if (n.gold < this.buildingCost(key, 1)) return "الذهب غير كافٍ";
-    if (n.buildings.some((b) => b.cell === cell)) return "يوجد مبنى هنا";
+    if (!n.alive) return t("دولتك سقطت");
+    if (this.owners[cell] !== n.id) return t("يجب البناء داخل أرضك");
+    if (n.gold < this.buildingCost(key, 1)) return t("الذهب غير كافٍ");
+    if (n.buildings.some((b) => b.cell === cell)) return t("يوجد مبنى هنا");
     return null;
   }
 
@@ -558,9 +559,9 @@ export class Game {
   }
 
   upgradeBuilding(n, b) {
-    if (b.level >= 5) return "المستوى الأقصى";
+    if (b.level >= 5) return t("المستوى الأقصى");
     const cost = this.buildingCost(b.key, b.level + 1);
-    if (n.gold < cost) return "الذهب غير كافٍ";
+    if (n.gold < cost) return t("الذهب غير كافٍ");
     n.gold -= cost;
     b.level++;
     this.refreshAgg(n);
@@ -595,7 +596,7 @@ export class Game {
     if (a.ally.has(b.id)) {
       a.ally.delete(b.id);
       b.ally.delete(a.id);
-      if (a.isPlayer || b.isPlayer) this.log("تحالف انكسر… خيانة!", "bad");
+      if (a.isPlayer || b.isPlayer) this.log(t("تحالف انكسر… خيانة!"), "bad");
     }
     a.war.add(b.id);
     b.war.add(a.id);
@@ -651,13 +652,13 @@ export class Game {
   }
 
   launchAttack(attacker, defender, fraction) {
-    if (!attacker.alive || !defender.alive) return "دولة غير موجودة";
-    if (attacker.ally.has(defender.id)) return "لا يمكنك مهاجمة حليفك";
-    if (attacker.army < 200) return "جيشك صغير جدًا";
+    if (!attacker.alive || !defender.alive) return t("دولة غير موجودة");
+    if (attacker.ally.has(defender.id)) return t("لا يمكنك مهاجمة حليفك");
+    if (attacker.army < 200) return t("جيشك صغير جدًا");
     if (this.ceasefireLeft > 0) return `الهدنة سارية — تبقى ${Math.ceil(this.ceasefireLeft)} ثانية`;
     const naval = !this.adjacent(attacker, defender);
-    if (naval && !this.hasPort(attacker)) return "تحتاج ميناء للغزو البحري";
-    if (naval && !this.canReach(attacker, defender)) return "هذه الدولة بعيدة عن موانئك";
+    if (naval && !this.hasPort(attacker)) return t("تحتاج ميناء للغزو البحري");
+    if (naval && !this.canReach(attacker, defender)) return t("هذه الدولة بعيدة عن موانئك");
     // Never let a nation commit its last soldiers: keep a garrison floor, so a
     // single over-committed offensive can't leave the homeland defenceless.
     const cap = this.capacityOf ? this.capacityOf(attacker) : attacker.cap || attacker.army;
@@ -665,8 +666,8 @@ export class Game {
     const available = Math.floor(attacker.army - garrison);
     if (available < 200) {
       return attacker.isPlayer
-        ? "احتياطيك منخفض — انتظر تجنيداً أو اسحب قواتك"
-        : "لا يوجد احتياطي كافٍ";
+        ? t("احتياطيك منخفض — انتظر تجنيداً أو اسحب قواتك")
+        : t("لا يوجد احتياطي كافٍ");
     }
     const existing = this.attacks.find((a) => a.attacker === attacker && a.defender === defender && a.active);
     if (existing) {
@@ -682,7 +683,7 @@ export class Game {
     if (!attacker.war.has(defender.id)) this.declareWar(attacker, defender);
     if (!attacker.isPlayer && this.attacks.length > 150) return "الحد الأقصى للهجمات";
     const troops = Math.min(available, Math.floor(attacker.army * fraction));
-    if (troops < 100) return "جيشك صغير جدًا";
+    if (troops < 100) return t("جيشك صغير جدًا");
     attacker.army -= troops;
     const atk = new Attack(attacker, defender, troops, { naval });
     atk.createdAt = this.time;
@@ -691,7 +692,7 @@ export class Game {
       atk.landingAt = this.findLandingCell(attacker, defender);
       if (atk.landingAt < 0) {
         attacker.army += troops;
-        return "لا يوجد ساحل يمكن الوصول إليه";
+        return t("لا يوجد ساحل يمكن الوصول إليه");
       }
     }
     this.attacks.push(atk);
@@ -755,7 +756,7 @@ export class Game {
     a.attacker.army += back;
     a.active = false;
     a.troops = 0;
-    if (a.attacker.isPlayer) this.log("انسحاب — خسرت 25% من القوة", "warn");
+    if (a.attacker.isPlayer) this.log(t("انسحاب — خسرت 25% من القوة"), "warn");
     this.attacks = this.attacks.filter((x) => x !== a);
   }
 
@@ -1087,11 +1088,11 @@ export class Game {
 
   fortify(n) {
     const cost = 650;
-    if (n.gold < cost) return "الذهب غير كافٍ";
-    if ((n.fortifyUntil || 0) > this.time) return "التحصين فعّال بالفعل";
+    if (n.gold < cost) return t("الذهب غير كافٍ");
+    if ((n.fortifyUntil || 0) > this.time) return t("التحصين فعّال بالفعل");
     n.gold -= cost;
     n.fortifyUntil = this.time + 20;
-    if (n.isPlayer) this.log("تحصين الحدود +30% دفاع لمدة 20 ثانية", "good");
+    if (n.isPlayer) this.log(t("تحصين الحدود +30% دفاع لمدة 20 ثانية"), "good");
     return null;
   }
 
@@ -1124,19 +1125,19 @@ export class Game {
   // --------------------------------------------------------------- strikes ---
 
   canStrike(n) {
-    if (!n.agg || !n.agg.silo) return "تحتاج منصة صواريخ";
+    if (!n.agg || !n.agg.silo) return t("تحتاج منصة صواريخ");
     const ready = n.buildings.filter((b) => b.key === "silo" && b.cd <= 0).length;
-    if (ready <= 0) return "الصاروخ قيد التجهيز";
-    if (n.gold < B.missileCost) return "الذهب غير كافٍ";
+    if (ready <= 0) return t("الصاروخ قيد التجهيز");
+    if (n.gold < B.missileCost) return t("الذهب غير كافٍ");
     return null;
   }
 
   launchStrike(n, cell, kind = "missile") {
     const cost = kind === "nuke" ? B.nukeCost : B.missileCost;
-    if (!n.agg || !n.agg.silo) return "تحتاج منصة صواريخ";
-    if (n.gold < cost) return "الذهب غير كافٍ";
+    if (!n.agg || !n.agg.silo) return t("تحتاج منصة صواريخ");
+    if (n.gold < cost) return t("الذهب غير كافٍ");
     const silo = n.buildings.find((b) => b.key === "silo" && b.cd <= 0);
-    if (!silo) return "الصاروخ قيد التجهيز";
+    if (!silo) return t("الصاروخ قيد التجهيز");
     silo.cd = kind === "nuke" ? B.missileChargeTime * 2 : B.missileChargeTime;
     n.gold -= cost;
     n.stats.strikes++;
@@ -1153,7 +1154,7 @@ export class Game {
       x1: cell % this.world.w,
       y1: (cell / this.world.w) | 0,
     });
-    if (n.isPlayer) this.log(kind === "nuke" ? "أُطلق سلاح نووي!" : "أُطلق صاروخ كروز", "warn");
+    if (n.isPlayer) this.log(kind === "nuke" ? t("أُطلق سلاح نووي!") : t("أُطلق صاروخ كروز"), "warn");
     return null;
   }
 
@@ -1230,11 +1231,11 @@ export class Game {
       by: strike.from,
     });
     if (by && by.isPlayer) {
-      this.log(blocked ? "اعترض الدفاع الجوي الصاروخ!" : "إصابة مباشرة!", blocked ? "warn" : "good");
+      this.log(blocked ? t("اعترض الدفاع الجوي الصاروخ!") : t("إصابة مباشرة!"), blocked ? "warn" : "good");
       if (strike.kind === "nuke") this.checkMedal("nuke");
     }
     const victim = this.nations.get(this.owners[strike.cell]);
-    if (victim && victim.isPlayer) this.log("ضربة صاروخية على أرضك!", "bad");
+    if (victim && victim.isPlayer) this.log(t("ضربة صاروخية على أرضك!"), "bad");
   }
 
   // ------------------------------------------------------------ diplomacy ---
@@ -1243,10 +1244,10 @@ export class Game {
     // offer: {type:'ceasefire'|'alliance'|'peace', from, to, cost}
     const from = this.byId[offer.from];
     const to = this.byId[offer.to];
-    if (!from || !to || !from.alive || !to.alive) return "دولة غير متاحة";
+    if (!from || !to || !from.alive || !to.alive) return t("دولة غير متاحة");
     if (offer.type === "ceasefire") {
-      if (!from.war.has(to.id)) return "لا توجد حرب";
-      if (from.gold < B.ceasefireCost) return "الذهب غير كافٍ";
+      if (!from.war.has(to.id)) return t("لا توجد حرب");
+      if (from.gold < B.ceasefireCost) return t("الذهب غير كافٍ");
       from.gold -= B.ceasefireCost;
       if (to.isPlayer) {
         this.offers.push({ ...offer, id: uidCounter++, at: this.time });
@@ -1259,10 +1260,10 @@ export class Game {
         return null;
       }
       this.log(`${to.ar} رفضت وقف إطلاق النار`, "warn");
-      return "مرفوض";
+      return t("مرفوض");
     }
     if (offer.type === "gift") {
-      if (from.gold < B.giftCost) return "الذهب غير كافٍ";
+      if (from.gold < B.giftCost) return t("الذهب غير كافٍ");
       from.gold -= B.giftCost;
       to.gold += B.giftCost;
       if (from.isPlayer) this.log(`أرسلت هدية إلى ${to.ar}`, "good");
@@ -1270,9 +1271,9 @@ export class Game {
       return null;
     }
     if (offer.type === "alliance") {
-      if (from.ally.has(to.id)) return "أنتما حلفاء بالفعل";
-      if (from.ally.size >= 2) return "لا يمكنك تحالف أكثر من دولتين";
-      if (from.gold < 1000) return "الذهب غير كافٍ";
+      if (from.ally.has(to.id)) return t("أنتما حلفاء بالفعل");
+      if (from.ally.size >= 2) return t("لا يمكنك تحالف أكثر من دولتين");
+      if (from.gold < 1000) return t("الذهب غير كافٍ");
       from.gold -= 1000;
       if (to.isPlayer) {
         this.offers.push({ ...offer, id: uidCounter++, at: this.time });
@@ -1280,11 +1281,11 @@ export class Game {
         this.formAlliance(from, to);
       } else {
         this.log(`${to.ar} رفضت التحالف`, "warn");
-        return "مرفوض";
+        return t("مرفوض");
       }
       return null;
     }
-    return "طلب غير معروف";
+    return t("طلب غير معروف");
   }
 
   aiAcceptsCeasefire(ai, other) {
@@ -1334,7 +1335,7 @@ export class Game {
   // Called on the player's behalf: ask allies to join the war on a target.
   callAllies(target) {
     const p = this.player();
-    if (!p || !p.alive || !target || !target.alive) return "لا يوجد هدف";
+    if (!p || !p.alive || !target || !target.alive) return t("لا يوجد هدف");
     let joined = 0;
     let strikes = 0;
     for (const id of [...p.ally]) {
@@ -1378,7 +1379,7 @@ export class Game {
         { nation: ally.id }
       );
     }
-    if (!joined) return "لم ينضم أي حليف — لا تملك تحالفات حيّة";
+    if (!joined) return t("لم ينضم أي حليف — لا تملك تحالفات حيّة");
     if (!strikes) return null;
     // Silence is bad UX: report that they joined but are far from the front.
     this.log(`حلفاؤك في الحرب، لكن ${strikes} منهم بعيدون عن جبهة ${target.ar}`, "info");
@@ -1421,7 +1422,7 @@ export class Game {
 
   reclaim(n, cell) {
     const { world, owners } = this;
-    if (owners[cell] !== RUIN) return "ليست أرضًا خربة";
+    if (owners[cell] !== RUIN) return t("ليست أرضًا خربة");
     // must be reachable from the player's territory
     const x = cell % world.w;
     const y = (cell / world.w) | 0;
@@ -1430,7 +1431,7 @@ export class Game {
       (x < world.w - 1 && owners[cell + 1] === n.id) ||
       (y > 0 && owners[cell - world.w] === n.id) ||
       (y < world.h - 1 && owners[cell + world.w] === n.id);
-    if (!near) return "الأرض الخربة بعيدة عن حدودك";
+    if (!near) return t("الأرض الخربة بعيدة عن حدودك");
     // reclaim a small blob around the click
     let claimed = 0;
     for (let dy = -2; dy <= 2 && claimed < 16; dy++) {
@@ -1445,7 +1446,7 @@ export class Game {
         }
       }
     }
-    if (claimed && n.isPlayer) this.log("استعادة أرض خربة", "good");
+    if (claimed && n.isPlayer) this.log(t("استعادة أرض خربة"), "good");
     return null;
   }
 
@@ -1457,10 +1458,10 @@ export class Game {
   }
 
   doResearch(n, key) {
-    if (!(key in n.tech)) return "بحث غير معروف";
-    if (n.tech[key] >= MAX_TECH) return "أعلى مستوى";
+    if (!(key in n.tech)) return t("بحث غير معروف");
+    if (n.tech[key] >= MAX_TECH) return t("أعلى مستوى");
     const cost = this.researchCost(key, n);
-    if (n.research < cost) return "نقاط البحث غير كافية";
+    if (n.research < cost) return t("نقاط البحث غير كافية");
     n.research -= cost;
     n.tech[key]++;
     if (n.isPlayer) {
@@ -1555,7 +1556,7 @@ export class Game {
       rank: this.rankName(p),
     };
     this.summary = stats;
-    this.log(result === "win" ? "🏆 النصر! سيطرت على الأرض" : "💀 الهزيمة", result === "win" ? "good" : "bad");
+    this.log(result === "win" ? t("🏆 النصر! سيطرت على الأرض") : t("💀 الهزيمة"), result === "win" ? "good" : "bad");
     if (this.onEnd) this.onEnd(stats);
   }
 
@@ -1962,18 +1963,18 @@ export class Game {
 
   setSeatReady(seat, ready) {
     const st = this.lobby && this.lobby.seats.find((x) => x.id === seat);
-    if (!st) return "مقعد غير موجود";
+    if (!st) return t("مقعد غير موجود");
     st.ready = !!ready;
     return null;
   }
 
   setSeatNation(seat, nationId) {
     const st = this.lobby && this.lobby.seats.find((x) => x.id === seat);
-    if (!st) return "مقعد غير موجود";
-    if (this.onlinePhase !== "lobby") return "المباراة بدأت";
+    if (!st) return t("مقعد غير موجود");
+    if (this.onlinePhase !== "lobby") return t("المباراة بدأت");
     const nation = this.byId[nationId];
-    if (!nation || !nation.def) return "دولة غير صالحة";
-    if (this.lobby.seats.some((x) => x.id !== seat && x.nationId === nationId)) return "الدولة محجوزة";
+    if (!nation || !nation.def) return t("دولة غير صالحة");
+    if (this.lobby.seats.some((x) => x.id !== seat && x.nationId === nationId)) return t("الدولة محجوزة");
     const old = this.byId[st.nationId];
     st.nationId = nationId;
     st.ready = false;
@@ -2030,8 +2031,8 @@ export class Game {
   }
 
   startOnline() {
-    if (this.onlinePhase !== "lobby") return "المباراة بدأت بالفعل";
-    if (this.lobby.seats.some((st) => !st.ready && !st.disconnected)) return "ليس كل اللاعبين جاهزين";
+    if (this.onlinePhase !== "lobby") return t("المباراة بدأت بالفعل");
+    if (this.lobby.seats.some((st) => !st.ready && !st.disconnected)) return t("ليس كل اللاعبين جاهزين");
     this.onlinePhase = "playing";
     this.startCeasefire(this.lobby.ceasefire ?? 25);
     for (const st of this.lobby.seats) {
@@ -2039,12 +2040,12 @@ export class Game {
       if (n && n.ai) n.ai = null;
       st.ready = true;
     }
-    this.log("بدأت المباراة!", "good");
+    this.log(t("بدأت المباراة!"), "good");
     return null;
   }
 
   onlineRematch() {
-    if (!this.lobby) return "لا توجد مباراة أونلاين";
+    if (!this.lobby) return t("لا توجد مباراة أونلاين");
     this.result = null;
     this.winners = null;
     this.attacks = [];
@@ -2083,16 +2084,16 @@ export class Game {
     }
     this.computeAllFrontiers();
     this.ownerVersion++;
-    this.log("مباراة جديدة — الجميع جاهز؟", "info");
+    this.log(t("مباراة جديدة — الجميع جاهز؟"), "info");
     return null;
   }
 
   addChat(seat, text) {
-    if (!this.lobby) return "لا توجد غرفة";
+    if (!this.lobby) return t("لا توجد غرفة");
     const st = this.lobby.seats.find((x) => x.id === seat);
-    if (!st) return "مقعد غير موجود";
+    if (!st) return t("مقعد غير موجود");
     const clean = String(text || "").slice(0, 240).replace(/[<>]/g, "");
-    if (!clean.trim()) return "رسالة فارغة";
+    if (!clean.trim()) return t("رسالة فارغة");
     this.lobby.chat = this.lobby.chat || [];
     this.lobby.chat.push({ seat, name: st.name, text: clean, t: Math.round(this.time) });
     if (this.lobby.chat.length > 60) this.lobby.chat.shift();

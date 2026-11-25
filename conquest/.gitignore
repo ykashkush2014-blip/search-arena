@@ -1,3 +1,9 @@
 
 # local test harness artifacts
 __harness_*.mjs
+
+# test harnesses and their installed deps are not part of the deliverable
+.smoketest/
+node_modules/
+package.json
+package-lock.json

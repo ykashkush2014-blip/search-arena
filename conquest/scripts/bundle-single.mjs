@@ -23,6 +23,8 @@ const read = (p) => readFileSync(join(ROOT, p), "utf8");
 // stable list makes the generated file diff-friendly.
 const MODULES = [
   "js/rng.js",
+  "js/i18n-en.js",
+  "js/i18n.js",
   "js/data.js",
   "js/world.js",
   "js/state.js",
