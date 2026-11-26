@@ -32,7 +32,8 @@ set -uo pipefail
 APP="${APP:-conquest-online-8129}"
 REGION="${REGION:-fra}"
 INTERVAL="${INTERVAL:-30}"
-URL="https://$APP.fly.dev"
+# يمكن تغيير العنوان للاختبار المحلي:  URL=http://127.0.0.1:8080 bash keep-fly.sh --status
+URL="${URL:-https://$APP.fly.dev}"
 
 # --- ألوان فقط لو كان الطرفية حقيقية -----------------------------------------
 if [ -t 1 ]; then
@@ -45,6 +46,24 @@ ok()   { printf '%s✓%s %s\n' "$G" "$N" "$*"; }
 bad()  { printf '%s✗%s %s\n' "$R" "$N" "$*" >&2; }
 dim()  { printf '%s%s%s\n' "$DIM" "$*" "$N"; }
 
+usage() {
+  cat <<USAGE
+الاستخدام: bash conquest/keep-fly.sh [--watch|--fix|--status]
+
+  (بلا خيار)  اضبط الإعدادات، اطبع الحالة، ثم راقب دائمًا
+  --watch     نفس الشيء مع مخرجات مباشرة
+  --fix       اضبط الإعدادات واطبع الحالة ثم اخرج
+  --status    اطبع الحالة فقط
+  -h, --help  هذه الرسالة
+
+لوحتك على fly:  fly status -a $APP
+USAGE
+}
+
+case "${1:-}" in
+  -h|--help|help) usage; exit 0 ;;
+esac
+
 # ---- 1) أداة fly ------------------------------------------------------------
 export PATH="$HOME/.fly/bin:$PATH"
 find_fly() {
@@ -56,7 +75,13 @@ find_fly() {
 if ! FLY="$(find_fly)"; then
   say "${Y}تثبيت flyctl (مرة واحدة)…${N}"
   curl -fsSL https://fly.io/install.sh | bash || {
-    bad "تعذّر تثبيت flyctl. جرّب يدويًا: curl -fsSL https://fly.io/install.sh | bash"
+    bad "تعذّر تنزيل flyctl (لا اتصال بـ fly.io من هنا)."
+    say ""
+    say "  على جهازك، ثبّته مرة واحدة:"
+    say "    curl -fsSL https://fly.io/install.sh | bash"
+    say "    export PATH=\"\$HOME/.fly/bin:\$PATH\""
+    say ""
+    say "  ثم شغّل هذا السكربت من جديد."
     exit 1
   }
   export PATH="$HOME/.fly/bin:$PATH"
@@ -113,20 +138,34 @@ apply_config() {
   #     العدد 1 لا أكثر.
   local n; n="$(machine_count)"
   if [ "${n:-0}" -eq 0 ]; then
-    bad "لا توجد أي ماشينة — إنشاء واحدة…"
-    "$FLY" machine create --app "$APP" --region "$REGION" \
-      --vm-size shared-cpu-1x --vm-memory 512 \
-      "$("$FLY" image show -a "$APP" 2>/dev/null | head -1)" >/dev/null 2>&1 ||
+    # اختفت الماشينة تمامًا (حذف، أو نشر فاشل). `scale count 1` يعيد إنشاءها
+    # من آخر صورة منشورة، بلا بناء جديد ولا انتظار دقائق.
+    bad "لا توجد أي ماشينة — إعادة إنشاء واحدة…"
+    "$FLY" scale count 1 --yes --region "$REGION" -a "$APP" >/dev/null 2>&1 ||
       "$FLY" scale count 1 --yes -a "$APP" >/dev/null 2>&1
-    sleep 5
+    sleep 8
     n="$(machine_count)"
-    [ "${n:-0}" -ge 1 ] && ok "أُنشئت ماشينة (العدد: $n)" || bad "تعذّر إنشاء ماشينة"
+    [ "${n:-0}" -ge 1 ] && ok "أُنشئت ماشينة (العدد: $n)" || bad "تعذّر إنشاء ماشينة — راجع: fly status -a $APP"
   elif [ "$n" -gt 1 ]; then
     say "${Y}  ⚠ عدد الماشينات $n — هذا يكسر الأونلاين${N}"
     "$FLY" scale count 1 --yes -a "$APP" >/dev/null 2>&1 &&
       ok "قُلّص العدد إلى 1 (عالم واحد للجميع)" || bad "تعذّر التقليص"
   else
-    ok "ماشينة واحدة تعمل"
+    ok "ماشينة واحدة"
+    # الماشينة قد تكون موجودة لكنها متوقفة (OOM، أو إيقاف يدوي): العدد 1 لا
+    # يعني أنها تعمل. نطلب حالتها ونشغّلها إن لزم.
+    local stopped
+    stopped="$("$FLY" machine list -a "$APP" --json 2>/dev/null |
+      grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"[^}]*"state"[[:space:]]*:[[:space:]]*"[^"]*"' |
+      grep -v '"state"[[:space:]]*:[[:space:]]*"started"' |
+      sed -E 's/.*"id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' | tr '\n' ' ')"
+    if [ -n "${stopped// /}" ]; then
+      say "${Y}  ماشينة متوقفة — تشغيل…${N}"
+      for id in $stopped; do
+        "$FLY" machine start "$id" -a "$APP" >/dev/null 2>&1 && ok "  ▶ $id" || bad "  تعذّر تشغيل $id"
+      done
+      sleep 6
+    fi
   fi
 }
 
@@ -144,7 +183,6 @@ watch_loop() {
   local fails=0
   say ""
   say "${Y}مراقبة دائمة${N} — كل ${INTERVAL}ث. أوقفها بـ Ctrl-C."
-  dim "  (الإبقاء ليس مجانيًا في الخطة المدفوعة، لكن حتى خطة pay-as-you-go تُبقي الماشينة بلا فوترة إضافية إن كانت دائمًا مشغّلة بإعداد min_machines_running=1)"
   while true; do
     if health_ok; then
       fails=0
@@ -179,14 +217,7 @@ case "${1:-}" in
     watch_loop
     ;;
   *)
-    cat <<USAGE
-الاستخدام: bash conquest/keep-fly.sh [--watch|--fix|--status]
-
-  (بلا خيار)  اضبط الإعدادات، اطبع الحالة، ثم راقب دائمًا
-  --watch     نفس الشيء مع مخرجات مباشرة
-  --fix       اضبط الإعدادات واطبع الحالة ثم اخرج
-  --status    اطبع الحالة فقط
-USAGE
+    usage
     exit 1
     ;;
 esac
