@@ -1,10 +1,20 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<!-- English is the default language (CrazyGames requires it; Arabic is a
+     setting). js/i18n.js rewrites lang/dir at import time from the saved
+     choice, so an Arabic player still gets rtl before anything paints. -->
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <meta name="theme-color" content="#0a1220" />
-<title>كونكوست — فتح العالم</title>
+<title>Conquest — World Domination</title>
+<!-- The CrazyGames SDK must be a real <script> tag in <head>, not injected by
+     JavaScript later: their launch checker looks for the tag itself, and with
+     the runtime-injected version it reports "Gameplay Start: not detected"
+     even though gameplayStart() is being called correctly. defer keeps it off
+     the critical path, and js/crazygames.js still treats a missing SDK as a
+     no-op (a downloaded file, or an offline machine, never sees this load). -->
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js" defer></script>
 </head>
 <body>
 <div id="app">
@@ -107,7 +117,7 @@
         <div class="online-card">
           <h3>إنشاء غرفة خاصة</h3>
           <p>ستحصل على كود من 4 أحرف تشاركه مع أصدقائك.</p>
-          <label class="field"><span>اسمك</span><input id="online-name" class="search" maxlength="18" placeholder="قائد" /></label>
+          <label class="field"><span>اسمك</span><input id="online-name" class="search" maxlength="18" placeholder="قائد" autocomplete="off" /></label>
           <div class="field-row">
             <label class="field"><span>الوضع</span>
               <select id="online-mode" class="select">
@@ -6918,10 +6928,20 @@ __def("js/net.js", function (__req, __exp, __reexport) {
 // Online client: WebSocket link to the authoritative server (server.js).
 // The server sends the full world state a few times per second; the client
 // patches its local World/Game objects and sends player intents back.
+const { isEmbedded } = __req("js/crazygames.js");
+const { getLang } = __req("js/i18n.js");
 const { World, setWorldData, rleToGrid } = __req("js/world.js");
 const { Game } = __req("js/state.js");
 
 const SOCKET_TIMEOUT = 12000;
+
+// A name the player never typed: it is shown to other players and in the
+// lobby, so it follows the interface language.
+function defaultName() {
+  return getLang() === "en"
+    ? `Player-${Math.floor(Math.random() * 900 + 100)}`
+    : `لاعب-${Math.floor(Math.random() * 900 + 100)}`;
+}
 
 class NetClient {
   constructor() {
@@ -6977,10 +6997,18 @@ class NetClient {
     return "wss://conquest-online-8129.fly.dev/ws";
   }
 
-  // Hosts that serve the static page and nothing else.
+  // Hosts that serve the page and nothing else — no WebSocket of their own.
+  //
+  // Game portals belong here, and that is not obvious: a page on
+  // www.crazygames.com is a static embed like any other, so without this the
+  // client dials wss://www.crazygames.com/ws (which does not exist) and every
+  // online screen says "could not reach the server" while the page looks fine.
+  // isEmbedded() owns the portal list; keeping one list means the two answers
+  // cannot drift apart.
   static isStaticHost(host) {
     const h = String(host || "").split(":")[0].toLowerCase();
     if (!h) return true; // file:// or opaque origin
+    if (isEmbedded()) return true;
     return (
       h.endsWith(".vercel.app") ||
       h.endsWith(".now.sh") ||
@@ -6988,7 +7016,9 @@ class NetClient {
       h.endsWith(".pages.dev") ||
       h.endsWith(".github.io") ||
       h.endsWith(".web.app") ||
-      h.endsWith(".surge.sh")
+      h.endsWith(".surge.sh") ||
+      h === "localhost.itch.zone" ||
+      h.endsWith(".itch.zone")
     );
   }
 
@@ -7031,7 +7061,7 @@ class NetClient {
       if (name && name !== this.name) this.send({ t: "hello", name, proto: NetClient.PROTOCOL });
       return Promise.resolve(this.status === "online");
     }
-    this.name = String(name || "").trim() || `لاعب-${Math.floor(Math.random() * 900 + 100)}`;
+    this.name = String(name || "").trim() || defaultName();
     this.status = "connecting";
     this.emit("status", this.status);
     return new Promise((resolve) => {
@@ -7798,9 +7828,31 @@ function canLoadSdk() {
   return location.protocol === "http:" || location.protocol === "https:";
 }
 
+// The SDK normally arrives through the <script> tag in index.html, because the
+// portal's checker looks for that tag in <head>. This stays as a fallback for
+// pages built from an older template, and it waits for the tag that may already
+// be loading rather than adding a second copy.
 function loadSdk() {
   if (window.CrazyGames && window.CrazyGames.SDK) return Promise.resolve(window.CrazyGames.SDK);
   if (!canLoadSdk()) return Promise.resolve(null);
+  const inline = document.querySelector('script[src*="crazygames-sdk-v3"]');
+  if (inline) {
+    // The tag is deferred, so it runs after this bundle: wait for its load
+    // event instead of polling, and give up quietly (offline, blocked CDN).
+    return new Promise((resolve) => {
+      const finish = (value) => {
+        clearTimeout(timer);
+        inline.removeEventListener("load", onLoad);
+        inline.removeEventListener("error", onError);
+        resolve(value);
+      };
+      const onLoad = () => finish(window.CrazyGames && window.CrazyGames.SDK ? window.CrazyGames.SDK : null);
+      const onError = () => finish(null);
+      const timer = setTimeout(onError, 6000);
+      inline.addEventListener("load", onLoad);
+      inline.addEventListener("error", onError);
+    });
+  }
   return new Promise((resolve) => {
     const el = document.createElement("script");
     el.src = SDK_URL;
@@ -7817,12 +7869,66 @@ function loadSdk() {
   });
 }
 
+// Hosts that serve an embedded game and nothing else. The page may be on any of
+// them, and none of them can hold a WebSocket, so online play has to dial the
+// game server over there. testing.crazygames.com is the QA environment.
+const EMBED_HOSTS = [
+  "crazygames.com",
+  "crazygames.co.uk",
+  "crazygames.fr",
+  "crazygames.de",
+  "crazygames.es",
+  "crazygames.it",
+  "crazygames.pl",
+  "crazygames.se",
+  "crazygames.dk",
+  "crazygames.no",
+  "crazygames.fi",
+  "crazygames.ru",
+  "crazygames.jp",
+  "crazygames.pt",
+  "crazygames.com.br",
+  "itch.zone",
+  "itch.io",
+  "newgrounds.com",
+  "kongregate.com",
+  "armorgames.com",
+  "poki.com",
+  "poki-gdn.com",
+  "gamepix.com",
+  "gamedistribution.com",
+  "y8.com",
+  "html5games.com",
+  "construct.net",
+];
+
+// True when this page is a portal/embed build rather than our own server.
+//
+// This must be synchronous and must not depend on the SDK: it runs while the
+// module is imported, and net.js uses it to decide which WebSocket to open.
+// Getting it wrong is expensive in one specific way — if the portal's own
+// domain is not in this list, the client dials wss://www.crazygames.com/ws,
+// which does not exist, and every online feature shows "could not reach the
+// server" while the page itself looks fine.
+function isEmbedded() {
+  try {
+    const host = String(location.hostname || "").toLowerCase();
+    if (!host) return false;
+    for (const base of EMBED_HOSTS) {
+      if (host === base || host.endsWith("." + base)) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 // The portal embeds the game in an iframe on crazygames.com; the SDK also
 // exposes systemInfo.applicationType. Either signal is enough to treat this
 // as a portal run, but we never *require* it.
 function looksLikePortal() {
   try {
-    if (/crazygames\.(com|co\.uk)$/.test(location.hostname)) return true;
+    if (isEmbedded()) return true;
     if (window.parent && window.parent !== window) return true;
     if (window.CrazyGames && window.CrazyGames.SDK) return true;
   } catch {
@@ -8104,7 +8210,7 @@ const hasSdk = () => !!state.sdk;
 
 
 __exp.__done = true;
-return { initCrazyGames, onSettingsChange, getSettings, isMuted, isChatDisabled, isPortal, isReady, isInstantMultiplayer, getInviteParams, getSystemInfo, preferredLanguage, gameplayStart, gameplayStop, loadingStart, loadingStop, happytime, reportProgress, roomJoined, roomJoinable, roomLeft, onJoinRoom, inviteLink, getUser, getCachedUser, requestMidgameAd, requestRewardedAd, hasSdk };
+return { isEmbedded, initCrazyGames, onSettingsChange, getSettings, isMuted, isChatDisabled, isPortal, isReady, isInstantMultiplayer, getInviteParams, getSystemInfo, preferredLanguage, gameplayStart, gameplayStop, loadingStart, loadingStop, happytime, reportProgress, roomJoined, roomJoinable, roomLeft, onJoinRoom, inviteLink, getUser, getCachedUser, requestMidgameAd, requestRewardedAd, hasSdk };
 });
 
 __def("js/main.js", function (__req, __exp, __reexport) {
@@ -8343,12 +8449,43 @@ const online = {
   chatOpen: true,
 };
 
+// A generated name has to match the UI language, and it is stored, so it
+// outlives the moment it was made: an Arabic "لاعب-952" showed up in the
+// English build and stayed in the name field forever. Generated names are
+// therefore remembered separately from typed ones — a real name the player
+// typed is never replaced, but a generated one is regenerated when the
+// language changes.
+function generatedName() {
+  return getLang() === "en"
+    ? `Player-${Math.floor(Math.random() * 900 + 100)}`
+    : `قائد-${Math.floor(Math.random() * 900 + 100)}`;
+}
+
 function onlineName() {
   let name = ($("#online-name").value || "").trim();
-  if (!name) name = profile.settings.name || `قائد-${Math.floor(Math.random() * 900 + 100)}`;
+  const saved = profile.settings.name || "";
+  if (!name) {
+    // Fresh game, or the saved name is a leftover from the other language.
+    name = profile.settings.nameAuto || (looksGenerated(saved) ? "" : saved) || generatedName();
+    profile.settings.nameAuto = name;
+    const box = $("#online-name");
+    if (box) box.value = name;
+  }
   profile.settings.name = name;
   saveSettings();
   return name;
+}
+
+// Names we made up ourselves — safe to discard when the language changes.
+function looksGenerated(name) {
+  return /^(Player|لاعب|قائد)-\d{3}$/.test(String(name || ""));
+}
+
+// A generated name that belongs to the other language: Arabic script in an
+// English UI, or Latin script in an Arabic one.
+function nameMatchesLanguage(name) {
+  const arabic = /[\u0600-\u06FF]/.test(String(name || ""));
+  return getLang() === "en" ? !arabic : arabic;
 }
 
 async function openOnlineHome() {
@@ -8358,6 +8495,16 @@ async function openOnlineHome() {
   show("online");
   $("#online-home").hidden = false;
   $("#online-lobby").hidden = true;
+  // Show the name the player will appear under, not an empty box: the lobby,
+  // the room list and the chat all use it, and an empty field was filled with a
+  // generated name later — which is how "لاعب-952" ended up on screen in the
+  // English build. Generated here, once, in the current language.
+  const savedName = profile.settings.name || "";
+  if (!savedName || (looksGenerated(savedName) && !nameMatchesLanguage(savedName))) {
+    profile.settings.name = generatedName();
+    profile.settings.nameAuto = profile.settings.name;
+    saveSettings();
+  }
   $("#online-name").value = profile.settings.name || "";
   // Show the invite code immediately. A friend who followed an invite should
   // see which room they are heading into even if the server is briefly down,

@@ -39,9 +39,31 @@ function canLoadSdk() {
   return location.protocol === "http:" || location.protocol === "https:";
 }
 
+// The SDK normally arrives through the <script> tag in index.html, because the
+// portal's checker looks for that tag in <head>. This stays as a fallback for
+// pages built from an older template, and it waits for the tag that may already
+// be loading rather than adding a second copy.
 function loadSdk() {
   if (window.CrazyGames && window.CrazyGames.SDK) return Promise.resolve(window.CrazyGames.SDK);
   if (!canLoadSdk()) return Promise.resolve(null);
+  const inline = document.querySelector('script[src*="crazygames-sdk-v3"]');
+  if (inline) {
+    // The tag is deferred, so it runs after this bundle: wait for its load
+    // event instead of polling, and give up quietly (offline, blocked CDN).
+    return new Promise((resolve) => {
+      const finish = (value) => {
+        clearTimeout(timer);
+        inline.removeEventListener("load", onLoad);
+        inline.removeEventListener("error", onError);
+        resolve(value);
+      };
+      const onLoad = () => finish(window.CrazyGames && window.CrazyGames.SDK ? window.CrazyGames.SDK : null);
+      const onError = () => finish(null);
+      const timer = setTimeout(onError, 6000);
+      inline.addEventListener("load", onLoad);
+      inline.addEventListener("error", onError);
+    });
+  }
   return new Promise((resolve) => {
     const el = document.createElement("script");
     el.src = SDK_URL;
@@ -58,12 +80,66 @@ function loadSdk() {
   });
 }
 
+// Hosts that serve an embedded game and nothing else. The page may be on any of
+// them, and none of them can hold a WebSocket, so online play has to dial the
+// game server over there. testing.crazygames.com is the QA environment.
+const EMBED_HOSTS = [
+  "crazygames.com",
+  "crazygames.co.uk",
+  "crazygames.fr",
+  "crazygames.de",
+  "crazygames.es",
+  "crazygames.it",
+  "crazygames.pl",
+  "crazygames.se",
+  "crazygames.dk",
+  "crazygames.no",
+  "crazygames.fi",
+  "crazygames.ru",
+  "crazygames.jp",
+  "crazygames.pt",
+  "crazygames.com.br",
+  "itch.zone",
+  "itch.io",
+  "newgrounds.com",
+  "kongregate.com",
+  "armorgames.com",
+  "poki.com",
+  "poki-gdn.com",
+  "gamepix.com",
+  "gamedistribution.com",
+  "y8.com",
+  "html5games.com",
+  "construct.net",
+];
+
+// True when this page is a portal/embed build rather than our own server.
+//
+// This must be synchronous and must not depend on the SDK: it runs while the
+// module is imported, and net.js uses it to decide which WebSocket to open.
+// Getting it wrong is expensive in one specific way — if the portal's own
+// domain is not in this list, the client dials wss://www.crazygames.com/ws,
+// which does not exist, and every online feature shows "could not reach the
+// server" while the page itself looks fine.
+export function isEmbedded() {
+  try {
+    const host = String(location.hostname || "").toLowerCase();
+    if (!host) return false;
+    for (const base of EMBED_HOSTS) {
+      if (host === base || host.endsWith("." + base)) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 // The portal embeds the game in an iframe on crazygames.com; the SDK also
 // exposes systemInfo.applicationType. Either signal is enough to treat this
 // as a portal run, but we never *require* it.
 function looksLikePortal() {
   try {
-    if (/crazygames\.(com|co\.uk)$/.test(location.hostname)) return true;
+    if (isEmbedded()) return true;
     if (window.parent && window.parent !== window) return true;
     if (window.CrazyGames && window.CrazyGames.SDK) return true;
   } catch {

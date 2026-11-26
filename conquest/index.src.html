@@ -1,10 +1,20 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<!-- English is the default language (CrazyGames requires it; Arabic is a
+     setting). js/i18n.js rewrites lang/dir at import time from the saved
+     choice, so an Arabic player still gets rtl before anything paints. -->
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <meta name="theme-color" content="#0a1220" />
-<title>كونكوست — فتح العالم</title>
+<title>Conquest — World Domination</title>
+<!-- The CrazyGames SDK must be a real <script> tag in <head>, not injected by
+     JavaScript later: their launch checker looks for the tag itself, and with
+     the runtime-injected version it reports "Gameplay Start: not detected"
+     even though gameplayStart() is being called correctly. defer keeps it off
+     the critical path, and js/crazygames.js still treats a missing SDK as a
+     no-op (a downloaded file, or an offline machine, never sees this load). -->
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -111,7 +121,7 @@
         <div class="online-card">
           <h3>إنشاء غرفة خاصة</h3>
           <p>ستحصل على كود من 4 أحرف تشاركه مع أصدقائك.</p>
-          <label class="field"><span>اسمك</span><input id="online-name" class="search" maxlength="18" placeholder="قائد" /></label>
+          <label class="field"><span>اسمك</span><input id="online-name" class="search" maxlength="18" placeholder="قائد" autocomplete="off" /></label>
           <div class="field-row">
             <label class="field"><span>الوضع</span>
               <select id="online-mode" class="select">

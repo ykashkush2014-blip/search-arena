@@ -1,10 +1,20 @@
 // Online client: WebSocket link to the authoritative server (server.js).
 // The server sends the full world state a few times per second; the client
 // patches its local World/Game objects and sends player intents back.
+import { isEmbedded } from "./crazygames.js";
+import { getLang } from "./i18n.js";
 import { World, setWorldData, rleToGrid } from "./world.js";
 import { Game } from "./state.js";
 
 const SOCKET_TIMEOUT = 12000;
+
+// A name the player never typed: it is shown to other players and in the
+// lobby, so it follows the interface language.
+function defaultName() {
+  return getLang() === "en"
+    ? `Player-${Math.floor(Math.random() * 900 + 100)}`
+    : `لاعب-${Math.floor(Math.random() * 900 + 100)}`;
+}
 
 export class NetClient {
   constructor() {
@@ -60,10 +70,18 @@ export class NetClient {
     return "wss://conquest-online-8129.fly.dev/ws";
   }
 
-  // Hosts that serve the static page and nothing else.
+  // Hosts that serve the page and nothing else — no WebSocket of their own.
+  //
+  // Game portals belong here, and that is not obvious: a page on
+  // www.crazygames.com is a static embed like any other, so without this the
+  // client dials wss://www.crazygames.com/ws (which does not exist) and every
+  // online screen says "could not reach the server" while the page looks fine.
+  // isEmbedded() owns the portal list; keeping one list means the two answers
+  // cannot drift apart.
   static isStaticHost(host) {
     const h = String(host || "").split(":")[0].toLowerCase();
     if (!h) return true; // file:// or opaque origin
+    if (isEmbedded()) return true;
     return (
       h.endsWith(".vercel.app") ||
       h.endsWith(".now.sh") ||
@@ -71,7 +89,9 @@ export class NetClient {
       h.endsWith(".pages.dev") ||
       h.endsWith(".github.io") ||
       h.endsWith(".web.app") ||
-      h.endsWith(".surge.sh")
+      h.endsWith(".surge.sh") ||
+      h === "localhost.itch.zone" ||
+      h.endsWith(".itch.zone")
     );
   }
 
@@ -114,7 +134,7 @@ export class NetClient {
       if (name && name !== this.name) this.send({ t: "hello", name, proto: NetClient.PROTOCOL });
       return Promise.resolve(this.status === "online");
     }
-    this.name = String(name || "").trim() || `لاعب-${Math.floor(Math.random() * 900 + 100)}`;
+    this.name = String(name || "").trim() || defaultName();
     this.status = "connecting";
     this.emit("status", this.status);
     return new Promise((resolve) => {

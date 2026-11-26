@@ -256,12 +256,43 @@ const online = {
   chatOpen: true,
 };
 
+// A generated name has to match the UI language, and it is stored, so it
+// outlives the moment it was made: an Arabic "لاعب-952" showed up in the
+// English build and stayed in the name field forever. Generated names are
+// therefore remembered separately from typed ones — a real name the player
+// typed is never replaced, but a generated one is regenerated when the
+// language changes.
+function generatedName() {
+  return getLang() === "en"
+    ? `Player-${Math.floor(Math.random() * 900 + 100)}`
+    : `قائد-${Math.floor(Math.random() * 900 + 100)}`;
+}
+
 function onlineName() {
   let name = ($("#online-name").value || "").trim();
-  if (!name) name = profile.settings.name || `قائد-${Math.floor(Math.random() * 900 + 100)}`;
+  const saved = profile.settings.name || "";
+  if (!name) {
+    // Fresh game, or the saved name is a leftover from the other language.
+    name = profile.settings.nameAuto || (looksGenerated(saved) ? "" : saved) || generatedName();
+    profile.settings.nameAuto = name;
+    const box = $("#online-name");
+    if (box) box.value = name;
+  }
   profile.settings.name = name;
   saveSettings();
   return name;
+}
+
+// Names we made up ourselves — safe to discard when the language changes.
+function looksGenerated(name) {
+  return /^(Player|لاعب|قائد)-\d{3}$/.test(String(name || ""));
+}
+
+// A generated name that belongs to the other language: Arabic script in an
+// English UI, or Latin script in an Arabic one.
+function nameMatchesLanguage(name) {
+  const arabic = /[\u0600-\u06FF]/.test(String(name || ""));
+  return getLang() === "en" ? !arabic : arabic;
 }
 
 async function openOnlineHome() {
@@ -271,6 +302,16 @@ async function openOnlineHome() {
   show("online");
   $("#online-home").hidden = false;
   $("#online-lobby").hidden = true;
+  // Show the name the player will appear under, not an empty box: the lobby,
+  // the room list and the chat all use it, and an empty field was filled with a
+  // generated name later — which is how "لاعب-952" ended up on screen in the
+  // English build. Generated here, once, in the current language.
+  const savedName = profile.settings.name || "";
+  if (!savedName || (looksGenerated(savedName) && !nameMatchesLanguage(savedName))) {
+    profile.settings.name = generatedName();
+    profile.settings.nameAuto = profile.settings.name;
+    saveSettings();
+  }
   $("#online-name").value = profile.settings.name || "";
   // Show the invite code immediately. A friend who followed an invite should
   // see which room they are heading into even if the server is briefly down,
