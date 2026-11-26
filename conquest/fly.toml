@@ -1,4 +1,4 @@
-# CONQUEST — إعداد Fly.io
+# CONQUEST — إعداد Fly.io (التطبيق الحقيقي: conquest-online-8129)
 #
 # النشر:  cd conquest && fly launch --copy-config --no-deploy   ثم  fly deploy
 # (أو fly deploy مباشرة إذا كان التطبيق موجودًا)
@@ -6,13 +6,18 @@
 # تطبيق واحد يقدّم الصفحة + ملفات اللعبة + WebSocket على نفس المنفذ،
 # لذلك الأونلاين (غرف بكود) يعمل بلا أي إعداد إضافي.
 #
-# ملاحظة: اسم التطبيق يجب أن يكون فريدًا على مستوى Fly كلّه.
-# إن كان "conquest-online" محجوزًا، غيّر السطر أدناه إلى اسم آخر.
+# اسم التطبيق يجب أن يطابق ما تنشره فعلًا. كان هنا "conquest-online" بينما
+# التطبيق الحقيقي "conquest-online-8129"، فأي `fly deploy` من داخل مجلد
+# conquest ينشئ/ينشر تطبيقًا آخر — أي أن النشر ينجح ولا يتغيّر شيء في اللعبة.
 
-app = "conquest-online"
+app = "conquest-online-8129"
 primary_region = "fra" # fra / cdg / ams / iad — أقرب منطقة لك
 
 [build]
+  # الصورة تُبنى من Dockerfile (بلا تبعيات، Node 22 + ملفات اللعبة فقط).
+  # قسم [build] الفارغ كان يعني أن Fly تختار الباني بنفسها — وهذا يتغيّر
+  # بين إصدارات flyctl، وقد ينتج نشرًا يفشل بلا سبب واضح.
+  dockerfile = "Dockerfile"
 
 [env]
   PORT = "8080"
