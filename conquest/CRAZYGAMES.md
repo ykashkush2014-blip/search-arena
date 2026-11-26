@@ -91,6 +91,21 @@ no Arabic survives on the canvas in English mode (and that Arabic is still
 there in Arabic mode). `.smoketest/sweep.mjs` opens the campaigns list, a
 campaign detail card, a live campaign match, the how-to and medals panels.
 
+
+### QA round 1 (portal screenshot) — what the checker reported and why
+
+| Panel says | Real cause | Fix |
+|---|---|---|
+| **Could not reach the server** (online panel) | The page host was not in the static-host list, so the client dialled `wss://www.crazygames.com/ws`, which does not exist. The portal is as static as Vercel. | `isEmbedded()` owns one host list; `net.js` imports it. `urlcheck.mjs` asserts 8 hosts, including the QA origin. |
+| **Gameplay Start: not detected** | The SDK was injected by JS at runtime. The checker looks for a `<script>` tag in `<head>`. | Deferred tag in the template; the loader waits for its load event. A downloaded copy still degrades to a no-op. |
+| Arabic document in English mode | `html lang="ar" dir="rtl"` was hardcoded. | `lang="en" dir="ltr"` + the existing runtime rewrite from the saved language. |
+| `لاعب-952` in the English build | The default name was generated in Arabic and then **stored**, so it outlived the language switch. | Generated names follow the language; a leftover from the other script is replaced; a typed name is never touched. `namecheck.mjs` covers all four cases. |
+
+Note on `Gameplay Start`: the QA panel also needs the game to actually enter a
+match. It is called from the game loop (`main.js` ~1798) when a match is live,
+so the tester has to start one — launching into the menu and waiting will keep
+reporting "not detected" even with a correct tag.
+
 ---
 
 ## Gameplay requirements
