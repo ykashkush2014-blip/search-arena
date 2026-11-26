@@ -2945,14 +2945,28 @@ async function boot() {
     }
   }, 3000);
 
+  // Yes/no questions go through the in-game modal: a native confirm() can be
+  // blocked inside the portal's iframe and renders browser chrome the game
+  // cannot style or translate.
+  function askConfirm(text, onYes) {
+    const modal = $("#modal-confirm");
+    if (!modal) return;
+    $("#confirm-text").textContent = text;
+    modal.hidden = false;
+    $("#btn-confirm-yes").onclick = () => {
+      modal.hidden = true;
+      onYes();
+    };
+  }
+
+  const btnPriv = $("#btn-privacy");
+  if (btnPriv) btnPriv.onclick = () => ($("#modal-privacy").hidden = false);
+
   const btnSurr = $("#btn-surrender");
   if (btnSurr) {
     btnSurr.onclick = () => {
       if (!net.room) return;
-      // confirm() renders chrome-localised browser text around our string, so
-      // the message itself has to come from the dictionary.
-      if (!confirm(t("هل تريد الاستسلام؟ ستخرج من المباراة."))) return;
-      net.act("surrender");
+      askConfirm(t("هل تريد الاستسلام؟ ستخرج من المباراة."), () => net.act("surrender"));
     };
   }
 

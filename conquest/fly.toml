@@ -17,6 +17,10 @@ primary_region = "fra" # fra / cdg / ams / iad — أقرب منطقة لك
 [env]
   PORT = "8080"
   NODE_ENV = "production"
+  # سقف الغرف: كل غرفة ~50MB في الذاكرة، والماشينة 512MB. بلا سقف تنفد
+  # الذاكرة بعد ليلة من إنشاء الغرف، فيقتل Fly العملية ويبدو الأمر وكأن
+  # الخادم "انطفأ من نفسه". الرفض المهذّب أفضل من الموت.
+  MAX_ROOMS = "6"
 
 [http_service]
   internal_port = 8080
@@ -26,6 +30,8 @@ primary_region = "fra" # fra / cdg / ams / iad — أقرب منطقة لك
   # هنا عمودي (shared-cpu-2x) لا أفقي؛ وللتوسّع الأفقي لاحقًا يلزم مخزن
   # مشترك (Redis) للغرف، وهذا تغيير معماري لا إعداد.
   # لا تُوقف الماشين أبدًا: الغرف تعيش في ذاكرة الخادم، وإيقافه يمسح المباريات.
+  # (auto_stop_machines الافتراضي في Fly هو true — أي أن التطبيق ينطفئ بعد
+  # دقائق من الخمول. هذه القيمة هي أهم سطر في الملف كلّه.)
   auto_stop_machines = false
   auto_start_machines = true
   min_machines_running = 1

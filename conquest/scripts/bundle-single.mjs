@@ -204,7 +204,12 @@ const heroB64 = hero.toString("base64");
 // index.html: keep the markup, drop the module script, stylesheet link and the
 // Google Fonts (they need the network; a single file must open offline, so the
 // font stack degrades to the system Arabic fonts already in styles.css).
-let html = read("index.html");
+// Two outputs from one template:
+//   dist/conquest.html — the shipped, double-clickable single file
+//   index.html         — the same bundle, so the Fly/Vercel server serves the
+//                        real game instead of the old multi-file page
+// index.html is generated: edit index.src.html, never index.html.
+let html = read("index.src.html");
 html = html.replace(/<link rel="preconnect"[^>]*>\s*/g, "");
 html = html.replace(/<link href="https:\/\/fonts\.googleapis\.com[^>]*>\s*/g, "");
 html = html.replace(/<link rel="stylesheet" href="\.\/styles\.css"\s*\/?>\s*/g, "");
@@ -263,6 +268,8 @@ html = html.replace(/url\("\.\/media\/hero\.jpg"\)/g, () => `url("data:image/jpe
 
 mkdirSync(join(ROOT, "dist"), { recursive: true });
 const out = join(ROOT, "dist/conquest.html");
+const outServed = join(ROOT, "index.html");
 writeFileSync(out, html);
+writeFileSync(outServed, html);
 const kb = (Buffer.byteLength(html) / 1024).toFixed(0);
-console.log(`✓ dist/conquest.html — ${kb} KB (${MODULES.length} modules + map + styles inlined)`);
+console.log(`✓ dist/conquest.html + index.html — ${kb} KB (${MODULES.length} modules + map + styles inlined)`);

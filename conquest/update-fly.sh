@@ -16,7 +16,7 @@
 #    REGION=fra                 منطقة الإنشاء لو لم يكن التطبيق موجودًا
 # ═══════════════════════════════════════════════════════════════════════════
 set -uo pipefail
-VERSION="2026-11-22.3"
+VERSION="2026-11-26.1"
 
 REPO_SLUG="${REPO_SLUG:-ykashkush2014-blip/search-arena}"
 BRANCH="${BRANCH:-arena/07357b19-search-arena}"
@@ -106,7 +106,19 @@ else
   "$FLY" deploy --build-arg "GIT_SHA=${SHA:-dev}" --ha=false --yes || die "فشل النشر. راجع: fly logs -a $APP"
 fi
 
-# ---- 4) تحقّق ---------------------------------------------------------------
+# ---- 4) لا تُطفئ الماشينة أبدًا ---------------------------------------------
+# fly.toml يضبط auto_stop_machines=false، لكن هذا الإعداد يعيش في الخدمة على
+# مستوى التطبيق أيضًا، و`fly deploy` لا يعيد ضبطه دائمًا. الخادم الذي ينطفئ بعد
+# دقائق من الخمول هو بالضبط ما حاولنا منعه، لذا نفرضه صراحةً بعد النشر.
+say "ضبط عدم الإطفاء…"
+"$FLY" services update "$APP" --http-service-auto-stop-machines=false >/dev/null 2>&1 \
+  && echo "  ✓ auto_stop_machines = false" \
+  || echo "  ⚠ تعذّر ضبطه عبر services update (fly.toml يغلّبه)"
+"$FLY" services update "$APP" --http-service-min-machines-running=1 >/dev/null 2>&1 \
+  && echo "  ✓ min_machines_running = 1" \
+  || echo "  ⚠ تعذّر ضبط min_machines_running"
+
+# ---- 5) تحقّق ---------------------------------------------------------------
 URL="https://$APP.fly.dev"
 
 # الغرف تُحفظ في ذاكرة العملية نفسها (بلا قاعدة بيانات مشتركة)، لذلك ماشينتان
@@ -195,3 +207,6 @@ fi
 say "تم ✅"
 echo "  اللعبة + الأونلاين: $URL"
 echo "  السجلّات:           $FLY logs -a $APP"
+echo ""
+echo "  للإبقاء عليه حيًّا في الخلفية (موصى به — يمنع الإطفاء ويراقب كل 30ث):"
+echo "    nohup bash conquest/keep-fly.sh > conquest/fly-keep.log 2>&1 &"

@@ -156,6 +156,13 @@
             <li>الخادم هو الحكم — لا مجال للغش من المتصفح.</li>
             <li>لو انقطع لاعب، يدير الذكاء الاصطناعي دولته حتى يعود.</li>
           </ul>
+          <!-- CrazyGames asks for a privacy notice whenever a game sends data to
+               its own server (online names, room codes, chat). A quiet line with
+               an in-game policy is what their docs recommend — not a popup. -->
+          <p class="privacy-note">
+            باللعب أونلاين يُرسل اسمك المختار وكود الغرفة ورسائل الدردشة إلى خادم اللعبة لإدارة المباراة.
+            <button class="link-btn" id="btn-privacy" type="button">سياسة الخصوصية</button>
+          </p>
         </div>
       </div>
     </div>
@@ -372,6 +379,45 @@
     <div class="modal-card wide">
       <header><h3>الأوسمة</h3><button class="icon-btn" data-close>✕</button></header>
       <div class="medal-grid" id="medal-grid"></div>
+    </div>
+  </div>
+
+  <!-- Privacy policy, kept in-game (Bloxd.io style) so the build stays one file. -->
+  <div class="modal" id="modal-privacy" hidden>
+    <div class="modal-card">
+      <header><h3>سياسة الخصوصية</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="howto">
+        <h4>اللعب الفردي</h4>
+        <ul>
+          <li>لا يغادر أي شيء جهازك — التقدم والأوسمة والإعدادات تُحفظ محليًا في متصفحك فقط.</li>
+        </ul>
+        <h4>اللعب الأونلاين</h4>
+        <ul>
+          <li>يُرسل اسمك المختار وكود الغرفة وأفعالك داخل المباراة ورسائل الدردشة إلى خادم اللعبة، لأن الخادم هو من يدير المباراة بين اللاعبين.</li>
+          <li>رسائل الدردشة تمر عبر فلتر ألفاظ نابية قبل عرضها على باقي اللاعبين.</li>
+        </ul>
+        <h4>ما لا نفعله</h4>
+        <ul>
+          <li>لا حسابات ولا بريد إلكتروني ولا كلمات مرور.</li>
+          <li>لا تتبع إعلاني ولا بيع لأي بيانات.</li>
+        </ul>
+        <h4>الحذف</h4>
+        <ul>
+          <li>بياناتك المحلية تُحذف فورًا بمسح بيانات الموقع من إعدادات متصفحك.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic in-game confirm. Native confirm() can be blocked or ugly inside
+       the portal iframe, so every yes/no question goes through this modal. -->
+  <div class="modal" id="modal-confirm" hidden>
+    <div class="modal-card narrow">
+      <h3 id="confirm-text" style="margin:0 0 14px"></h3>
+      <div class="menu-list">
+        <button class="btn danger" id="btn-confirm-yes" type="button">تأكيد</button>
+        <button class="btn ghost" type="button" data-close>إلغاء</button>
+      </div>
     </div>
   </div>
 
@@ -1067,6 +1113,16 @@ input, select { font-family: inherit; }
 .online-status.ok { color: #b5eeb2; border-color: rgba(142,217,138,0.4); }
 .online-status.bad { color: #ffb4ae; border-color: rgba(255,125,116,0.4); }
 .online-tips { margin: 0; padding-inline-start: 18px; font-size: 11px; color: var(--muted); line-height: 1.8; }
+
+/* privacy notice under the online panel (CrazyGames: own-server data needs one) */
+.privacy-note {
+  margin: 14px 0 0; font-size: 11px; color: rgba(147, 166, 189, 0.75);
+  text-align: center; line-height: 1.8;
+}
+.link-btn {
+  background: none; border: none; padding: 0;
+  color: var(--blue); font-size: inherit; text-decoration: underline;
+}
 
 /* lobby */
 /* الخريطة للعرض فقط، واختيار الدولة من قائمة على اليمين (RTL) — كما في
@@ -2133,6 +2189,26 @@ const EN = {
   "الهدف:": "Goal:",
   "من الأرض": "of the world",
   "الهدف الأرضي": "Land goal",
+  // --- privacy notice and policy (CrazyGames requirement for own-server data)
+  "باللعب أونلاين يُرسل اسمك المختار وكود الغرفة ورسائل الدردشة إلى خادم اللعبة لإدارة المباراة.":
+    "Playing online sends your chosen name, room code and chat messages to the game server to run the match.",
+  "سياسة الخصوصية": "Privacy policy",
+  "اللعب الفردي": "Single player",
+  "لا يغادر أي شيء جهازك — التقدم والأوسمة والإعدادات تُحفظ محليًا في متصفحك فقط.":
+    "Nothing leaves your device — progress, medals and settings are stored locally in your browser only.",
+  "اللعب الأونلاين": "Online play",
+  "يُرسل اسمك المختار وكود الغرفة وأفعالك داخل المباراة ورسائل الدردشة إلى خادم اللعبة، لأن الخادم هو من يدير المباراة بين اللاعبين.":
+    "Your chosen name, room code, in-match actions and chat messages are sent to the game server, because the server runs the match between players.",
+  "رسائل الدردشة تمر عبر فلتر ألفاظ نابية قبل عرضها على باقي اللاعبين.":
+    "Chat messages pass through a profanity filter before other players see them.",
+  "ما لا نفعله": "What we never do",
+  "لا حسابات ولا بريد إلكتروني ولا كلمات مرور.": "No accounts, no email, no passwords.",
+  "لا تتبع إعلاني ولا بيع لأي بيانات.": "No ad tracking and no selling of any data.",
+  "الحذف": "Deletion",
+  "بياناتك المحلية تُحذف فورًا بمسح بيانات الموقع من إعدادات متصفحك.":
+    "Your local data is deleted instantly by clearing site data in your browser settings.",
+  "تأكيد": "Confirm",
+  "إلغاء": "Cancel",
 };
 
 
@@ -10956,14 +11032,28 @@ async function boot() {
     }
   }, 3000);
 
+  // Yes/no questions go through the in-game modal: a native confirm() can be
+  // blocked inside the portal's iframe and renders browser chrome the game
+  // cannot style or translate.
+  function askConfirm(text, onYes) {
+    const modal = $("#modal-confirm");
+    if (!modal) return;
+    $("#confirm-text").textContent = text;
+    modal.hidden = false;
+    $("#btn-confirm-yes").onclick = () => {
+      modal.hidden = true;
+      onYes();
+    };
+  }
+
+  const btnPriv = $("#btn-privacy");
+  if (btnPriv) btnPriv.onclick = () => ($("#modal-privacy").hidden = false);
+
   const btnSurr = $("#btn-surrender");
   if (btnSurr) {
     btnSurr.onclick = () => {
       if (!net.room) return;
-      // confirm() renders chrome-localised browser text around our string, so
-      // the message itself has to come from the dictionary.
-      if (!confirm(t("هل تريد الاستسلام؟ ستخرج من المباراة."))) return;
-      net.act("surrender");
+      askConfirm(t("هل تريد الاستسلام؟ ستخرج من المباراة."), () => net.act("surrender"));
     };
   }
 

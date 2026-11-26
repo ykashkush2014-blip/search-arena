@@ -682,6 +682,16 @@ input, select { font-family: inherit; }
 .online-status.bad { color: #ffb4ae; border-color: rgba(255,125,116,0.4); }
 .online-tips { margin: 0; padding-inline-start: 18px; font-size: 11px; color: var(--muted); line-height: 1.8; }
 
+/* privacy notice under the online panel (CrazyGames: own-server data needs one) */
+.privacy-note {
+  margin: 14px 0 0; font-size: 11px; color: rgba(147, 166, 189, 0.75);
+  text-align: center; line-height: 1.8;
+}
+.link-btn {
+  background: none; border: none; padding: 0;
+  color: var(--blue); font-size: inherit; text-decoration: underline;
+}
+
 /* lobby */
 /* الخريطة للعرض فقط، واختيار الدولة من قائمة على اليمين (RTL) — كما في
    الوضع العادي. العمود على اليمين لأن dir=rtl: أول عمود يظهر يمينًا. */

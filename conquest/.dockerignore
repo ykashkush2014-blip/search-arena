@@ -1,11 +1,28 @@
 # ملفات لا تدخل الصورة — الصورة تحتاج اللعبة فقط.
 .git
 .gitignore
-__harness_*
-deploy
-scripts
+.dockerignore
+Dockerfile
+fly.toml
 vercel.json
 README.md
-Dockerfile
-.dockerignore
-fly.toml
+deploy
+scripts
+
+# تبعيات التطوير: الخادم بلا أي تبعية (zero-dependency) وهذه فقط لمُشغّلات
+# الاختبار (jsdom). نسخها إلى الصورة يضيف 22MB بلا فائدة، والخادم نفسه يرمي
+# «Cannot find package» لو حاول تحميلها — أي أنها ليست ضرورية أصلًا.
+node_modules
+package.json
+package-lock.json
+.smoketest
+__harness_*
+
+# قالب الصفحة: index.html هو البناء الجاهز الذي يُقدَّم فعلًا. الاحتفاظ
+# بالقالب في الصورة يخلق نسختين قد تختلفان، ويُضلّل من يفتح الملف داخل الحاوية.
+index.src.html
+
+# الملفات القديمة/المولّدة
+dist
+*.zip
+*.log

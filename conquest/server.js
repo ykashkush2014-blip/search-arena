@@ -29,6 +29,9 @@ const BUILD = (process.env.GIT_SHA || process.env.FLY_IMAGE_REF || "dev").slice(
 // what keeps every player in the same in-memory world.
 const BOOT_ID = `${BUILD}-${Math.random().toString(36).slice(2, 8)}`;
 const PORT = Number(process.argv[2] || process.env.PORT || 5173);
+// 512 MB machine, ~56 MB idle and ~50 MB per live room: 6 rooms leaves headroom.
+// Override with MAX_ROOMS when the VM size changes.
+const MAX_ROOMS = Math.max(1, Number(process.env.MAX_ROOMS) || 6);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -846,6 +849,14 @@ function setupClient(client) {
       }
       case "create": {
         if (room) return sendJSON(client, { t: "error", text: "أنت في غرفة بالفعل" });
+        // A room holds a full world in memory (~50 MB per the measurement in
+        // fly.toml) and this process is meant to run forever. Without a ceiling
+        // an idle night of room creation ends in an OOM kill — which is exactly
+        // the "server turned itself off" this deployment is trying to avoid.
+        // Refusing politely is recoverable; dying is not.
+        if (rooms.size >= MAX_ROOMS) {
+          return sendJSON(client, { t: "error", text: "الخادم مشغول بالكامل — جرّب بعد قليل" });
+        }
         let code;
         do {
           code = makeCode(Math.random);

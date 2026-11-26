@@ -675,4 +675,24 @@ export const EN = {
   "الهدف:": "Goal:",
   "من الأرض": "of the world",
   "الهدف الأرضي": "Land goal",
+  // --- privacy notice and policy (CrazyGames requirement for own-server data)
+  "باللعب أونلاين يُرسل اسمك المختار وكود الغرفة ورسائل الدردشة إلى خادم اللعبة لإدارة المباراة.":
+    "Playing online sends your chosen name, room code and chat messages to the game server to run the match.",
+  "سياسة الخصوصية": "Privacy policy",
+  "اللعب الفردي": "Single player",
+  "لا يغادر أي شيء جهازك — التقدم والأوسمة والإعدادات تُحفظ محليًا في متصفحك فقط.":
+    "Nothing leaves your device — progress, medals and settings are stored locally in your browser only.",
+  "اللعب الأونلاين": "Online play",
+  "يُرسل اسمك المختار وكود الغرفة وأفعالك داخل المباراة ورسائل الدردشة إلى خادم اللعبة، لأن الخادم هو من يدير المباراة بين اللاعبين.":
+    "Your chosen name, room code, in-match actions and chat messages are sent to the game server, because the server runs the match between players.",
+  "رسائل الدردشة تمر عبر فلتر ألفاظ نابية قبل عرضها على باقي اللاعبين.":
+    "Chat messages pass through a profanity filter before other players see them.",
+  "ما لا نفعله": "What we never do",
+  "لا حسابات ولا بريد إلكتروني ولا كلمات مرور.": "No accounts, no email, no passwords.",
+  "لا تتبع إعلاني ولا بيع لأي بيانات.": "No ad tracking and no selling of any data.",
+  "الحذف": "Deletion",
+  "بياناتك المحلية تُحذف فورًا بمسح بيانات الموقع من إعدادات متصفحك.":
+    "Your local data is deleted instantly by clearing site data in your browser settings.",
+  "تأكيد": "Confirm",
+  "إلغاء": "Cancel",
 };
