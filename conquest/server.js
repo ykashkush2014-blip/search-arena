@@ -485,7 +485,6 @@ class Room {
           out: this.game.surrendered.has(seat),
           capital: n.capital,
           stats: n.stats,
-          fortifyLeft: Math.max(0, Math.round(((n.fortifyUntil || 0) - this.game.time) * 10) / 10),
         }
         : null,
     };
@@ -1095,8 +1094,10 @@ function applyAction(game, n, msg) {
     }
     case "reclaim":
       return game.reclaim(n, Number(msg.cell));
-    case "fortify":
-      return game.fortify(n);
+    case "reinforce": {
+      const a = msg.id != null ? game.attackById(Number(msg.id)) : null;
+      return game.fortify(n, a ? a.id : null);
+    }
     case "retreat": {
       const a = game.attackById(Number(msg.id));
       if (!a || a.attacker !== n) return "هجوم غير موجود";

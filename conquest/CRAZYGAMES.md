@@ -7,7 +7,7 @@ Everything the portal asks for, and where each requirement is implemented.
 | | |
 |---|---|
 | Build file | `dist/conquest.html` (single self-contained file) |
-| Size | **1.50 MB** (limit 50 MB basic / 250 MB full) |
+| Size | **1.51 MB** (limit 50 MB basic / 250 MB full) |
 | File count | **1** (limit 1500) |
 | External assets | none — map, styles, audio and all 12 modules are inlined |
 | External requests | only `https://sdk.crazygames.com/crazygames-sdk-v3.js` |
@@ -140,6 +140,18 @@ Measured on the shipped build, 400 s of headless play with an idle player: **122
 | 2 | The build square must be visible | the hover was a 1.5 px outline one cell wide, invisible on the map. It is now a filled, pulsing square with a thick outline, a soft halo and corner ticks, green when legal and red when not | `brushsq.mjs` 7/7 |
 | 3 | Bots should not attack the player **until the player touches them** | new provocation gate: an AI may not declare on the human until the human has attacked it or one of its allies. AI-vs-AI wars are untouched (identical scoring to the previous build — my earlier scoring tweak was reverted). Provocation is saved with the game and survives a reload | `untouched.mjs` 10/10 — 10 idle minutes: 0 wars on the player, 50–74 AI-vs-AI war links alive; one attack on a neighbour: it counter-attacks within the same minute |
 | 4 | Remove the instant-start button, rename the picker button to "العب" | quick start deleted; the menu's single button is **العب**, and the picker has its own **العب**. To keep the portal's one-click rule the app now boots straight into the picker with a nation preselected | `oneclick.mjs` 7/7 (load → one click → running match), `crazygames.mjs` 29/29 |
+
+### Round 4 (seven requests)
+
+| # | Requested | What changed | Verified by |
+|---|---|---|---|
+| 1 | Bots **sometimes** attack the player unprovoked (not "never") | the provocation gate from round 3 was too absolute. An unprovoked AI now picks the human occasionally: nothing in the first minute, then a rising chance, gated on having a real advantage (a 25 % band either way). A provoked nation — and its allies — still always fight back | `untouched.mjs` 11/11 — 4/6 seeds attack an idle player, never before 60 s, 4/6 idle players survive 10 minutes, 438 AI-AI war links |
+| 2 | Fortification should send **soldiers**, not cost gold | `fortify()` no longer touches gold at all (a test asserts the treasury is unchanged). It moves troops out of the reserve into the front that is under attack, capped at 25 % of the army cap per order, and the troops raise that front's defence. The HUD button is now **تعزيز / Reinforce**. It also refuses when there is no incoming attack | `reinforce.mjs` 9/9 — 200 000 → 190 829 army, gold unchanged at 1 000, front 25 000 → 34 171 troops |
+| 3 | Price step 18 % → **15 %** | `BALANCE.buildPriceStep = 0.15` | `priceup.mjs` (updated): 775 → 891 → 1 025 → 1 179 → 1 355 → 1 559 |
+| 4 | The game opened on **Liberia** instead of the menu | two bugs. The landing screen had been changed to the picker, and the preselected nation was `pool[length / 2]` — the middle of a size-sorted list, which is literally Liberia. The menu is the landing screen again, and the default pick is a deliberate, recognisable mid-sized nation (Germany, France, Brazil, Japan, Egypt, Turkey, Mexico, India) | `oneclick.mjs` — lands on menu, Play → picker with Germany selected |
+| 5 | No flying navies: cross water only | `seaRoute()` runs a breadth-first search over **water cells only** (typed-array queue, reused between calls) and the renderer animates the convoy along that polyline. If no water path exists the invasion is refused instead of teleported | `searoute.mjs` 10/10 — a 364-cell crossing with **0 land cells** |
+| 6 | Ports only on the shore; a naval attack uses the **nearest** port | `canBuild` refuses `port` anywhere that does not touch water (AI included); `findSailingCell` picks the closest of your own ports to the beachhead | `searoute.mjs` — inland refused, nearest of two ports chosen |
+| 7 | The square follows the pointer, and Shift-drag draws the area | the hover square was cached on the last *stored* cell, so it froze; it is now recomputed on every pointer move, cleared on right-click and on leaving the map, and Shift+drag still paints the rectangle with a live preview | `buildui.mjs` 17/17 — tracks before a click, after a placement, clears on right-click and on pointer-leave |
 
 ---
 

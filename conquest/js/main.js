@@ -678,6 +678,25 @@ function netAct(a, payload) {
 
 // --------------------------------------------------------- country select ---
 
+// The nation a new player lands on. This used to be pool[length / 2], which is
+// fine as code and terrible as a first impression: the middle of a list sorted
+// by size is literally Liberia on the world map, so every new player started as
+// Liberia whether they meant to or not. A short list of recognisable, mid-sized
+// starting countries reads as a deliberate opening move instead.
+const START_PICKS = ["Germany", "France", "Brazil", "Japan", "Egypt", "Turkey", "Mexico", "India"];
+
+function defaultStartNation() {
+  const w = app.pickWorld;
+  if (!w) return null;
+  for (const name of START_PICKS) {
+    const c = w.countries.find((x) => x && x.name === name && w.active[x.id] && w.cellCount[x.id] > 0);
+    if (c) return c.id;
+  }
+  // Fall back to a mid-sized nation, never the smallest or the largest.
+  const pool = w.playable().filter((c) => c.cells > 120).sort((a, b) => b.cells - a.cells);
+  return pool.length ? pool[Math.floor(pool.length / 2)].id : null;
+}
+
 function openCountrySelect(daily) {
   if (!app.pickWorld) {
     app.pickWorld = new World("world", app.era);
@@ -697,10 +716,7 @@ function openCountrySelect(daily) {
   // live match: the player taps a country to change it, or taps Play to go.
   // (The portal's "at most one click to gameplay" rule, kept by making the
   // choice optional rather than making it skippable.)
-  if (!daily && app.selectedId == null) {
-    const pool = app.pickWorld.playable().filter((c) => c.cells > 120);
-    if (pool.length) app.selectedId = pool[Math.floor(pool.length / 2)].id;
-  }
+  if (!daily && app.selectedId == null) app.selectedId = defaultStartNation();
   buildCountryList();
   show("country");
   requestAnimationFrame(() => {
@@ -1468,6 +1484,7 @@ function attachGameInput() {
   const canvas = $("#map");
   const R = () => app.renderer;
   let drag = null;
+  let lastHoverCell = -2;
   let pinch = null;
   let lastTap = 0;
 
@@ -1499,9 +1516,13 @@ function attachGameInput() {
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const cell = R().screenToCell(sx, sy);
-    if (cell !== R().hoverCell) {
-      R().hoverCell = cell;
-      if (R().brush) R().brushOk = !app.game.canBuild(app.game.player(), R().brush, cell);
+    // The square has to follow the pointer even when the cell under it is the
+    // same as last frame's *stored* cell: pointerdown/up reset it, and a stale
+    // value froze the square in place. Recompute it from this event instead.
+    R().hoverCell = cell;
+    if (R().brush) R().brushOk = cell >= 0 && !app.game.canBuild(app.game.player(), R().brush, cell);
+    if (cell !== lastHoverCell) {
+      lastHoverCell = cell;
       updateTooltip(e.clientX, e.clientY, cell);
     }
     if (area.active) {
@@ -1589,7 +1610,11 @@ function attachGameInput() {
 
   canvas.addEventListener("pointerleave", () => {
     $("#tooltip").hidden = true;
+    // Pointer left the map: the square goes too, rather than sticking to the
+    // last cell it saw.
     R().hoverCell = -1;
+    lastHoverCell = -2;
+    R().render();
   });
 
   // two-finger pinch zoom
@@ -1745,10 +1770,10 @@ function handleClick(cell, e) {
 
 function handleRightClick(cell) {
   if (app.brush) {
-    // Right-click ends a build run; the brush now persists after each placement,
-    // so this is the way out that does not require hunting for the card again.
+    // Right-click ends the build run and the square goes with it.
     app.brush = null;
     app.renderer.brush = null;
+    app.renderer.hoverCell = -1;
     $("#map").classList.remove("placing");
     updateTab();
     return;
@@ -2153,7 +2178,7 @@ const TIPS = [
   t("منصة صواريخ تحوّل الأرض إلى خرائب لا يعبرها الجيش."),
   t("الجيش يتجدد أسرع عندما يكون أقل من السقف."),
   t("الدفاع الجوي يعترض صواريخ العدو القريبة."),
-  "التحصين يمنح +30% دفاع لمدة 20 ثانية.",
+  "التعزيز يرسل جنودًا من احتياطيك إلى الجبهة التي تتعرض للهجوم.",
   t("اضغط F للعودة إلى عاصمتك."),
   t("كل بحث يرفع قوة جيشك أو اقتصادك بشكل دائم."),
 ];
@@ -2217,7 +2242,7 @@ function updateEvents() {
     rows.push(`<div class="ev ${incoming ? "top" : ""}">
       <div class="ev-row">
         <b>${mine ? "➤ " + t("هجومك على") + " " + nationName(other) : "⚠ " + nationName(other) + " " + t("تهجم عليك")}</b>
-        <button class="mini" data-retreat="${a.id}">${mine ? t("انسحاب") : t("تحصين")}</button>
+        <button class="mini" data-retreat="${a.id}">${mine ? t("انسحاب") : t("تعزيز")}</button>
       </div>
       <div class="ev-sub">${fmt(a.troops)} ${t("جندي")} • ${a.naval ? t("بحري") : t("برّي")} ${a.landingTimer > 0 ? t("• إنزال…") : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">${t("الجبهة متعثرة")}</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">${t("كمّاشة")}</b>` : ""}</div>
       <div class="bar ${mine ? "adv" : ""}"><i style="width:${pct2}%"></i></div>
@@ -2245,10 +2270,11 @@ function updateEvents() {
         if (netAct("retreat", { id: a.id })) return;
         game.retreat(a.id);
       } else {
-        if (!netAct("fortify", {}) || !online.lastState) {
-          const err = game.fortify(p);
-          toast(err || t("تم تحصين الحدود"), err ? "bad" : "good");
-        }
+        // "Reinforce" ships army into this specific front instead of paying
+        // gold for a temporary buff.
+        if (netAct("reinforce", { id: a ? a.id : null })) return;
+        const err = game.fortify(p, a ? a.id : null);
+        toast(err || t("أُرسلت تعزيزات إلى الجبهة"), err ? "bad" : "good");
       }
       updateEvents();
     };
@@ -2935,7 +2961,7 @@ function howTo() {
     <h4>البداية</h4>
     <ul>
       <li>أول 25 ثانية هدنة: ابنِ مدنًا ومصانع قبل أن تبدأ الحرب.</li>
-      <li>الدول الأخرى لا تهاجمك حتى تلمسها: أول هجوم تشنّه على دولة يجعلها — وحلفاءها — يردّون. قبل ذلك العالم يقاتل بعضه وأنت خارج الحرب.</li>
+      <li>الدول الأخرى تقاتل بعضها دائمًا، وتهاجمك أحيانًا حتى دون استفزاز — لكن ليس في الدقيقة الأولى، وبقوة أكبر منك. أول هجوم تشنّه على دولة يجعلها وحلفاءها يردّون فورًا.</li>
       <li>المدينة ترفع سقف جيشك وذهبك. المصنع يزيد ذهبك. القاعدة تسرّع التجنيد.</li>
       <li>اختر مبنى من الشريط ثم اضغط داخل أرضك: الفرشاة تبقى بيدك، فابنِ عشرة متتالية دون إعادة الاختيار. زر الفأرة الأيمن يوقف.</li>
       <li><code>Shift</code> + سحب يرسم مستطيلًا ويبني فيه كله دفعة واحدة.</li>
@@ -2951,7 +2977,8 @@ function howTo() {
     </ul>
     <h4>الأسطول والغزو البحري</h4>
     <ul>
-      <li>ابنِ ميناء (مفتاح <code>4</code>) ثم اضغط أي دولة في العالم، ولو كانت في القارة الأخرى.</li>
+            <li>الميناء يُبنى على خليتك الساحلية فقط — لا موانئ داخليّة.</li>
+      <li>ثم اضغط أي دولة في العالم: الأسطول ينطلق من أقرب ميناء لك ويسير على الماء فقط، لا يطير فوق الدول، والإنزال يقع عند وصوله إلى ساحلها.</li>
       <li>الأسطول يبحر فعلًا: ترى السفن تعبر الماء من سواحلك إلى ساحل الهدف، والإنزال يقع عند وصولها — والمسافة الأبعد تأخذ وقتًا أطول.</li>
     </ul>
     <h4>البحث</h4>
@@ -3061,16 +3088,10 @@ async function boot() {
       toast(t("تعذر تحميل الحفظ"), "bad");
     }
   };
-  // The picker is the front door now, so "back" from it is the menu (modes,
-  // medals, settings, online) and "back" from the menu is the picker again.
   $("#btn-back-menu").onclick = () => {
     closeModals();
-    if (app.screen === "country") {
-      show("menu");
-      buildMenu();
-    } else {
-      openCountrySelect(false);
-    }
+    show("menu");
+    buildMenu();
   };
   $("#country-search").oninput = () => buildCountryList();
   $("#btn-random").onclick = randomCountry;
@@ -3537,17 +3558,11 @@ async function boot() {
     app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
     attachPickInput();
   }
-  // Land straight in the nation picker.
-  //
-  // The portal allows at most one click before gameplay and the instant-start
-  // button is gone by request, so the click has to be the play button itself.
-  // The picker already arrives with a nation preselected, which makes "العب"
-  // here a genuine one-click start — and the full menu stays reachable from the
-  // back arrow for modes, medals, settings and online.
+  // The menu is the first screen. Online, medals, settings and the daily
+  // challenge all live here, and jumping the player into a nation picker before
+  // they have seen any of that made the game look like it had one mode.
   app.selectedId = null;
-  requestAnimationFrame(() => {
-    openCountrySelect(false);
-  });
+  requestAnimationFrame(() => show("menu"));
 }
 
 // Bracket the load for the portal's measurement: loadingStart must come before

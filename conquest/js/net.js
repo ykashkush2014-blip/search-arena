@@ -669,7 +669,6 @@ export class NetMirror {
         me.cells = state.nation.cells;
         me.capital = state.nation.capital;
         me.stats = state.nation.stats;
-        me.fortifyUntil = game.time + (state.nation.fortifyLeft || 0);
         me.alive = state.nation.alive;
         me.out = !!state.nation.out;
         me.seat = state.you;

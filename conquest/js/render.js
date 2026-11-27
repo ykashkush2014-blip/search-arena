@@ -636,79 +636,82 @@ export class Renderer {
       }
       const targets = a.fronts;
       if (a.naval) {
-        // The fleet: a line from the home coast to the beachhead and ships
-        // travelling along it. Before this the invasion was already decided —
-        // the player ordered it and land changed hands 1.6s later with nothing
-        // on screen in between, so a naval attack was indistinguishable from a
-        // land one.
-        const from = a.sailFrom != null && a.sailFrom >= 0 ? a.sailFrom : a.attacker.capital;
-        if (from < 0 || a.landingAt < 0) continue;
-        const x1 = ((from % w) - this.cam.x) * zoom;
-        const y1 = (((from / w) | 0) - this.cam.y) * zoom;
-        const x2 = ((a.landingAt % w) - this.cam.x) * zoom;
-        const y2 = (((a.landingAt / w) | 0) - this.cam.y) * zoom;
+        // The fleet follows the water route the simulation computed, so the
+        // ships visibly go around continents instead of flying over them.
+        const route = a.route;
+        if (!route || route.length < 2) continue;
         const mine = a.attacker.isPlayer;
         const atSea = !a.landed;
+        const sx = (c) => (c % w) - this.cam.x;
+        const sy = (c) => ((c / w) | 0) - this.cam.y;
         ctx.save();
-        // route
-        ctx.globalAlpha = atSea ? 0.5 : 0.22;
+        // the sailed path, faint: it shows the route without shouting
+        ctx.globalAlpha = atSea ? 0.42 : 0.16;
         ctx.strokeStyle = mine ? "#8fe3ff" : "#ff9d8f";
-        ctx.lineWidth = Math.max(1.2, zoom * 0.3);
-        ctx.setLineDash([6, 5]);
+        ctx.lineWidth = Math.max(1, zoom * 0.22);
+        ctx.setLineDash([5, 6]);
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        const mx = (x1 + x2) / 2;
-        const my = (y1 + y2) / 2 - 40;
-        ctx.quadraticCurveTo(mx, my, x2, y2);
+        for (let i = 0; i < route.length; i += 2) {
+          const px = sx(route[i]) * zoom;
+          const py = sy(route[i]) * zoom;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
         ctx.stroke();
         ctx.setLineDash([]);
 
         if (atSea && a.crossing > 0) {
-          // progress along the curve, 0 at the home coast and 1 at the beach
+          // position along the polyline, 0 at the port and 1 at the beach
           const t = Math.min(1, Math.max(0, 1 - a.landingTimer / a.crossing));
-          const q = (k) => (1 - k) * (1 - k) * x1 + 2 * (1 - k) * k * mx + k * k * x2;
-          const qy = (k) => (1 - k) * (1 - k) * y1 + 2 * (1 - k) * k * my + k * k * y2;
+          const at = (k) => {
+            const idx = Math.min(route.length - 1, Math.max(0, k * (route.length - 1)));
+            const i0 = Math.floor(idx);
+            const i1 = Math.min(route.length - 1, i0 + 1);
+            const f = idx - i0;
+            const c0 = route[i0];
+            const c1 = route[i1];
+            return {
+              x: (sx(c0) + (sx(c1) - sx(c0)) * f) * zoom,
+              y: (sy(c0) + (sy(c1) - sy(c0)) * f) * zoom,
+            };
+          };
           // a small convoy, spaced back along the route
           for (let i = 0; i < 3; i++) {
-            const k = Math.max(0, t - i * 0.045);
-            const px = q(k);
-            const py = qy(k);
-            const ang = Math.atan2(qy(Math.min(1, k + 0.02)) - py, q(Math.min(1, k + 0.02)) - px);
-            const s = Math.max(3, Math.min(9, zoom * 0.7));
+            const k = Math.max(0, t - i * 0.035);
+            const p0 = at(k);
+            const p1 = at(Math.min(1, k + 0.01));
+            const ang = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+            const s2 = Math.max(3, Math.min(9, zoom * 0.7));
             ctx.save();
-            ctx.translate(px, py);
+            ctx.translate(p0.x, p0.y);
             ctx.rotate(ang);
             // hull
             ctx.fillStyle = i === 0 ? "#ffffff" : "rgba(220,240,255,0.85)";
             ctx.beginPath();
-            ctx.moveTo(s * 0.6, 0);
-            ctx.lineTo(-s * 0.5, s * 0.34);
-            ctx.lineTo(-s * 0.3, 0);
-            ctx.lineTo(-s * 0.5, -s * 0.34);
+            ctx.moveTo(s2 * 0.6, 0);
+            ctx.lineTo(-s2 * 0.5, s2 * 0.34);
+            ctx.lineTo(-s2 * 0.3, 0);
+            ctx.lineTo(-s2 * 0.5, -s2 * 0.34);
             ctx.closePath();
             ctx.fill();
             // wake
             ctx.strokeStyle = "rgba(160,220,255,0.55)";
-            ctx.lineWidth = Math.max(1, s * 0.12);
+            ctx.lineWidth = Math.max(1, s2 * 0.12);
             ctx.beginPath();
-            ctx.moveTo(-s * 0.55, 0);
-            ctx.lineTo(-s * 1.4, 0);
+            ctx.moveTo(-s2 * 0.55, 0);
+            ctx.lineTo(-s2 * 1.4, 0);
             ctx.stroke();
             ctx.restore();
           }
-          // beachhead marker, pulsing while the fleet is still at sea
+          // the destination pulses while the fleet is still at sea
+          const endP = at(1);
           ctx.globalAlpha = 0.4 + 0.4 * Math.sin(game.time * 5);
           ctx.strokeStyle = mine ? "#8fe3ff" : "#ff9d8f";
           ctx.lineWidth = Math.max(1, zoom * 0.18);
           ctx.beginPath();
-          ctx.arc(x2, y2, Math.max(4, zoom * 0.8), 0, Math.PI * 2);
+          ctx.arc(endP.x, endP.y, Math.max(4, zoom * 0.8), 0, Math.PI * 2);
           ctx.stroke();
         }
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = "#fff";
-        ctx.beginPath();
-        ctx.arc(x2, y2, 2.6, 0, Math.PI * 2);
-        ctx.fill();
         ctx.restore();
         continue;
       }

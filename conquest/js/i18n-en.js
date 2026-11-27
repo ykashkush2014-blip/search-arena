@@ -765,4 +765,16 @@ export const EN = {
   "الخادم مشغول بالكامل  جرّب بعد قليل": "The server is full — try again in a moment",
   "العب": "Play",
   "اختر دولتك": "Choose your country",
+  "تعزيز": "Reinforce",
+  "أرسلت": "Sent",
+  "جنديًا لتعزيز الجبهة": "soldiers to reinforce the front",
+  "عزّزت جبهتها بـ": "reinforced its front with",
+  "لا يوجد احتياطي كافٍ للتحصين": "Not enough reserve to reinforce",
+  "لا يوجد هجوم جارٍ لتعزيزه": "No incoming attack to reinforce",
+  "أُرسلت تعزيزات إلى الجبهة": "Reinforcements sent to the front",
+  "التعزيز يرسل جنودًا من احتياطيك إلى الجبهة التي تتعرض للهجوم.":
+    "Reinforce sends soldiers from your reserve to the front under attack.",
+  "الميناء يُبنى على الشاطئ فقط": "A port can only be built on the coast",
+  "لا يوجد طريق بحري مفتوح إلى هذا الساحل": "No open sea route to that coast",
+  "ابنِ ميناء للغزو البحري": "build a port to invade by sea",
 };

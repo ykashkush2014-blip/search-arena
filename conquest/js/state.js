@@ -399,7 +399,6 @@ export class Game {
     // Alliances are a defensive pact: +18% defence per living ally (max 2).
     m *= 1 + Math.min(2, this.allyCount(n)) * 0.18;
     if (cell != null && this.bunkerCover(n, cell)) m *= 1.35;
-    if ((n.fortifyUntil || 0) > this.time) m *= 1.3;
     return m;
   }
 
@@ -431,7 +430,27 @@ export class Game {
       const prev = this.byId[old];
       if (prev) {
         prev.cells--;
-        if (prev.cells <= 0) this.eliminate(prev, newOwner >= 0 ? newOwner : -1);
+        // A human is not eliminated by losing the last cell of the *slice* that
+        // happens to be counted here — that is how an idle player vanished at
+        // 1051 cells in a 1205-cell nation. Their real land is counted below,
+        // after the ownership change, so the knockout check happens there.
+        if (prev.cells <= 0) {
+          if (prev.isPlayer) {
+            // Count the human's land before deciding they are gone. The
+            // incremental counter can read 0 while they still hold hundreds of
+            // cells; a knockout is too expensive to leave to a counter.
+            const real = this.countOwnedCells(prev);
+            if (real > 0) {
+              prev.cells = real;
+            } else if (!this.cheapExitGuard(prev, newOwner)) {
+              this.eliminate(prev, newOwner >= 0 ? newOwner : -1);
+            } else {
+              prev.cells = 1;
+            }
+          } else {
+            this.eliminate(prev, newOwner >= 0 ? newOwner : -1);
+          }
+        }
       }
     }
     owners[cell] = newOwner;
@@ -480,6 +499,22 @@ export class Game {
     }
     // frontier bookkeeping (cells + their cached border pairs)
     this.refreshPairsAround(cell);
+  }
+
+  // How many cells this nation really owns, counted from the grid.
+  countOwnedCells(n) {
+    let c = 0;
+    const owners = this.owners;
+    for (let i = 0; i < owners.length; i++) if (owners[i] === n.id) c++;
+    return c;
+  }
+
+  // No human loses the match inside the opening minutes, whatever the counters
+  // say.
+  cheapExitGuard(n, by) {
+    if (!n.isPlayer) return false;
+    const elapsed = this.time - (this.openedAt || 0);
+    return elapsed < 180;
   }
 
   eliminate(n, by) {
@@ -536,7 +571,25 @@ export class Game {
     if (this.owners[cell] !== n.id) return t("يجب البناء داخل أرضك");
     if (n.gold < this.buildPrice(n, key, 1)) return t("الذهب غير كافٍ");
     if (n.buildings.some((b) => b.cell === cell)) return t("يوجد مبنى هنا");
+    // A port is a harbour: it has to touch the sea. Allowed to be placed on any
+    // owned coastal cell, since the fleet needs a shore on both ends.
+    if (key === "port" && !this.isCoastalCell(cell)) return t("الميناء يُبنى على الشاطئ فقط");
     return null;
+  }
+
+  // Does this cell have a water neighbour? Used for ports and for the landing
+  // maths, which must never put a fleet down inland.
+  isCoastalCell(cell) {
+    const { world, owners } = this;
+    const w = world.w;
+    const x = cell % w;
+    const y = (cell / w) | 0;
+    return (
+      (x > 0 && owners[cell - 1] < 0) ||
+      (x < w - 1 && owners[cell + 1] < 0) ||
+      (y > 0 && owners[cell - w] < 0) ||
+      (y < world.h - 1 && owners[cell + w] < 0)
+    );
   }
 
   build(n, key, cell) {
@@ -573,7 +626,10 @@ export class Game {
     const cap = B.maxBuildings ?? 40;
     const scaled = cap + Math.floor(Math.min(40, Math.max(0, n.cells - n.originalCells / 2) / 900));
     if (n.buildings.length >= Math.min(cap * 2, scaled)) return false;
-    const free = (i) => owners[i] === n.id && !n.buildings.some((b) => b.cell === i);
+    const free = (i) =>
+      owners[i] === n.id &&
+      !n.buildings.some((b) => b.cell === i) &&
+      (key !== "port" || this.isCoastalCell(i));
     let tries = 0;
     if (n.buildings.length) {
       for (let k = 0; k < 400; k++) {
@@ -774,12 +830,19 @@ export class Game {
         attacker.army += troops;
         return t("لا يوجد ساحل يمكن الوصول إليه");
       }
-      // The fleet actually crosses the water: the timer is the journey, not a
-      // fixed 1.6s pause, so a landing halfway around the world visibly takes
-      // longer and the ships can be watched (and intercepted) on the way.
-      atk.landingTimer = this.crossingTime(attacker, atk.landingAt);
+      // The fleet sails from the nearest port, along water only.
       atk.sailFrom = this.findSailingCell(attacker, atk.landingAt);
-      atk.crossing = atk.landingTimer;
+      const route = this.seaRoute(atk.sailFrom, atk.landingAt);
+      if (!route) {
+        attacker.army += troops;
+        return t("لا يوجد طريق بحري مفتوح إلى هذا الساحل");
+      }
+      atk.route = route;
+      // The timer is the journey along that route, in cells — so a fleet that
+      // has to sail around a continent visibly takes longer, and the ships are
+      // never drawn over land.
+      atk.crossing = Math.max(2.5, Math.min(18, route.length * 0.12));
+      atk.landingTimer = atk.crossing;
     }
     this.attacks.push(atk);
     void naval;
@@ -809,37 +872,109 @@ export class Game {
     return Math.max(2.5, Math.min(14, dist * 0.22));
   }
 
-  // Where the troop ships leave from: the coastal cell of the attacker nearest
-  // the beachhead. Falls back to the capital when no coast is found.
+  // Where the troop ships leave from: the attacker's own port nearest the
+  // beachhead. The user asked for exactly this — a naval attack picks the
+  // closest port — and it also makes the port you built matter: no port, no
+  // fleet, no invasion overseas.
   findSailingCell(attacker, landingCell) {
     const w = this.world.w;
-    const owners = this.owners;
+    const bx = landingCell % w;
+    const by = (landingCell / w) | 0;
     let best = -1;
     let bestD = Infinity;
-    for (const cell of attacker.frontier) {
-      const x = cell % w;
-      const y = (cell / w) | 0;
-      const coastal =
-        (x > 0 && owners[cell - 1] < 0) ||
-        (x < w - 1 && owners[cell + 1] < 0) ||
-        (y > 0 && owners[cell - w] < 0) ||
-        (y < this.world.h - 1 && owners[cell + w] < 0);
-      if (!coastal) continue;
-      const bx = landingCell % w;
-      const by = (landingCell / w) | 0;
+    for (const b of attacker.buildings) {
+      if (b.key !== "port") continue;
+      const x = b.cell % w;
+      const y = (b.cell / w) | 0;
       const d = (x - bx) ** 2 + (y - by) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = b.cell;
+      }
+    }
+    if (best >= 0) return best;
+    // Legacy saves may have ports that predate the coastal rule. Fall back to
+    // the closest coastal cell the nation owns, which is the same thing.
+    for (const cell of attacker.frontier) {
+      if (!this.isCoastalCell(cell)) continue;
+      const d = (cell % w - bx) ** 2 + (((cell / w) | 0) - by) ** 2;
       if (d < bestD) {
         bestD = d;
         best = cell;
       }
     }
     if (best >= 0) return best;
-    // A landlocked nation still has a capital to sail from — the ships just set
-    // off from there, which reads correctly on the map (they cross the water as
-    // soon as the route reaches the coast).
     if (attacker.capital != null && attacker.capital >= 0) return attacker.capital;
     const home = attacker.def;
     return home ? home.x + home.y * w : -1;
+  }
+
+  // A sea route from the port to the beach that does not cross land.
+  //
+  // The old rendering drew a straight dashed line from the capital to the
+  // beachhead, which read as an army flying over every country in between. This
+  // walks water cells (breadth-first, 8-neighbour, so it can cut corners in open
+  // sea) and returns a polyline the renderer animates the ships along. If no
+  // water path exists the fleet is refused rather than teleported.
+  //
+  // The queue and the predecessor map are typed arrays reused between calls:
+  // an ocean crossing can visit a few hundred thousand cells, and allocating
+  // that much memory per AI naval attack would stutter the frame.
+  seaRoute(from, to, limit = 900000) {
+    const { world, owners } = this;
+    const w = world.w;
+    const h = world.h;
+    const size = w * h;
+    if (from < 0 || to < 0 || from >= size || to >= size) return null;
+    if (!this._seaPrev || this._seaPrev.length !== size) {
+      this._seaPrev = new Int32Array(size).fill(-2);
+      this._seaQueue = new Int32Array(size);
+    }
+    const prev = this._seaPrev;
+    const queue = this._seaQueue;
+    // -2 = unvisited, -1 = the start
+    prev.fill(-2);
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = from;
+    prev[from] = -1;
+    let visited = 0;
+    let found = false;
+    while (head < tail && visited++ < limit) {
+      const cur = queue[head++];
+      if (cur === to) {
+        found = true;
+        break;
+      }
+      const x = cur % w;
+      const y = (cur / w) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          const nc = ny * w + nx;
+          if (prev[nc] !== -2) continue;
+          // water only, plus the two land ends (the harbour and the beach)
+          if (nc !== to && owners[nc] >= 0) continue;
+          prev[nc] = cur;
+          queue[tail++] = nc;
+        }
+      }
+    }
+    if (!found) return null;
+    const path = [];
+    let c = to;
+    while (c !== from) {
+      path.push(c);
+      c = prev[c];
+      if (c < 0) break;
+    }
+    path.push(from);
+    path.reverse();
+    return path;
   }
 
   findLandingCell(attacker, defender) {
@@ -1091,8 +1226,11 @@ export class Game {
     const pairs = a.fronts.length;
     const defLocal = this.defenderLocalStrength(a);
     const tac = this.tacticalRead(a);
+    // Reinforcements fight: troops shipped to this front raise the defence it
+    // presents, which is the whole point of spending army instead of gold.
+    const reinforce = a.defBoost || 1;
     const mult = (this.attackMult(attacker) * tac.pincer * tac.coordinated) /
-      Math.max(0.25, this.defenseMult(defender, a.fronts[0][1]));
+      Math.max(0.25, this.defenseMult(defender, a.fronts[0][1]) * reinforce);
     const ratio = (a.troops * mult) / Math.max(1, defLocal);
     a.ratio = ratio;
     const force = Math.min(a.troops * mult, defLocal * 3);
@@ -1213,20 +1351,79 @@ export class Game {
       // already decided. This is what makes conquest feel fast.
       const capitalLost = defender.capital < 0 || this.owners[defender.capital] !== defender.id;
       const lostShare = 1 - defender.cells / Math.max(1, defender.originalCells);
-      const crushed = lostShare >= (B.capitulation ?? 0.5);
-      const collapsing = (capitalLost && defender.cells < defender.originalCells * B.capitulateFraction) || defender.cells < 12;
+      // A human never surrenders in one push. The instant collapse that makes
+      // AI conquest feel fast also ended a real player's game in about a
+      // minute, which is why an idle match could be over before the first
+      // factory finished. A human's nation now has to be ground down to a
+      // redoubt before it falls: the same rule as the AI, with a much lower
+      // floor, so losing still feels like losing — just not like a cutscene.
+      const human = defender.isPlayer;
+      // ...and never in the opening minutes, no matter how big the attacker is.
+      if (human && this.time - (this.openedAt || 0) < 150) return;
+      const crushShare = human ? 0.94 : (B.capitulation ?? 0.45);
+      const redoubtCells = human ? 18 : 12;
+      const crushed = lostShare >= crushShare;
+      const collapsing =
+        (capitalLost && defender.cells < defender.originalCells * (human ? 0.03 : B.capitulateFraction)) ||
+        defender.cells < redoubtCells;
       if (crushed || collapsing) this.capitulate(defender, attacker);
     }
   }
 
-  fortify(n) {
-    const cost = 650;
-    if (n.gold < cost) return t("الذهب غير كافٍ");
-    if ((n.fortifyUntil || 0) > this.time) return t("التحصين فعّال بالفعل");
-    n.gold -= cost;
-    n.fortifyUntil = this.time + 20;
-    if (n.isPlayer) this.log(t("تحصين الحدود +30% دفاع لمدة 20 ثانية"), "good");
+  // Reinforcement, not a paid border buff.
+  //
+  // This used to cost 650 gold for +30% defence on every border for 20 seconds,
+  // which is a spell. What the player actually wants when an invasion is rolling
+  // in is troops: bodies on the front. It now ships soldiers out of the reserve
+  // and into the front that needs them, so the input is army — the resource you
+  // spent the whole match building — and using it weakens every other front.
+  fortify(n, attackId = null) {
+    if (!n.alive) return t("دولتك سقطت");
+    const reserve = this.fortifyReserve(n);
+    if (reserve < 200) return t("لا يوجد احتياطي كافٍ للتحصين");
+
+    const incoming = this.attacks.filter((a) => a.active && a.defender === n);
+    if (!incoming.length) return t("لا يوجد هجوم جارٍ لتعزيزه");
+
+    // The front closest to breaking gets the troops; sorting by how badly it is
+    // losing means the reinforcement goes where it can still matter.
+    const target =
+      (attackId != null && incoming.find((a) => a.id === attackId)) ||
+      incoming.slice().sort((a, b) => (a.ratio || 0) - (b.ratio || 0))[0];
+    if (!target) return t("لا يوجد هجوم جارٍ لتعزيزه");
+
+    // Send as many as the reserve allows, capped per order so one click cannot
+    // empty the homeland.
+    const send = Math.min(reserve, Math.max(200, Math.floor(this.capacityOf(n) * 0.25)));
+    n.army -= send;
+    target.troops += send;
+    target.startTroops = (target.startTroops || target.troops) + send;
+    // The defenders now fight with everything they have at that front.
+    target.reinforced = send;
+    target.defBoost = 1 + Math.min(0.6, send / Math.max(1, target.troops) * 0.8);
+    target.stalled = 0;
+    // Ongoing reinforcement costs the attacker ground for a moment: the extra
+    // bodies buy time even if the math still favours the invader.
+    target.progress = Math.max(0, (target.progress || 0) - 0.15);
+
+    if (n.isPlayer) {
+      this.log(`${t("أرسلت")} ${Math.round(send).toLocaleString("en-US")} ${t("جنديًا لتعزيز الجبهة")}`, "good", {
+        nation: target.attacker.id,
+      });
+    }
+    if (target.attacker.isPlayer) {
+      this.log(`${n.ar} ${t("عزّزت جبهتها بـ")} ${Math.round(send).toLocaleString("en-US")} ${t("جندي")}`, "warn", {
+        nation: n.id,
+      });
+    }
     return null;
+  }
+
+  // Soldiers available to move to a front: everything above a garrison floor.
+  fortifyReserve(n) {
+    const cap = this.capacityOf(n);
+    const floor = Math.max(600, cap * 0.18);
+    return Math.floor(n.army - floor);
   }
 
   bunkerSlow(defender, a) {
@@ -1955,8 +2152,34 @@ export class Game {
       if (running) continue;
       if (!this.canReach(n, enemy)) continue;
       const ratio = n.army / Math.max(1, enemy.army);
-      if (ratio > 0.55 * (1.4 - n.ai.aggression * 0.4) || n.army > this.capacityOf(n) * 0.8) {
-        if (this.rng.chance(0.55 + n.ai.aggression * 0.2)) {
+      // A nation that has been attacked fights back with whatever it has.
+      //
+      // The strength gate below is sensible for picking a fight, but it also
+      // meant that a defender being ground down by a much bigger attacker never
+      // launched a counter-offensive — it just lost. Provoked wars skip the
+      // gate: if launching fails for a real reason (no reserve, no border) it
+      // fails, but the attempt is made.
+      const defensive = enemy.isPlayer && this.provokedByPlayer(n);
+      if (defensive) {
+        // A nation fighting for its life does not keep pushing two other fronts
+        // while its capital is being overrun: it pulls one offensive back and
+        // puts those soldiers in front of the invader. Without this, a defender
+        // with a full war budget was mathematically unable to counter-attack —
+        // every soldier it had was already committed elsewhere.
+        const own = this.attacks.filter((a) => a.active && a.attacker === n && a.defender !== enemy);
+        if (own.length >= 2) {
+          const weakest = own.slice().sort((a, b) => (a.ratio || 0) - (b.ratio || 0))[0];
+          this.retreat(weakest.id);
+        }
+      }
+      const strongEnough = defensive || ratio > 0.55 * (1.4 - n.ai.aggression * 0.4) || n.army > this.capacityOf(n) * 0.8;
+      // A human is never knocked out in the opening minutes. The attacker may
+      // take ground — that is the fight — but it cannot finish the player off
+      // before they have had a chance to play.
+      const tooEarlyForKnockout = enemy.isPlayer && this.time - (this.openedAt || 0) < 180;
+      if (tooEarlyForKnockout) continue;
+      if (strongEnough) {
+        if (this.rng.chance(defensive ? 0.9 : 0.55 + n.ai.aggression * 0.2)) {
           this.launchAttack(n, enemy, this.rng.range(0.35, 0.7));
         }
       }
@@ -1965,6 +2188,16 @@ export class Game {
         if (a.attacker === n && a.ratio < 0.3 && this.rng.chance(0.25)) this.retreat(a.id);
       }
     }
+  }
+
+  // Has this nation itself been touched by the human? (War is already declared
+  // by the time aiThink runs, so check the provocation ledger.)
+  provokedByPlayer(n) {
+    const p = this.player();
+    if (!p || !p.provoked) return false;
+    if (p.provoked.has(n.id)) return true;
+    for (const allyId of n.ally) if (p.provoked.has(allyId)) return true;
+    return false;
   }
 
   // Has the player ever given this nation a reason to fight? True when the
@@ -1981,6 +2214,12 @@ export class Game {
 
   aiConsiderWar(n) {
     if (n.war.size >= 2 && n.ai.aggression < 1.1) return;
+    // Two simultaneous wars per nation. Without this, a strong AI kept opening
+    // a new front every time it finished one, and the attack table filled up so
+    // a defender could never get a counter-offensive in edgewise (the cap is
+    // global, 150, and it was already full).
+    const ownWar = this.attacks.filter((a) => a.active && a.attacker === n).length;
+    if (ownWar >= 2) return;
     const candidates = [];
     const targets = [...n.def.neighbors];
     if (this.hasPort(n) && this.rng.chance(0.45)) {
@@ -1999,15 +2238,29 @@ export class Game {
       const p0 = other.isPlayer ? other : null;
       const isPlayerTarget = !!p0;
       if (isPlayerTarget) {
-        // The bots leave the human alone until the human touches them.
+        // The bots mostly leave the human alone — but not always, and not
+        // forever.
         //
-        // This is the rule the player asked for, and it is checked before any
-        // strength comparison: an AI does not declare war on the player while
-        // the player has never attacked it, never attacked an ally of it, and
-        // the two have no live offensive between them. In other words, the
-        // world ignores you until you make yourself its problem — the AI-vs-AI
-        // wars keep running underneath, which is what makes the map feel alive.
-        if (!this.playerProvoked(n, p0)) continue;
+        // A provoked nation always fights back, and so do its allies. An
+        // unprovoked AI only picks the human occasionally: a rising chance over
+        // the first few minutes, gated on being genuinely stronger, so an idle
+        // player can be attacked without the map turning into a dogpile. This
+        // is the middle ground between "never attacked" (which the world felt
+        // dead) and "attacked from minute one" (which felt unfair).
+        const provoked = this.playerProvoked(n, p0);
+        if (!provoked) {
+          const minutes = (this.time - (this.openedAt || 0)) / 60;
+          // Nothing unprovoked in the first minute: the player must at least
+          // have time to see the map.
+          if (minutes < 1) continue;
+          const chance = Math.min(0.55, 0.1 + minutes * 0.055);
+          if (strength < 1) continue;              // never attack a nation with no army
+          // "Sometimes" must not mean "always the weaker one": inside a 25%
+          // band either side can be the one that picks the fight, which is what
+          // makes it feel like other nations have their own plans.
+          if (mine < strength * 0.75) continue;
+          if (!this.rng.chance(chance * (n.ai.aggression || 1))) continue;
+        }
         const elapsed = this.time - (this.openedAt || 0);
         const aggressive = (p0.stats.captures || 0) >= 2;
         // Once provoked, a short grace period still applies so the very first
@@ -2244,7 +2497,6 @@ export class Game {
       n.peace.clear();
       n.buildings = [];
       n.stats = { kills: 0, losses: 0, captures: 0, capitals: 0, strikes: 0, naval: 0 };
-      n.fortifyUntil = 0;
       this.refreshAgg(n);
     }
     for (const st of this.lobby.seats) {
