@@ -820,13 +820,39 @@ export class Renderer {
     }
   }
 
+  // The cell a click would build on. It used to be a 1.5px outline that
+  // disappeared against the map's borders, so "where exactly is my building
+  // going" was guesswork. Now it is a filled, pulsing square with a solid
+  // outline, clipped to the cell, so the answer is obvious.
   drawBrush(ctx, zoom) {
     const s = this.cellToScreen(this.hoverCell);
-    const size = Math.max(7, zoom * 1.1);
+    const ok = this.brushOk;
+    const size = Math.max(9, zoom * 1.45);
+    const x = s.x - size / 2;
+    const y = s.y - size / 2;
+    const fill = ok ? "rgba(184,240,160,0.30)" : "rgba(255,143,143,0.30)";
+    const line = ok ? "#b8f0a0" : "#ff8f8f";
+    const pulse = 0.55 + 0.45 * Math.sin((this.game?.time || 0) * 7);
     ctx.save();
-    ctx.strokeStyle = this.brushOk ? "#b8f0a0" : "#ff8f8f";
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(s.x - size / 2, s.y - size / 2, size, size);
+    // soft halo so the square reads on any terrain colour
+    ctx.fillStyle = ok ? "rgba(184,240,160,0.12)" : "rgba(255,143,143,0.12)";
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, size * 0.95, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, size, size);
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = line;
+    ctx.lineWidth = Math.max(2, zoom * 0.16);
+    ctx.strokeRect(x, y, size, size);
+    // corner ticks: they make the square read as a selection, not a tile
+    ctx.globalAlpha = 1;
+    const t = size * 0.34;
+    ctx.lineWidth = Math.max(2, zoom * 0.2);
+    ctx.beginPath();
+    ctx.moveTo(x, y + t); ctx.lineTo(x, y); ctx.lineTo(x + t, y);
+    ctx.moveTo(x + size - t, y + size); ctx.lineTo(x + size, y + size); ctx.lineTo(x + size, y + size - t);
+    ctx.stroke();
     ctx.restore();
   }
 

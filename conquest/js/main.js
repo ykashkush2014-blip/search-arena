@@ -693,6 +693,14 @@ function openCountrySelect(daily) {
   const filters = document.querySelector(".filters");
   filters.style.display = daily ? "none" : "";
   if (!daily) fillFilters();
+  // Preselect a sensible starting nation so the picker is *one* click from a
+  // live match: the player taps a country to change it, or taps Play to go.
+  // (The portal's "at most one click to gameplay" rule, kept by making the
+  // choice optional rather than making it skippable.)
+  if (!daily && app.selectedId == null) {
+    const pool = app.pickWorld.playable().filter((c) => c.cells > 120);
+    if (pool.length) app.selectedId = pool[Math.floor(pool.length / 2)].id;
+  }
   buildCountryList();
   show("country");
   requestAnimationFrame(() => {
@@ -832,7 +840,7 @@ function renderCountryCard(id) {
     ${sea.length ? `<div class="neigh-list">${sea.map((n) => `<span class="chip">⛵ ${escapeHtml(nationName(n))}</span>`).join("")}</div>` : ""}
     ${daily ? `<p class="hint">${app.daily.arBlurb}</p>` : ""}
     <div class="card-actions">
-      <button class="btn gold" id="btn-start-game">ابدأ الحملة</button>
+      <button class="btn gold" id="btn-start-game">${daily ? t("ابدأ الحملة") : t("العب")}</button>
       <button class="btn ghost" id="btn-pick-random">دولة أخرى 🎲</button>
     </div>
   `;
@@ -872,30 +880,6 @@ function randomCountry() {
     app.pickRenderer.cam.zoom = Math.max(app.pickRenderer.cam.zoom, 2.2);
     app.pickRenderer.renderBase(true);
   }
-}
-
-// One click from the menu straight into a match. The portal allows at most one
-// click before gameplay, and this is that click: a random mid-sized nation on
-// the world map, default settings, no configuration screen. Players who want to
-// choose can still use "اختر دولتك", which is the explicitly labelled button.
-function quickStart() {
-  if (!app.pickWorld) {
-    app.pickWorld = new World("world", app.era);
-    app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
-    attachPickInput();
-  }
-  app.mode = "normal";
-  app.campaign = null;
-  app.daily = null;
-  app.era = app.era || "modern";
-  app.preset = "world";
-  if (!app.goal) app.goal = 0.5;
-  if (!app.aiLevel) app.aiLevel = "normal";
-  const pool = app.pickWorld.playable().filter((c) => c.cells > 120);
-  const c = pool[Math.floor(Math.random() * pool.length)];
-  if (!c) return startFlow();
-  startGame(c.id);
-  toast(t("⚡ بدأت فورًا") + " — " + nationName(c), "good");
 }
 
 function pickDailyNation(showToast) {
@@ -2297,13 +2281,16 @@ function updateTab() {
   $$("#tabs .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === app.tab));
   if (app.tab === "empire") {
     body.innerHTML = BUILDINGS.map((def, i) => {
-      const cost = game.buildingCost(def.key, 1);
-      const owned = p.buildings.filter((b) => b.key === def.key).length;
+      // The price on the card is what the *next* one costs, which climbs with
+      // every copy you already own.
+      const cost = game.buildPrice(p, def.key, 1);
+      const owned = game.countBuilding(p, def.key);
+      const infl = game.buildInflation(p, def.key);
       const cant = p.gold < cost;
       return `<div class="bcard ${app.brush === def.key ? "active" : ""} ${cant ? "locked" : ""}" data-b="${def.key}">
         <span class="hk">${i + 1}</span>
         <div class="bh"><i class="bi" style="background:${def.color}">${ICONS[def.key] || "★"}</i>${eraName(def.key)}</div>
-        <div class="cost">${fmt(cost)} ◈ <span>${owned} ${t("مبنى")}</span></div>
+        <div class="cost">${fmt(cost)} ◈ <span>${owned} ${t("مبنى")}</span>${infl ? `<em class="infl">+${infl}%</em>` : ""}</div>
         <div class="desc">${def.descAr}</div>
         <button class="pick">${cant ? t("الذهب غير كافٍ") : t("ابنِ")}</button>
       </div>`;
@@ -2490,8 +2477,8 @@ const ICONS = { city: "▦", factory: "⚙", lab: "⚗", port: "⚓", base: "⌂
 function pickBuilding(key, sticky) {
   const p = app.game.player();
   const def = BUILDING_BY_KEY[key];
-  if (app.game.buildingCost(key, 1) > p.gold) {
-    toast(`تحتاج ${fmt(app.game.buildingCost(key, 1))} ذهب`, "bad");
+  if (app.game.buildPrice(p, key, 1) > p.gold) {
+    toast(`${t("تحتاج")} ${fmt(app.game.buildPrice(p, key, 1))} ${t("ذهب")}`, "bad");
     return;
   }
   app.brush = app.brush === key ? null : key;
@@ -2560,7 +2547,7 @@ function placeArea(cells) {
     const before = p.gold;
     if (netAct("build", { key, cell })) {
       built++;
-      spent += game.buildingCost(key, 1);
+      spent += game.buildPrice(p, key, 1);
       continue;
     }
     const err = game.build(p, key, cell);
@@ -2948,9 +2935,11 @@ function howTo() {
     <h4>البداية</h4>
     <ul>
       <li>أول 25 ثانية هدنة: ابنِ مدنًا ومصانع قبل أن تبدأ الحرب.</li>
+      <li>الدول الأخرى لا تهاجمك حتى تلمسها: أول هجوم تشنّه على دولة يجعلها — وحلفاءها — يردّون. قبل ذلك العالم يقاتل بعضه وأنت خارج الحرب.</li>
       <li>المدينة ترفع سقف جيشك وذهبك. المصنع يزيد ذهبك. القاعدة تسرّع التجنيد.</li>
       <li>اختر مبنى من الشريط ثم اضغط داخل أرضك: الفرشاة تبقى بيدك، فابنِ عشرة متتالية دون إعادة الاختيار. زر الفأرة الأيمن يوقف.</li>
       <li><code>Shift</code> + سحب يرسم مستطيلًا ويبني فيه كله دفعة واحدة.</li>
+      <li>كل مبنى من النوع نفسه يرفع سعر التالي: المدينة الأولى أرخص من الخامسة. البطاقة تُظهر السعر الحالي ونسبة الغلاء، فابنِ ما تحتاجه فعلًا بدل صفٍّ من عشرين.</li>
     </ul>
     <h4>الهجوم</h4>
     <ul>
@@ -3029,22 +3018,29 @@ async function boot() {
   buildMenu();
   renderMedals();
   void platformReady;
-  $("#btn-quick").onclick = () => {
-    app.started = true;
-    sfx.resume();
-    sfx.click();
-    if (profile.settings.sound !== false && !getSettings().muteAudio) sfx.startMusic();
-    quickStart();
-  };
-  $("#btn-play").onclick = () => {
+  // The single entry point: choose a nation, then play.
+  const beginMatch = () => {
     // First real user gesture: browsers only allow an AudioContext here, so the
     // music bed starts on this click rather than at boot.
     app.started = true;
     sfx.resume();
     sfx.click();
     if (profile.settings.sound !== false && !getSettings().muteAudio) sfx.startMusic();
+  };
+  $("#btn-play").onclick = () => {
+    beginMatch();
     startFlow();
   };
+  // Play from the picker: the preselected nation (or the highlighted one).
+  const playNow = $("#btn-play-now");
+  if (playNow) {
+    playNow.onclick = () => {
+      beginMatch();
+      const id = app.selectedId;
+      if (id != null) startGame(id);
+      else startFlow();
+    };
+  }
   $("#btn-howto").onclick = () => ($("#modal-howto").hidden = false);
   const tutorSkip = $("#tutor-skip");
   if (tutorSkip) tutorSkip.onclick = () => tutorStop();
@@ -3065,10 +3061,16 @@ async function boot() {
       toast(t("تعذر تحميل الحفظ"), "bad");
     }
   };
+  // The picker is the front door now, so "back" from it is the menu (modes,
+  // medals, settings, online) and "back" from the menu is the picker again.
   $("#btn-back-menu").onclick = () => {
     closeModals();
-    show("menu");
-    buildMenu();
+    if (app.screen === "country") {
+      show("menu");
+      buildMenu();
+    } else {
+      openCountrySelect(false);
+    }
   };
   $("#country-search").oninput = () => buildCountryList();
   $("#btn-random").onclick = randomCountry;
@@ -3535,7 +3537,17 @@ async function boot() {
     app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
     attachPickInput();
   }
-  requestAnimationFrame(() => show("menu"));
+  // Land straight in the nation picker.
+  //
+  // The portal allows at most one click before gameplay and the instant-start
+  // button is gone by request, so the click has to be the play button itself.
+  // The picker already arrives with a nation preselected, which makes "العب"
+  // here a genuine one-click start — and the full menu stays reachable from the
+  // back arrow for modes, medals, settings and online.
+  app.selectedId = null;
+  requestAnimationFrame(() => {
+    openCountrySelect(false);
+  });
 }
 
 // Bracket the load for the portal's measurement: loadingStart must come before

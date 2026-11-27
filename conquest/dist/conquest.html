@@ -37,8 +37,10 @@
         <button class="btn ghost" id="btn-continue" hidden>
           <span class="k">متابعة</span><small>استئناف آخر معركة</small>
         </button>
-        <button class="btn gold" id="btn-quick">⚡ ابدأ فورًا</button>
-        <button class="btn ghost" id="btn-play">اختر دولتك</button>
+        <!-- One way in: pick your country, then play. The old "start instantly"
+             button is gone — it dropped the player into a random nation, which
+             made the first click skip the only choice that matters. -->
+        <button class="btn gold" id="btn-play">العب</button>
         <button class="btn ghost" id="btn-medals">
           <span class="k">الأوسمة</span>
           <small id="medal-count">0 / 19</small>
@@ -61,6 +63,9 @@
         <p id="select-sub">كل دولة لها حدودها الحقيقية وصعوبتها الخاصة</p>
       </div>
       <div class="spacer"></div>
+      <!-- The one-click path: a nation is preselected, so this starts a match
+           immediately and the list is only there to change your mind. -->
+      <button class="btn gold play-now" id="btn-play-now"><i class="ico">▶</i><span>العب</span></button>
       <div class="filters">
         <select id="era-select" class="select"></select>
         <select id="map-select" class="select"></select>
@@ -906,6 +911,12 @@ input, select { font-family: inherit; }
 }
 .bcard .cost { font-size: 11px; color: var(--gold); display: flex; justify-content: space-between; }
 .bcard .cost span { color: var(--muted); font-size: 10px; }
+/* price escalation marker: +N% over the card's base price */
+.bcard .cost .infl {
+  font-style: normal; font-size: 9.5px; color: var(--red);
+  background: rgba(255,120,110,0.12); border: 1px solid rgba(255,120,110,0.3);
+  border-radius: 5px; padding: 0 4px; margin-inline-start: 3px; flex: 0 0 auto;
+}
 .bcard .desc {
   font-size: 9.5px; color: var(--muted); line-height: 1.35;
   /* two lines maximum, ellipsis instead of a hard cut mid-glyph */
@@ -1332,6 +1343,11 @@ input, select { font-family: inherit; }
 @media (max-width: 760px) {
   .chat-dock { display: none; }
 }
+/* the picker's one-click Play: icon and label are separate nodes so the DOM
+   translator can swap the word without touching the glyph */
+.play-now { display: inline-flex; align-items: center; gap: 6px; }
+.play-now .ico { font-style: normal; font-size: 11px; opacity: 0.9; }
+
 .rematch-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
 .rematch-row .btn { min-width: 130px; }
 .icon-btn.danger { color: var(--red); }
@@ -2435,6 +2451,8 @@ const EN = {
   "إنزال على": "Landing on",
   "بانتظار المضيف لبدء مباراة جديدة…": "Waiting for the host to start a new match…",
   "الخادم مشغول بالكامل  جرّب بعد قليل": "The server is full — try again in a moment",
+  "العب": "Play",
+  "اختر دولتك": "Choose your country",
 };
 
 
@@ -3191,6 +3209,10 @@ const BALANCE = {
   tick: 0.1, // simulation step (seconds)
 
   // --- economy ---
+  // Each building you already own of a type makes the next one 18% dearer.
+  // Paying the same 620 for the tenth factory as for the first made "build
+  // wide" strictly better than "fight", which is not the game.
+  buildPriceStep: 0.18,
   baseGoldRate: 3.4,
   goldPerFactory: 17,
   goldPerCell: 0.01,
@@ -3672,6 +3694,9 @@ class Nation {
     this.originalCells = 0;
     this.war = new Set();
     this.ally = new Set();
+    // Nations this human has touched. Empty for bots; it is the switch that
+    // allows an AI to fight back (see playerProvoked).
+    this.provoked = new Set();
     this.peace = new Map(); // id -> timestamp (seconds)
     this.frontier = new Set();
     this.totalFront = 0;
@@ -3958,6 +3983,35 @@ class Game {
     return Math.round(def.cost * eraMult * Math.pow(1.62, level - 1));
   }
 
+  // What the *next* one of this kind actually costs the player. Every building
+  // already owned of the same type makes the next one dearer, so a row of ten
+  // factories is a real commitment rather than ten copies of the same cheap
+  // card. Level upgrades keep their own exponential curve (buildingCost).
+  buildPrice(n, key, level = 1) {
+    const base = this.buildingCost(key, level);
+    if (!n || !n.buildings) return base;
+    const owned = this.countBuilding(n, key);
+    if (!owned) return base;
+    const step = (BALANCE && BALANCE.buildPriceStep) || 0.18;
+    return Math.round(base * Math.pow(1 + step, owned));
+  }
+
+  // How many of a type a nation has, capped so the price cannot explode for an
+  // empire that has been building for an hour.
+  countBuilding(n, key) {
+    let c = 0;
+    for (const b of n.buildings) if (b.key === key) c++;
+    return c;
+  }
+
+  // Percentage the next copy costs above the base card price — the HUD shows
+  // this so the escalation is visible rather than mysterious.
+  buildInflation(n, key) {
+    const base = this.buildingCost(key, 1);
+    const now = this.buildPrice(n, key, 1);
+    return Math.max(0, Math.round((now / Math.max(1, base) - 1) * 100));
+  }
+
   resourceRate(n) {
     const agg = n.agg || { factory: 0, port: 0, lab: 0 };
     const economy = n.tech.economy || 0;
@@ -4123,7 +4177,7 @@ class Game {
   canBuild(n, key, cell) {
     if (!n.alive) return t("دولتك سقطت");
     if (this.owners[cell] !== n.id) return t("يجب البناء داخل أرضك");
-    if (n.gold < this.buildingCost(key, 1)) return t("الذهب غير كافٍ");
+    if (n.gold < this.buildPrice(n, key, 1)) return t("الذهب غير كافٍ");
     if (n.buildings.some((b) => b.cell === cell)) return t("يوجد مبنى هنا");
     return null;
   }
@@ -4131,7 +4185,7 @@ class Game {
   build(n, key, cell) {
     const err = this.canBuild(n, key, cell);
     if (err) return err;
-    const cost = this.buildingCost(key, 1);
+    const cost = this.buildPrice(n, key, 1);
     n.gold -= cost;
     const b = { key, cell, level: 1, cd: 0 };
     n.buildings.push(b);
@@ -4151,7 +4205,7 @@ class Game {
     // (setup/starting buildings are the only free ones). Before this, the AI
     // built dozens of cities per minute for free, which made land worthless.
     const { world, owners } = this;
-    const cost = this.buildingCost(key, 1);
+    const cost = this.buildPrice(n, key, 1);
     if (opts.paid !== false) {
       if (!n.alive) return false;
       if (n.gold < cost) return false;
@@ -4238,6 +4292,14 @@ class Game {
     b.war.add(a.id);
     a.peace.delete(b.id);
     b.peace.delete(a.id);
+    // A human who declares war has touched that nation (and, through the pact
+    // above, its allies): from now on they may hit back. This is the only thing
+    // that wakes an AI up to the player.
+    if (a.isPlayer) {
+      a.provoked = a.provoked || new Set();
+      a.provoked.add(b.id);
+      for (const allyId of b.ally) a.provoked.add(allyId);
+    }
     this.warVersion = (this.warVersion || 0) + 1;
     if (!silent) {
       this.log(`${a.ar} أعلنت الحرب على ${b.ar}`, b.isPlayer ? "bad" : "info", {
@@ -5548,15 +5610,16 @@ class Game {
     }
   }
 
-  // How many live offensives already run between two nations — used to keep the
-  // AI from re-declaring a war it is already fighting.
-  warsBetween(a, b) {
-    let n = 0;
-    for (const atk of this.attacks) {
-      if (!atk.active) continue;
-      if ((atk.attacker === a && atk.defender === b) || (atk.attacker === b && atk.defender === a)) n++;
-    }
-    return n;
+  // Has the player ever given this nation a reason to fight? True when the
+  // player attacked it, attacked one of its allies, or already has a live
+  // offensive against it. A bot with no answer here leaves the human alone.
+  playerProvoked(n, p) {
+    if (!p || !p.isPlayer || !n) return false;
+    if (p.war.has(n.id)) return true;              // already at war
+    if (p.provoked && p.provoked.has(n.id)) return true;   // hit us directly
+    for (const id of n.ally) if (p.provoked && p.provoked.has(id)) return true; // hit our ally
+    for (const a of this.attacks) if (a.active && a.attacker === p && a.defender === n) return true;
+    return false;
   }
 
   aiConsiderWar(n) {
@@ -5575,32 +5638,24 @@ class Game {
       if (n.war.has(id)) continue;
       // don't dogpile a nation that is already collapsing
       const strength = other.army * this.attackMult(other);
-      let mine = n.army * this.attackMult(n) * (1 + n.ai.aggression * 0.35);
+      const mine = n.army * this.attackMult(n) * (1 + n.ai.aggression * 0.35);
       const p0 = other.isPlayer ? other : null;
       const isPlayerTarget = !!p0;
-      if (!isPlayerTarget) {
-        // The AI used to treat the human as the only real target: everyone else
-        // was skipped by the "don't attack anyone but the player" effect of the
-        // scoring below, so the map sat still and the whole world waited on the
-        // player. AI nations now fight each other on the same terms, with a
-        // mild preference for a neighbour that is weaker than they are, and a
-        // small bias against the player so the human is not dogpiled.
-        if (other.army < n.army * 0.85) mine *= 1.15;
-        if (this.warsBetween(n, other) > 0) mine *= 1.1;
-      }
       if (isPlayerTarget) {
-        const elapsed = this.time - (this.openedAt || 0);
-        // The human gets breathing room to build up, and AI coalitions only
-        // form once the player has proven to be a threat.
+        // The bots leave the human alone until the human touches them.
         //
-        // But "breathing room" had become a no-entry zone: an AI needed 2.1×
-        // the player's strength to declare at all, so on a normal start nobody
-        // ever attacked — the map was at war with itself and the human sat
-        // untouched until one giant finally qualified. The bar is now modestly
-        // above parity, which still protects a small player without making the
-        // world ignore them.
-        const grace = this.mode === "daily" ? 45 : 75;
+        // This is the rule the player asked for, and it is checked before any
+        // strength comparison: an AI does not declare war on the player while
+        // the player has never attacked it, never attacked an ally of it, and
+        // the two have no live offensive between them. In other words, the
+        // world ignores you until you make yourself its problem — the AI-vs-AI
+        // wars keep running underneath, which is what makes the map feel alive.
+        if (!this.playerProvoked(n, p0)) continue;
+        const elapsed = this.time - (this.openedAt || 0);
         const aggressive = (p0.stats.captures || 0) >= 2;
+        // Once provoked, a short grace period still applies so the very first
+        // skirmish does not instantly become a three-front war.
+        const grace = this.mode === "daily" ? 30 : 60;
         if (elapsed < grace) continue;
         if (!aggressive && mine < strength * 1.45) continue;
         if (aggressive && mine < strength * 1.1) continue;
@@ -5910,6 +5965,9 @@ class Game {
         war: [...n.war],
         ally: [...n.ally],
         peace: [...n.peace],
+        // who the human has touched — without it a reload would make the bots
+        // forget they are allowed to fight back
+        provoked: n.provoked ? [...n.provoked] : [],
         buildings: n.buildings.map((b) => [b.key, b.cell, b.level, Math.round(b.cd * 10) / 10]),
         stats: n.stats,
         originalCells: n.originalCells,
@@ -5986,6 +6044,7 @@ class Game {
         cells: ns.cells,
         capital: ns.capital,
         war: new Set(ns.war),
+        provoked: new Set(ns.provoked || []),
         ally: new Set(ns.ally),
         peace: new Map(ns.peace),
         stats: ns.stats,
@@ -6845,13 +6904,39 @@ class Renderer {
     }
   }
 
+  // The cell a click would build on. It used to be a 1.5px outline that
+  // disappeared against the map's borders, so "where exactly is my building
+  // going" was guesswork. Now it is a filled, pulsing square with a solid
+  // outline, clipped to the cell, so the answer is obvious.
   drawBrush(ctx, zoom) {
     const s = this.cellToScreen(this.hoverCell);
-    const size = Math.max(7, zoom * 1.1);
+    const ok = this.brushOk;
+    const size = Math.max(9, zoom * 1.45);
+    const x = s.x - size / 2;
+    const y = s.y - size / 2;
+    const fill = ok ? "rgba(184,240,160,0.30)" : "rgba(255,143,143,0.30)";
+    const line = ok ? "#b8f0a0" : "#ff8f8f";
+    const pulse = 0.55 + 0.45 * Math.sin((this.game?.time || 0) * 7);
     ctx.save();
-    ctx.strokeStyle = this.brushOk ? "#b8f0a0" : "#ff8f8f";
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(s.x - size / 2, s.y - size / 2, size, size);
+    // soft halo so the square reads on any terrain colour
+    ctx.fillStyle = ok ? "rgba(184,240,160,0.12)" : "rgba(255,143,143,0.12)";
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, size * 0.95, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, size, size);
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = line;
+    ctx.lineWidth = Math.max(2, zoom * 0.16);
+    ctx.strokeRect(x, y, size, size);
+    // corner ticks: they make the square read as a selection, not a tile
+    ctx.globalAlpha = 1;
+    const t = size * 0.34;
+    ctx.lineWidth = Math.max(2, zoom * 0.2);
+    ctx.beginPath();
+    ctx.moveTo(x, y + t); ctx.lineTo(x, y); ctx.lineTo(x + t, y);
+    ctx.moveTo(x + size - t, y + size); ctx.lineTo(x + size, y + size); ctx.lineTo(x + size, y + size - t);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -9543,6 +9628,14 @@ function openCountrySelect(daily) {
   const filters = document.querySelector(".filters");
   filters.style.display = daily ? "none" : "";
   if (!daily) fillFilters();
+  // Preselect a sensible starting nation so the picker is *one* click from a
+  // live match: the player taps a country to change it, or taps Play to go.
+  // (The portal's "at most one click to gameplay" rule, kept by making the
+  // choice optional rather than making it skippable.)
+  if (!daily && app.selectedId == null) {
+    const pool = app.pickWorld.playable().filter((c) => c.cells > 120);
+    if (pool.length) app.selectedId = pool[Math.floor(pool.length / 2)].id;
+  }
   buildCountryList();
   show("country");
   requestAnimationFrame(() => {
@@ -9682,7 +9775,7 @@ function renderCountryCard(id) {
     ${sea.length ? `<div class="neigh-list">${sea.map((n) => `<span class="chip">⛵ ${escapeHtml(nationName(n))}</span>`).join("")}</div>` : ""}
     ${daily ? `<p class="hint">${app.daily.arBlurb}</p>` : ""}
     <div class="card-actions">
-      <button class="btn gold" id="btn-start-game">ابدأ الحملة</button>
+      <button class="btn gold" id="btn-start-game">${daily ? t("ابدأ الحملة") : t("العب")}</button>
       <button class="btn ghost" id="btn-pick-random">دولة أخرى 🎲</button>
     </div>
   `;
@@ -9722,30 +9815,6 @@ function randomCountry() {
     app.pickRenderer.cam.zoom = Math.max(app.pickRenderer.cam.zoom, 2.2);
     app.pickRenderer.renderBase(true);
   }
-}
-
-// One click from the menu straight into a match. The portal allows at most one
-// click before gameplay, and this is that click: a random mid-sized nation on
-// the world map, default settings, no configuration screen. Players who want to
-// choose can still use "اختر دولتك", which is the explicitly labelled button.
-function quickStart() {
-  if (!app.pickWorld) {
-    app.pickWorld = new World("world", app.era);
-    app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
-    attachPickInput();
-  }
-  app.mode = "normal";
-  app.campaign = null;
-  app.daily = null;
-  app.era = app.era || "modern";
-  app.preset = "world";
-  if (!app.goal) app.goal = 0.5;
-  if (!app.aiLevel) app.aiLevel = "normal";
-  const pool = app.pickWorld.playable().filter((c) => c.cells > 120);
-  const c = pool[Math.floor(Math.random() * pool.length)];
-  if (!c) return startFlow();
-  startGame(c.id);
-  toast(t("⚡ بدأت فورًا") + " — " + nationName(c), "good");
 }
 
 function pickDailyNation(showToast) {
@@ -11147,13 +11216,16 @@ function updateTab() {
   $$("#tabs .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === app.tab));
   if (app.tab === "empire") {
     body.innerHTML = BUILDINGS.map((def, i) => {
-      const cost = game.buildingCost(def.key, 1);
-      const owned = p.buildings.filter((b) => b.key === def.key).length;
+      // The price on the card is what the *next* one costs, which climbs with
+      // every copy you already own.
+      const cost = game.buildPrice(p, def.key, 1);
+      const owned = game.countBuilding(p, def.key);
+      const infl = game.buildInflation(p, def.key);
       const cant = p.gold < cost;
       return `<div class="bcard ${app.brush === def.key ? "active" : ""} ${cant ? "locked" : ""}" data-b="${def.key}">
         <span class="hk">${i + 1}</span>
         <div class="bh"><i class="bi" style="background:${def.color}">${ICONS[def.key] || "★"}</i>${eraName(def.key)}</div>
-        <div class="cost">${fmt(cost)} ◈ <span>${owned} ${t("مبنى")}</span></div>
+        <div class="cost">${fmt(cost)} ◈ <span>${owned} ${t("مبنى")}</span>${infl ? `<em class="infl">+${infl}%</em>` : ""}</div>
         <div class="desc">${def.descAr}</div>
         <button class="pick">${cant ? t("الذهب غير كافٍ") : t("ابنِ")}</button>
       </div>`;
@@ -11340,8 +11412,8 @@ const ICONS = { city: "▦", factory: "⚙", lab: "⚗", port: "⚓", base: "⌂
 function pickBuilding(key, sticky) {
   const p = app.game.player();
   const def = BUILDING_BY_KEY[key];
-  if (app.game.buildingCost(key, 1) > p.gold) {
-    toast(`تحتاج ${fmt(app.game.buildingCost(key, 1))} ذهب`, "bad");
+  if (app.game.buildPrice(p, key, 1) > p.gold) {
+    toast(`${t("تحتاج")} ${fmt(app.game.buildPrice(p, key, 1))} ${t("ذهب")}`, "bad");
     return;
   }
   app.brush = app.brush === key ? null : key;
@@ -11410,7 +11482,7 @@ function placeArea(cells) {
     const before = p.gold;
     if (netAct("build", { key, cell })) {
       built++;
-      spent += game.buildingCost(key, 1);
+      spent += game.buildPrice(p, key, 1);
       continue;
     }
     const err = game.build(p, key, cell);
@@ -11798,9 +11870,11 @@ function howTo() {
     <h4>البداية</h4>
     <ul>
       <li>أول 25 ثانية هدنة: ابنِ مدنًا ومصانع قبل أن تبدأ الحرب.</li>
+      <li>الدول الأخرى لا تهاجمك حتى تلمسها: أول هجوم تشنّه على دولة يجعلها — وحلفاءها — يردّون. قبل ذلك العالم يقاتل بعضه وأنت خارج الحرب.</li>
       <li>المدينة ترفع سقف جيشك وذهبك. المصنع يزيد ذهبك. القاعدة تسرّع التجنيد.</li>
       <li>اختر مبنى من الشريط ثم اضغط داخل أرضك: الفرشاة تبقى بيدك، فابنِ عشرة متتالية دون إعادة الاختيار. زر الفأرة الأيمن يوقف.</li>
       <li><code>Shift</code> + سحب يرسم مستطيلًا ويبني فيه كله دفعة واحدة.</li>
+      <li>كل مبنى من النوع نفسه يرفع سعر التالي: المدينة الأولى أرخص من الخامسة. البطاقة تُظهر السعر الحالي ونسبة الغلاء، فابنِ ما تحتاجه فعلًا بدل صفٍّ من عشرين.</li>
     </ul>
     <h4>الهجوم</h4>
     <ul>
@@ -11879,22 +11953,29 @@ async function boot() {
   buildMenu();
   renderMedals();
   void platformReady;
-  $("#btn-quick").onclick = () => {
-    app.started = true;
-    sfx.resume();
-    sfx.click();
-    if (profile.settings.sound !== false && !getSettings().muteAudio) sfx.startMusic();
-    quickStart();
-  };
-  $("#btn-play").onclick = () => {
+  // The single entry point: choose a nation, then play.
+  const beginMatch = () => {
     // First real user gesture: browsers only allow an AudioContext here, so the
     // music bed starts on this click rather than at boot.
     app.started = true;
     sfx.resume();
     sfx.click();
     if (profile.settings.sound !== false && !getSettings().muteAudio) sfx.startMusic();
+  };
+  $("#btn-play").onclick = () => {
+    beginMatch();
     startFlow();
   };
+  // Play from the picker: the preselected nation (or the highlighted one).
+  const playNow = $("#btn-play-now");
+  if (playNow) {
+    playNow.onclick = () => {
+      beginMatch();
+      const id = app.selectedId;
+      if (id != null) startGame(id);
+      else startFlow();
+    };
+  }
   $("#btn-howto").onclick = () => ($("#modal-howto").hidden = false);
   const tutorSkip = $("#tutor-skip");
   if (tutorSkip) tutorSkip.onclick = () => tutorStop();
@@ -11915,10 +11996,16 @@ async function boot() {
       toast(t("تعذر تحميل الحفظ"), "bad");
     }
   };
+  // The picker is the front door now, so "back" from it is the menu (modes,
+  // medals, settings, online) and "back" from the menu is the picker again.
   $("#btn-back-menu").onclick = () => {
     closeModals();
-    show("menu");
-    buildMenu();
+    if (app.screen === "country") {
+      show("menu");
+      buildMenu();
+    } else {
+      openCountrySelect(false);
+    }
   };
   $("#country-search").oninput = () => buildCountryList();
   $("#btn-random").onclick = randomCountry;
@@ -12385,7 +12472,17 @@ async function boot() {
     app.pickRenderer = new Renderer($("#pick-canvas"), app.pickWorld, pickStubGame(app.pickWorld));
     attachPickInput();
   }
-  requestAnimationFrame(() => show("menu"));
+  // Land straight in the nation picker.
+  //
+  // The portal allows at most one click before gameplay and the instant-start
+  // button is gone by request, so the click has to be the play button itself.
+  // The picker already arrives with a nation preselected, which makes "العب"
+  // here a genuine one-click start — and the full menu stays reachable from the
+  // back arrow for modes, medals, settings and online.
+  app.selectedId = null;
+  requestAnimationFrame(() => {
+    openCountrySelect(false);
+  });
 }
 
 // Bracket the load for the portal's measurement: loadingStart must come before

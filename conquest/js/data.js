@@ -237,6 +237,10 @@ export const BALANCE = {
   tick: 0.1, // simulation step (seconds)
 
   // --- economy ---
+  // Each building you already own of a type makes the next one 18% dearer.
+  // Paying the same 620 for the tenth factory as for the first made "build
+  // wide" strictly better than "fight", which is not the game.
+  buildPriceStep: 0.18,
   baseGoldRate: 3.4,
   goldPerFactory: 17,
   goldPerCell: 0.01,

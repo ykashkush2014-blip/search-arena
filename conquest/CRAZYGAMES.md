@@ -7,7 +7,7 @@ Everything the portal asks for, and where each requirement is implemented.
 | | |
 |---|---|
 | Build file | `dist/conquest.html` (single self-contained file) |
-| Size | **1.49 MB** (limit 50 MB basic / 250 MB full) |
+| Size | **1.50 MB** (limit 50 MB basic / 250 MB full) |
 | File count | **1** (limit 1500) |
 | External assets | none — map, styles, audio and all 12 modules are inlined |
 | External requests | only `https://sdk.crazygames.com/crazygames-sdk-v3.js` |
@@ -132,6 +132,15 @@ reporting "not detected" even with a correct tag.
 
 Measured on the shipped build, 400 s of headless play with an idle player: **122 462 AI→AI attack samples, 32 live AI-vs-AI war pairs, 31 war declarations in the feed — all of them between nations other than the player**, and AI-vs-AI combat on screen in 94 % of the sampled frames. The player is attacked once they have taken something; they are not the only war on the map.
 
+### Round 3 (four requests)
+
+| # | Requested | What changed | Verified by |
+|---|---|---|---|
+| 1 | Make it harder: every building should raise the price of the next | `buildPrice()` scales with how many of that type you already own: `base × 1.18^owned`, capped. Level upgrades keep their own curve. The card shows the live price plus a red `+N%`, and the AI pays the same price, so the escalation is not a human-only tax | `priceup.mjs` 11/11 — 775 → 915 → 1079 → 1273 → 1503 → 1773, and buying at the old price is refused |
+| 2 | The build square must be visible | the hover was a 1.5 px outline one cell wide, invisible on the map. It is now a filled, pulsing square with a thick outline, a soft halo and corner ticks, green when legal and red when not | `brushsq.mjs` 7/7 |
+| 3 | Bots should not attack the player **until the player touches them** | new provocation gate: an AI may not declare on the human until the human has attacked it or one of its allies. AI-vs-AI wars are untouched (identical scoring to the previous build — my earlier scoring tweak was reverted). Provocation is saved with the game and survives a reload | `untouched.mjs` 10/10 — 10 idle minutes: 0 wars on the player, 50–74 AI-vs-AI war links alive; one attack on a neighbour: it counter-attacks within the same minute |
+| 4 | Remove the instant-start button, rename the picker button to "العب" | quick start deleted; the menu's single button is **العب**, and the picker has its own **العب**. To keep the portal's one-click rule the app now boots straight into the picker with a nation preselected | `oneclick.mjs` 7/7 (load → one click → running match), `crazygames.mjs` 29/29 |
+
 ---
 
 ## Gameplay requirements
@@ -141,7 +150,7 @@ Measured on the shipped build, 400 s of headless play with an idle player: **122
 | **English localisation, everywhere** | ✅ | English is the default; Arabic is optional. Covers DOM text *and* the three places the DOM walker cannot reach — see below |
 | Uses `locale`, falls back to English | ✅ | see above |
 | Readable at `devicePixelRatio: 1` | ✅ | 12–14 px minimum body text, high-contrast palette |
-| **Land in gameplay, max 1 click** | ✅ | **⚡ Quick start** on the menu is one click to a live match. The nation picker is a separate, clearly labelled choice |
+| **Land in gameplay, max 1 click** | ✅ | The game **opens on the nation picker** with a country already selected, and one press of **Play** starts a live match. The instant-start button was removed on request, so the single click is now the play button itself rather than a random-nation shortcut. Measured by `oneclick.mjs` (load → one click → running match) |
 | Consistent physics at 144/165 Hz | ✅ | integration uses real delta time, clamped at 250 ms, never a fixed per-frame step |
 | Originality | ✅ | own name, own procedural pixel map of real borders, no borrowed assets |
 | No cross-promotion | ✅ | no external links anywhere in the game |

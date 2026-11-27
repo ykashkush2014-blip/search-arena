@@ -41,8 +41,10 @@
         <button class="btn ghost" id="btn-continue" hidden>
           <span class="k">متابعة</span><small>استئناف آخر معركة</small>
         </button>
-        <button class="btn gold" id="btn-quick">⚡ ابدأ فورًا</button>
-        <button class="btn ghost" id="btn-play">اختر دولتك</button>
+        <!-- One way in: pick your country, then play. The old "start instantly"
+             button is gone — it dropped the player into a random nation, which
+             made the first click skip the only choice that matters. -->
+        <button class="btn gold" id="btn-play">العب</button>
         <button class="btn ghost" id="btn-medals">
           <span class="k">الأوسمة</span>
           <small id="medal-count">0 / 19</small>
@@ -65,6 +67,9 @@
         <p id="select-sub">كل دولة لها حدودها الحقيقية وصعوبتها الخاصة</p>
       </div>
       <div class="spacer"></div>
+      <!-- The one-click path: a nation is preselected, so this starts a match
+           immediately and the list is only there to change your mind. -->
+      <button class="btn gold play-now" id="btn-play-now"><i class="ico">▶</i><span>العب</span></button>
       <div class="filters">
         <select id="era-select" class="select"></select>
         <select id="map-select" class="select"></select>

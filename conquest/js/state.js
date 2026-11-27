@@ -51,6 +51,9 @@ export class Nation {
     this.originalCells = 0;
     this.war = new Set();
     this.ally = new Set();
+    // Nations this human has touched. Empty for bots; it is the switch that
+    // allows an AI to fight back (see playerProvoked).
+    this.provoked = new Set();
     this.peace = new Map(); // id -> timestamp (seconds)
     this.frontier = new Set();
     this.totalFront = 0;
@@ -337,6 +340,35 @@ export class Game {
     return Math.round(def.cost * eraMult * Math.pow(1.62, level - 1));
   }
 
+  // What the *next* one of this kind actually costs the player. Every building
+  // already owned of the same type makes the next one dearer, so a row of ten
+  // factories is a real commitment rather than ten copies of the same cheap
+  // card. Level upgrades keep their own exponential curve (buildingCost).
+  buildPrice(n, key, level = 1) {
+    const base = this.buildingCost(key, level);
+    if (!n || !n.buildings) return base;
+    const owned = this.countBuilding(n, key);
+    if (!owned) return base;
+    const step = (BALANCE && BALANCE.buildPriceStep) || 0.18;
+    return Math.round(base * Math.pow(1 + step, owned));
+  }
+
+  // How many of a type a nation has, capped so the price cannot explode for an
+  // empire that has been building for an hour.
+  countBuilding(n, key) {
+    let c = 0;
+    for (const b of n.buildings) if (b.key === key) c++;
+    return c;
+  }
+
+  // Percentage the next copy costs above the base card price — the HUD shows
+  // this so the escalation is visible rather than mysterious.
+  buildInflation(n, key) {
+    const base = this.buildingCost(key, 1);
+    const now = this.buildPrice(n, key, 1);
+    return Math.max(0, Math.round((now / Math.max(1, base) - 1) * 100));
+  }
+
   resourceRate(n) {
     const agg = n.agg || { factory: 0, port: 0, lab: 0 };
     const economy = n.tech.economy || 0;
@@ -502,7 +534,7 @@ export class Game {
   canBuild(n, key, cell) {
     if (!n.alive) return t("دولتك سقطت");
     if (this.owners[cell] !== n.id) return t("يجب البناء داخل أرضك");
-    if (n.gold < this.buildingCost(key, 1)) return t("الذهب غير كافٍ");
+    if (n.gold < this.buildPrice(n, key, 1)) return t("الذهب غير كافٍ");
     if (n.buildings.some((b) => b.cell === cell)) return t("يوجد مبنى هنا");
     return null;
   }
@@ -510,7 +542,7 @@ export class Game {
   build(n, key, cell) {
     const err = this.canBuild(n, key, cell);
     if (err) return err;
-    const cost = this.buildingCost(key, 1);
+    const cost = this.buildPrice(n, key, 1);
     n.gold -= cost;
     const b = { key, cell, level: 1, cd: 0 };
     n.buildings.push(b);
@@ -530,7 +562,7 @@ export class Game {
     // (setup/starting buildings are the only free ones). Before this, the AI
     // built dozens of cities per minute for free, which made land worthless.
     const { world, owners } = this;
-    const cost = this.buildingCost(key, 1);
+    const cost = this.buildPrice(n, key, 1);
     if (opts.paid !== false) {
       if (!n.alive) return false;
       if (n.gold < cost) return false;
@@ -617,6 +649,14 @@ export class Game {
     b.war.add(a.id);
     a.peace.delete(b.id);
     b.peace.delete(a.id);
+    // A human who declares war has touched that nation (and, through the pact
+    // above, its allies): from now on they may hit back. This is the only thing
+    // that wakes an AI up to the player.
+    if (a.isPlayer) {
+      a.provoked = a.provoked || new Set();
+      a.provoked.add(b.id);
+      for (const allyId of b.ally) a.provoked.add(allyId);
+    }
     this.warVersion = (this.warVersion || 0) + 1;
     if (!silent) {
       this.log(`${a.ar} أعلنت الحرب على ${b.ar}`, b.isPlayer ? "bad" : "info", {
@@ -1927,15 +1967,16 @@ export class Game {
     }
   }
 
-  // How many live offensives already run between two nations — used to keep the
-  // AI from re-declaring a war it is already fighting.
-  warsBetween(a, b) {
-    let n = 0;
-    for (const atk of this.attacks) {
-      if (!atk.active) continue;
-      if ((atk.attacker === a && atk.defender === b) || (atk.attacker === b && atk.defender === a)) n++;
-    }
-    return n;
+  // Has the player ever given this nation a reason to fight? True when the
+  // player attacked it, attacked one of its allies, or already has a live
+  // offensive against it. A bot with no answer here leaves the human alone.
+  playerProvoked(n, p) {
+    if (!p || !p.isPlayer || !n) return false;
+    if (p.war.has(n.id)) return true;              // already at war
+    if (p.provoked && p.provoked.has(n.id)) return true;   // hit us directly
+    for (const id of n.ally) if (p.provoked && p.provoked.has(id)) return true; // hit our ally
+    for (const a of this.attacks) if (a.active && a.attacker === p && a.defender === n) return true;
+    return false;
   }
 
   aiConsiderWar(n) {
@@ -1954,32 +1995,24 @@ export class Game {
       if (n.war.has(id)) continue;
       // don't dogpile a nation that is already collapsing
       const strength = other.army * this.attackMult(other);
-      let mine = n.army * this.attackMult(n) * (1 + n.ai.aggression * 0.35);
+      const mine = n.army * this.attackMult(n) * (1 + n.ai.aggression * 0.35);
       const p0 = other.isPlayer ? other : null;
       const isPlayerTarget = !!p0;
-      if (!isPlayerTarget) {
-        // The AI used to treat the human as the only real target: everyone else
-        // was skipped by the "don't attack anyone but the player" effect of the
-        // scoring below, so the map sat still and the whole world waited on the
-        // player. AI nations now fight each other on the same terms, with a
-        // mild preference for a neighbour that is weaker than they are, and a
-        // small bias against the player so the human is not dogpiled.
-        if (other.army < n.army * 0.85) mine *= 1.15;
-        if (this.warsBetween(n, other) > 0) mine *= 1.1;
-      }
       if (isPlayerTarget) {
-        const elapsed = this.time - (this.openedAt || 0);
-        // The human gets breathing room to build up, and AI coalitions only
-        // form once the player has proven to be a threat.
+        // The bots leave the human alone until the human touches them.
         //
-        // But "breathing room" had become a no-entry zone: an AI needed 2.1×
-        // the player's strength to declare at all, so on a normal start nobody
-        // ever attacked — the map was at war with itself and the human sat
-        // untouched until one giant finally qualified. The bar is now modestly
-        // above parity, which still protects a small player without making the
-        // world ignore them.
-        const grace = this.mode === "daily" ? 45 : 75;
+        // This is the rule the player asked for, and it is checked before any
+        // strength comparison: an AI does not declare war on the player while
+        // the player has never attacked it, never attacked an ally of it, and
+        // the two have no live offensive between them. In other words, the
+        // world ignores you until you make yourself its problem — the AI-vs-AI
+        // wars keep running underneath, which is what makes the map feel alive.
+        if (!this.playerProvoked(n, p0)) continue;
+        const elapsed = this.time - (this.openedAt || 0);
         const aggressive = (p0.stats.captures || 0) >= 2;
+        // Once provoked, a short grace period still applies so the very first
+        // skirmish does not instantly become a three-front war.
+        const grace = this.mode === "daily" ? 30 : 60;
         if (elapsed < grace) continue;
         if (!aggressive && mine < strength * 1.45) continue;
         if (aggressive && mine < strength * 1.1) continue;
@@ -2289,6 +2322,9 @@ export class Game {
         war: [...n.war],
         ally: [...n.ally],
         peace: [...n.peace],
+        // who the human has touched — without it a reload would make the bots
+        // forget they are allowed to fight back
+        provoked: n.provoked ? [...n.provoked] : [],
         buildings: n.buildings.map((b) => [b.key, b.cell, b.level, Math.round(b.cd * 10) / 10]),
         stats: n.stats,
         originalCells: n.originalCells,
@@ -2365,6 +2401,7 @@ export class Game {
         cells: ns.cells,
         capital: ns.capital,
         war: new Set(ns.war),
+        provoked: new Set(ns.provoked || []),
         ally: new Set(ns.ally),
         peace: new Map(ns.peace),
         stats: ns.stats,

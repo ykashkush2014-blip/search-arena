@@ -444,6 +444,12 @@ input, select { font-family: inherit; }
 }
 .bcard .cost { font-size: 11px; color: var(--gold); display: flex; justify-content: space-between; }
 .bcard .cost span { color: var(--muted); font-size: 10px; }
+/* price escalation marker: +N% over the card's base price */
+.bcard .cost .infl {
+  font-style: normal; font-size: 9.5px; color: var(--red);
+  background: rgba(255,120,110,0.12); border: 1px solid rgba(255,120,110,0.3);
+  border-radius: 5px; padding: 0 4px; margin-inline-start: 3px; flex: 0 0 auto;
+}
 .bcard .desc {
   font-size: 9.5px; color: var(--muted); line-height: 1.35;
   /* two lines maximum, ellipsis instead of a hard cut mid-glyph */
@@ -870,6 +876,11 @@ input, select { font-family: inherit; }
 @media (max-width: 760px) {
   .chat-dock { display: none; }
 }
+/* the picker's one-click Play: icon and label are separate nodes so the DOM
+   translator can swap the word without touching the glyph */
+.play-now { display: inline-flex; align-items: center; gap: 6px; }
+.play-now .ico { font-style: normal; font-size: 11px; opacity: 0.9; }
+
 .rematch-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
 .rematch-row .btn { min-width: 130px; }
 .icon-btn.danger { color: var(--red); }

@@ -763,4 +763,6 @@ export const EN = {
   "إنزال على": "Landing on",
   "بانتظار المضيف لبدء مباراة جديدة…": "Waiting for the host to start a new match…",
   "الخادم مشغول بالكامل  جرّب بعد قليل": "The server is full — try again in a moment",
+  "العب": "Play",
+  "اختر دولتك": "Choose your country",
 };
