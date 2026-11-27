@@ -14,6 +14,8 @@ const DEAD_LAND = [40, 40, 46];
 export class Renderer {
   constructor(canvas, world, game) {
     this.canvas = canvas;
+    // Shift+drag build rectangle: two corner cells, or null when idle.
+    this.area = null;
     this.ctx = canvas.getContext("2d", { alpha: false });
     this.world = world;
     this.game = game;
@@ -454,6 +456,7 @@ export class Renderer {
     this.drawAttacks(ctx, zoom);
     this.drawStrikes(ctx, zoom);
     if (this.brush && this.hoverCell >= 0) this.drawBrush(ctx, zoom);
+    if (this.area) this.drawArea(ctx, zoom);
     if (this.labels && zoom > 1.5) this.drawLabels(ctx, zoom);
   }
 
@@ -608,28 +611,100 @@ export class Renderer {
   drawAttacks(ctx, zoom) {
     const { game } = this;
     const w = this.world.w;
+    // Any AI-vs-AI offensive near the camera is drawn, not just the ones that
+    // touch the player. The whole point of a world war is that you can see it:
+    // the old rule hid every other nation's fighting unless you happened to
+    // zoom past 1.6×, so a map with 160 AI wars in it looked completely dead.
+    // Near = inside the visible frame plus a margin, measured in world cells for
+    // the current zoom. The margin is generous (a full screen in each direction)
+    // so a war one pan away is already drawn instead of popping in.
+    const viewCellsX = (this.canvas.width || 1200) / zoom;
+    const viewCellsY = (this.canvas.height || 700) / zoom;
+    const near = (cell) => {
+      const x = cell % w;
+      const y = (cell / w) | 0;
+      return Math.abs(x - this.cam.x) < viewCellsX * 1.5 && Math.abs(y - this.cam.y) < viewCellsY * 1.5;
+    };
     for (const a of game.attacks) {
       if (!a.active) continue;
       const involved = a.attacker.isPlayer || a.defender.isPlayer;
-      if (!involved && zoom < 1.6) continue;
+      if (!involved) {
+        if (zoom < 0.85) continue;
+        const shown = (a.fronts.length ? a.fronts : [a.landingAt || -1]).some((c) => c >= 0 && near(c));
+        const home = a.attacker.capital != null && a.attacker.capital >= 0 ? near(a.attacker.capital) : false;
+        if (!shown && !home) continue;
+      }
       const targets = a.fronts;
       if (a.naval) {
-        const cap = a.attacker.capital;
-        if (cap < 0 || a.landingAt < 0) continue;
-        const x1 = ((cap % w) - this.cam.x) * zoom;
-        const y1 = (((cap / w) | 0) - this.cam.y) * zoom;
+        // The fleet: a line from the home coast to the beachhead and ships
+        // travelling along it. Before this the invasion was already decided —
+        // the player ordered it and land changed hands 1.6s later with nothing
+        // on screen in between, so a naval attack was indistinguishable from a
+        // land one.
+        const from = a.sailFrom != null && a.sailFrom >= 0 ? a.sailFrom : a.attacker.capital;
+        if (from < 0 || a.landingAt < 0) continue;
+        const x1 = ((from % w) - this.cam.x) * zoom;
+        const y1 = (((from / w) | 0) - this.cam.y) * zoom;
         const x2 = ((a.landingAt % w) - this.cam.x) * zoom;
         const y2 = (((a.landingAt / w) | 0) - this.cam.y) * zoom;
+        const mine = a.attacker.isPlayer;
+        const atSea = !a.landed;
         ctx.save();
-        ctx.globalAlpha = 0.45 + Math.sin(game.time * 4) * 0.2;
-        ctx.strokeStyle = a.attacker.isPlayer ? "#8fe3ff" : "#ff9d8f";
+        // route
+        ctx.globalAlpha = atSea ? 0.5 : 0.22;
+        ctx.strokeStyle = mine ? "#8fe3ff" : "#ff9d8f";
         ctx.lineWidth = Math.max(1.2, zoom * 0.3);
         ctx.setLineDash([6, 5]);
         ctx.beginPath();
         ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo((x1 + x2) / 2, Math.min(y1, y2) - 40, x2, y2);
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2 - 40;
+        ctx.quadraticCurveTo(mx, my, x2, y2);
         ctx.stroke();
         ctx.setLineDash([]);
+
+        if (atSea && a.crossing > 0) {
+          // progress along the curve, 0 at the home coast and 1 at the beach
+          const t = Math.min(1, Math.max(0, 1 - a.landingTimer / a.crossing));
+          const q = (k) => (1 - k) * (1 - k) * x1 + 2 * (1 - k) * k * mx + k * k * x2;
+          const qy = (k) => (1 - k) * (1 - k) * y1 + 2 * (1 - k) * k * my + k * k * y2;
+          // a small convoy, spaced back along the route
+          for (let i = 0; i < 3; i++) {
+            const k = Math.max(0, t - i * 0.045);
+            const px = q(k);
+            const py = qy(k);
+            const ang = Math.atan2(qy(Math.min(1, k + 0.02)) - py, q(Math.min(1, k + 0.02)) - px);
+            const s = Math.max(3, Math.min(9, zoom * 0.7));
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(ang);
+            // hull
+            ctx.fillStyle = i === 0 ? "#ffffff" : "rgba(220,240,255,0.85)";
+            ctx.beginPath();
+            ctx.moveTo(s * 0.6, 0);
+            ctx.lineTo(-s * 0.5, s * 0.34);
+            ctx.lineTo(-s * 0.3, 0);
+            ctx.lineTo(-s * 0.5, -s * 0.34);
+            ctx.closePath();
+            ctx.fill();
+            // wake
+            ctx.strokeStyle = "rgba(160,220,255,0.55)";
+            ctx.lineWidth = Math.max(1, s * 0.12);
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.55, 0);
+            ctx.lineTo(-s * 1.4, 0);
+            ctx.stroke();
+            ctx.restore();
+          }
+          // beachhead marker, pulsing while the fleet is still at sea
+          ctx.globalAlpha = 0.4 + 0.4 * Math.sin(game.time * 5);
+          ctx.strokeStyle = mine ? "#8fe3ff" : "#ff9d8f";
+          ctx.lineWidth = Math.max(1, zoom * 0.18);
+          ctx.beginPath();
+          ctx.arc(x2, y2, Math.max(4, zoom * 0.8), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
         ctx.fillStyle = "#fff";
         ctx.beginPath();
         ctx.arc(x2, y2, 2.6, 0, Math.PI * 2);
@@ -752,6 +827,43 @@ export class Renderer {
     ctx.strokeStyle = this.brushOk ? "#b8f0a0" : "#ff8f8f";
     ctx.lineWidth = 1.5;
     ctx.strokeRect(s.x - size / 2, s.y - size / 2, size, size);
+    ctx.restore();
+  }
+
+  // The rectangle being dragged for an area build: a translucent fill plus a
+  // grid of dots on every cell that will be built, so the player sees exactly
+  // what they are about to pay for before releasing.
+  drawArea(ctx, zoom) {
+    const { a, b, ok } = this.area;
+    const w = this.world.w;
+    const ax = a % w;
+    const ay = (a / w) | 0;
+    const bx = b % w;
+    const by = (b / w) | 0;
+    const x0 = Math.min(ax, bx);
+    const x1 = Math.max(ax, bx);
+    const y0 = Math.min(ay, by);
+    const y1 = Math.max(ay, by);
+    const px = (x0 - this.cam.x) * zoom;
+    const py = (y0 - this.cam.y) * zoom;
+    const pw = (x1 - x0 + 1) * zoom;
+    const ph = (y1 - y0 + 1) * zoom;
+    ctx.save();
+    ctx.fillStyle = ok ? "rgba(184,240,160,0.18)" : "rgba(255,143,143,0.18)";
+    ctx.strokeStyle = ok ? "rgba(184,240,160,0.9)" : "rgba(255,143,143,0.9)";
+    ctx.lineWidth = Math.max(1, zoom * 0.2);
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeRect(px, py, pw, ph);
+    // one dot per cell that will receive a building
+    ctx.fillStyle = ok ? "rgba(200,255,180,0.75)" : "rgba(255,180,180,0.7)";
+    const r = Math.max(1, zoom * 0.16);
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        ctx.beginPath();
+        ctx.arc((x - this.cam.x) * zoom + zoom / 2, (y - this.cam.y) * zoom + zoom / 2, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.restore();
   }
 

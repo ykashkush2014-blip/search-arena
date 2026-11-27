@@ -200,6 +200,24 @@ const PATTERNS = [
   [/^(.+) اختار (.+)$/, (m) => `${m[1]} chose ${m[2]}`],
   [/^(.+) أعلنت الحرب على (.+)$/, (m) => `${m[1]} declared war on ${m[2]}`],
   [/^(.+) \(أنت\)$/, (m) => `${m[1]} (you)`],
+
+  // --- event log lines from state.js. These are the sentences the player reads
+  // in the war feed; they are composed in Arabic around nation names, so a
+  // dictionary of whole sentences could never match them.
+  [/^(.+) أعلنت الحرب على (.+)$/, (m) => `${m[1]} declared war on ${m[2]}`],
+  [/^تحالف بين (.+) و(.+) — دفاع مشترك$/, (m) => `Alliance between ${m[1]} and ${m[2]} — mutual defence`],
+  [/^وقف إطلاق النار بين (.+) و(.+)$/, (m) => `Ceasefire between ${m[1]} and ${m[2]}`],
+  [/^(.+) اختار (.+)$/, (m) => `${m[1]} chose ${m[2]}`],
+  [/^تنبيه: هجوم على عاصمتك$/, () => "Alert: attack on your capital"],
+  [/^هذه الدولة بعيدة عن مؤنك$/, () => "This country is too far from your supply lines"],
+  [/^حلفاؤك في الحرب، لكن (.+) منهم بعيدون عن جبهة (.+)$/, (m) => `Your allies are in the war, but ${m[1]} of them are far from the ${m[2]} front`],
+  [/^أسطولك يتجه إلى (.+)$/, (m) => `Your fleet is heading for ${m[1]}`],
+  [/^حلفاؤك انضموا إلى الحرب ضد (.+)$/, (m) => `Your allies joined the war against ${m[1]}`],
+  [/^الهدف: (.+) من الأرض$/, (m) => `Goal: ${m[1]} of the world`],
+  [/^سيطر على (.+) من الأرض$/, (m) => `Control ${m[1]} of the world`],
+  [/^اضغط داخل أرضك لوضع (.+) — البناء مستمرّ، وزر الفأرة الأيمن يوقف$/, (m) => `Click inside your own land to place ${m[1]} — building continues, right-click to stop`],
+  [/^اضغط داخل أرضك لوضع (.+)$/, (m) => `Click inside your own land to place ${m[1]}`],
+  [/^كمّاشة على (.+)$/, (m) => `Pincer on ${m[1]}`],
 ];
 
 // Inputs arrive as one composed Arabic sentence ("روسيا أعلنت الحرب على أوكرانيا"),
@@ -258,16 +276,33 @@ function swapPatternsWithin(text) {
 }
 
 export function swapPatterns(text) {
-  const s = String(text);
-  for (const [re, fn] of PATTERNS) {
-    const m = s.match(re);
-    if (m) {
+  // One direction only. These rules rewrite Arabic into English; running them
+  // while the language is Arabic would erase the Arabic the caller just wrote
+  // (every Arabic toast containing a number came out half-English).
+  if (lang === "ar") return String(text);
+  // Several rules match the same sentence with different reach — "الهدف: 50%
+  // من الأرض" is caught by the generic "X of the world" rule before the
+  // "Goal: …" rule ever runs, leaving half a sentence in Arabic. Rather than
+  // hand-order 80 regexes, apply them until nothing changes (a few passes at
+  // most); a rule that cannot rewrite a piece simply leaves it alone.
+  let s = String(text);
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false;
+    for (const [re, fn] of PATTERNS) {
+      const m = s.match(re);
+      if (!m) continue;
+      let out = s;
       try {
-        return fn(m);
+        out = fn(m);
       } catch {
-        return s;
+        continue;
+      }
+      if (out !== s) {
+        s = out;
+        changed = true;
       }
     }
+    if (!changed) break;
   }
   return s;
 }
@@ -291,6 +326,9 @@ function translateCore(text) {
   // the nation table for the tail.
   let out = swapPatterns(core);
   if (out === core) out = swapPatternsWithin(core);
+  // replaceNations is declared below with the nation table; calling it here is
+  // fine because this function only runs after module evaluation. It is what
+  // turns the nation names left inside a rewritten sentence into English.
   out = replaceNations(out);
   return out;
 }
@@ -317,6 +355,7 @@ function nationIn(text) {
   if (lang !== "en") return null;
   return nations.get(text) || null;
 }
+
 
 // ------------------------------------------------------------------ the DOM ---
 const ATTRS = ["placeholder", "title", "aria-label", "alt"];

@@ -532,6 +532,46 @@ input, select { font-family: inherit; }
 .modal-card header .icon-btn { margin-inline-start: auto; }
 .hint { font-size: 11.5px; color: var(--muted); margin: 10px 0 0; line-height: 1.6; }
 
+/* ---------------------------------------------------- research in the bar ---
+   The research tab lives in the same bottom bar as the build cards, so the six
+   techs are laid out as one compact row of cards instead of a modal grid. */
+.tech-inline {
+  display: flex; align-items: stretch; gap: 7px; flex-wrap: nowrap;
+  overflow-x: auto; overflow-y: hidden; width: 100%;
+}
+.tech-inline-pts {
+  flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center;
+  align-items: center; min-width: 58px; padding: 2px 8px; border-radius: 10px;
+  border: 1px solid rgba(244,210,122,0.35); background: rgba(244,210,122,0.08);
+}
+.tech-inline-pts b { color: var(--gold); font-size: 15px; font-variant-numeric: tabular-nums; }
+.tech-inline-pts small { font-size: 9.5px; color: var(--muted); }
+.tcard {
+  flex: 0 0 auto; width: 96px; display: flex; flex-direction: column; gap: 3px;
+  align-items: center; padding: 6px 5px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.035);
+  color: var(--text); text-align: center; font-size: 10.5px;
+}
+.tcard:hover { border-color: var(--line-2); background: rgba(255,255,255,0.07); }
+.tcard .ti { font-size: 14px; line-height: 1; }
+.tcard b { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tcard .pips { display: flex; gap: 2px; }
+.tcard .pips i { width: 9px; height: 4px; border-radius: 1.5px; background: rgba(255,255,255,0.14); }
+.tcard .pips i.on { background: linear-gradient(90deg, #c99b3f, #f4d27a); }
+.tcard .tcost { font-size: 9.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tcard.can { border-color: rgba(184,240,160,0.45); box-shadow: 0 0 0 1px rgba(184,240,160,0.12) inset; }
+.tcard.can .tcost { color: var(--green, #b8f0a0); }
+.tcard.done { opacity: 0.55; cursor: default; }
+
+/* A quiet dot on the tab when a tech is affordable, so research advertises
+   itself instead of waiting to be found. */
+.tab-badge {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  margin-inline-start: 4px; vertical-align: middle;
+  background: var(--gold); box-shadow: 0 0 6px rgba(244,210,122,0.8);
+}
+.tab-badge[hidden] { display: none; }
+
 .tech-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
 .tech {
   border: 1px solid var(--line); border-radius: 12px; padding: 10px;
@@ -770,11 +810,16 @@ input, select { font-family: inherit; }
 .lobby-chips .chip { font-size: 11px; }
 
 /* in-game chat dock */
+/* The chat dock used to be pinned at bottom-left, exactly on top of the attack
+   list (#events) — same left edge, same width, overlapping bottoms — so in an
+   online match chat covered the list of running offensives. It now lives on the
+   right, under the minimap, and never shares a column with the attack panel. */
 .chat-dock {
-  position: absolute; bottom: 178px; left: 10px; width: 262px; z-index: 11;
+  position: absolute; bottom: 190px; right: 10px; left: auto; width: 250px; z-index: 11;
   border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
   backdrop-filter: blur(8px); box-shadow: var(--shadow);
   display: flex; flex-direction: column; gap: 4px; padding: 6px;
+  max-height: 34vh;
 }
 .chat-dock.collapsed .dock-log, .chat-dock.collapsed .dock-row { display: none; }
 .dock-head { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
@@ -797,6 +842,32 @@ input, select { font-family: inherit; }
   .lobby-seats { flex-direction: row; overflow-x: auto; }
   .seat-row { min-width: 150px; }
   .lobby-chat { max-height: 26vh; }
+}
+
+/* Short viewports: the attack list and the chat still must not touch, so the
+   dock moves up under the hud-more button and keeps its narrow column. */
+/* Short viewports: the map is only a few hundred pixels tall and the right
+   column is already occupied by the minimap (bottom) and the ⋯ menu (top), so
+   the dock becomes a slim horizontal strip pinned above the minimap. It is
+   anchored to the same bottom offset as the minimap and therefore cannot reach
+   the bottom-left attack list. */
+@media (max-height: 620px) {
+  .chat-dock {
+    bottom: 272px; top: auto; right: 10px; left: auto;
+    width: 250px; max-height: 20vh;
+  }
+  .chat-dock .dock-log { max-height: 64px; }
+  .chat-dock.collapsed { max-height: none; }
+}
+
+/* Narrow-but-tall windows: the dock shrinks instead of disappearing, because a
+   multiplayer match with no chat is worse than a small chat. It only hides when
+   it would cover the map entirely. */
+@media (max-width: 980px) and (min-height: 560px) {
+  .chat-dock { display: flex; width: 200px; bottom: auto; top: 92px; }
+  .chat-dock.collapsed { width: 132px; }
+}
+@media (max-width: 760px) {
   .chat-dock { display: none; }
 }
 .rematch-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }

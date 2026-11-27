@@ -240,7 +240,7 @@
       </div>
       <div class="res" id="res-gold"><i class="ri">◈</i><b>0</b><small>+0/ث</small></div>
       <div class="res" id="res-army"><i class="ri">⚔</i><b>0</b><small>0%</small></div>
-      <div class="res" id="res-research"><i class="ri">✦</i><b>0</b><small>بحث</small></div>
+      <button class="res res-btn" id="res-research" title="البحث (R)"><i class="ri">✦</i><b>0</b><small>بحث</small></button>
       <div class="goal-chip">
         <div class="gc-row"><span id="goal-label">الهدف: 50% من الأرض</span><b id="goal-pct">0%</b></div>
         <div class="bar"><i id="goal-bar"></i></div>
@@ -290,6 +290,10 @@
         <button class="tab" data-tab="military" data-short="الجيش"><span class="tab-long">الجيش</span><span class="tab-short">الجيش</span></button>
         <button class="tab" data-tab="navy" data-short="الأسطول"><span class="tab-long">الأسطول</span><span class="tab-short">الأسطول</span></button>
         <button class="tab" data-tab="strikes" data-short="ضربات"><span class="tab-long">الضربات</span><span class="tab-short">ضربات</span></button>
+        <!-- Research used to be reachable only from a hidden ✦ button behind the
+             "more" menu on narrow screens. It is now a tab of its own, which is
+             also what the ✦ resource chip in the top bar opens. -->
+        <button class="tab" data-tab="research" data-short="بحث"><span class="tab-long">البحث</span><span class="tab-short">بحث</span><span class="tab-badge" id="research-badge" hidden></span></button>
       </div>
       <div class="tab-body" id="tab-body"></div>
       <div class="force-row">
@@ -990,6 +994,46 @@ input, select { font-family: inherit; }
 .modal-card header .icon-btn { margin-inline-start: auto; }
 .hint { font-size: 11.5px; color: var(--muted); margin: 10px 0 0; line-height: 1.6; }
 
+/* ---------------------------------------------------- research in the bar ---
+   The research tab lives in the same bottom bar as the build cards, so the six
+   techs are laid out as one compact row of cards instead of a modal grid. */
+.tech-inline {
+  display: flex; align-items: stretch; gap: 7px; flex-wrap: nowrap;
+  overflow-x: auto; overflow-y: hidden; width: 100%;
+}
+.tech-inline-pts {
+  flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center;
+  align-items: center; min-width: 58px; padding: 2px 8px; border-radius: 10px;
+  border: 1px solid rgba(244,210,122,0.35); background: rgba(244,210,122,0.08);
+}
+.tech-inline-pts b { color: var(--gold); font-size: 15px; font-variant-numeric: tabular-nums; }
+.tech-inline-pts small { font-size: 9.5px; color: var(--muted); }
+.tcard {
+  flex: 0 0 auto; width: 96px; display: flex; flex-direction: column; gap: 3px;
+  align-items: center; padding: 6px 5px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.035);
+  color: var(--text); text-align: center; font-size: 10.5px;
+}
+.tcard:hover { border-color: var(--line-2); background: rgba(255,255,255,0.07); }
+.tcard .ti { font-size: 14px; line-height: 1; }
+.tcard b { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tcard .pips { display: flex; gap: 2px; }
+.tcard .pips i { width: 9px; height: 4px; border-radius: 1.5px; background: rgba(255,255,255,0.14); }
+.tcard .pips i.on { background: linear-gradient(90deg, #c99b3f, #f4d27a); }
+.tcard .tcost { font-size: 9.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tcard.can { border-color: rgba(184,240,160,0.45); box-shadow: 0 0 0 1px rgba(184,240,160,0.12) inset; }
+.tcard.can .tcost { color: var(--green, #b8f0a0); }
+.tcard.done { opacity: 0.55; cursor: default; }
+
+/* A quiet dot on the tab when a tech is affordable, so research advertises
+   itself instead of waiting to be found. */
+.tab-badge {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  margin-inline-start: 4px; vertical-align: middle;
+  background: var(--gold); box-shadow: 0 0 6px rgba(244,210,122,0.8);
+}
+.tab-badge[hidden] { display: none; }
+
 .tech-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
 .tech {
   border: 1px solid var(--line); border-radius: 12px; padding: 10px;
@@ -1228,11 +1272,16 @@ input, select { font-family: inherit; }
 .lobby-chips .chip { font-size: 11px; }
 
 /* in-game chat dock */
+/* The chat dock used to be pinned at bottom-left, exactly on top of the attack
+   list (#events) — same left edge, same width, overlapping bottoms — so in an
+   online match chat covered the list of running offensives. It now lives on the
+   right, under the minimap, and never shares a column with the attack panel. */
 .chat-dock {
-  position: absolute; bottom: 178px; left: 10px; width: 262px; z-index: 11;
+  position: absolute; bottom: 190px; right: 10px; left: auto; width: 250px; z-index: 11;
   border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
   backdrop-filter: blur(8px); box-shadow: var(--shadow);
   display: flex; flex-direction: column; gap: 4px; padding: 6px;
+  max-height: 34vh;
 }
 .chat-dock.collapsed .dock-log, .chat-dock.collapsed .dock-row { display: none; }
 .dock-head { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
@@ -1255,6 +1304,32 @@ input, select { font-family: inherit; }
   .lobby-seats { flex-direction: row; overflow-x: auto; }
   .seat-row { min-width: 150px; }
   .lobby-chat { max-height: 26vh; }
+}
+
+/* Short viewports: the attack list and the chat still must not touch, so the
+   dock moves up under the hud-more button and keeps its narrow column. */
+/* Short viewports: the map is only a few hundred pixels tall and the right
+   column is already occupied by the minimap (bottom) and the ⋯ menu (top), so
+   the dock becomes a slim horizontal strip pinned above the minimap. It is
+   anchored to the same bottom offset as the minimap and therefore cannot reach
+   the bottom-left attack list. */
+@media (max-height: 620px) {
+  .chat-dock {
+    bottom: 272px; top: auto; right: 10px; left: auto;
+    width: 250px; max-height: 20vh;
+  }
+  .chat-dock .dock-log { max-height: 64px; }
+  .chat-dock.collapsed { max-height: none; }
+}
+
+/* Narrow-but-tall windows: the dock shrinks instead of disappearing, because a
+   multiplayer match with no chat is worse than a small chat. It only hides when
+   it would cover the map entirely. */
+@media (max-width: 980px) and (min-height: 560px) {
+  .chat-dock { display: flex; width: 200px; bottom: auto; top: 92px; }
+  .chat-dock.collapsed { width: 132px; }
+}
+@media (max-width: 760px) {
   .chat-dock { display: none; }
 }
 .rematch-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
@@ -2305,6 +2380,61 @@ const EN = {
   "جاهز — العالم أمامك": "Ready — the world is yours",
   "تخطّي": "Skip",
   "التالي": "Next",
+  // --- HUD fragments that were composed in Arabic around a variable
+  "كمّاشة على": "Pincer on",
+  "تهجم عليك": "is attacking you",
+  "اضغط داخل أرضك لوضع": "Click inside your own land to place",
+  "لوضع عدة": "— hold Shift to place several",
+  "تنبيه: هجوم": "Alert: attack",
+  "على عاصمتك": "on your capital",
+  "بعيدة عن مؤنك": "is too far from your supply lines",
+  "هذه الدولة بعيدة عن مؤنك": "This country is too far from your supply lines",
+  "أسطولك يتجه إلى": "Your fleet is heading for",
+  "حلفاؤك انضموا إلى الحرب ضد": "Your allies joined the war against",
+  "الخريطة:": "Map:",
+  "العصر:": "Era:",
+  "الوضع:": "Mode:",
+  "الخصوم:": "Opponents:",
+  "لا توجد دولة بهذا الاسم": "No country with that name",
+  "جزيرة — لا حدود برية": "Island — no land borders",
+  "مضيف": "Host",
+  "الحملة": "Campaign",
+  "اختر حملة من القائمة لرؤية تفاصيلها": "Pick a campaign from the list to see its details",
+  "لا توجد عوالم مفتوحة الآن — اضغط «العب الآن» لبدء عالم جديد": "No open worlds right now — press \"Play now\" to start one",
+  "جارٍ إعادة الاتصال…": "Reconnecting…",
+  "عاد الاتصال — عالم": "Reconnected — world",
+  "لاعبون": "Players",
+  "مغلق": "Closed",
+  "ابنِ ميناء (4)": "Build a port (4)",
+  "حلفاؤك في الحرب": "Your allies are in the war",
+  "الذهب غير كافٍ": "Not enough gold",
+  "تخطّي الجولة": "Skip tour",
+  "سيطر على": "Control",
+  "مبنى": "building",
+  "نقطة": "points",
+  "هجومك على": "Your attack on",
+  "• إنزال…": "• landing…",
+  "انسحاب": "Withdraw",
+  "تحصين": "Fortify",
+  "البناء مستمرّ، وزر الفأرة الأيمن يوقف": "building continues — right-click to stop",
+  "تم البناء": "Built",
+  "لم يُبنَ شيء — تحقّق من الأرض والذهب": "Nothing was built — check the land and your gold",
+  "حدّد منطقة": "Select an area",
+  "البناء بالمنطقة": "Area build",
+  "هذه الدولة ليست على حدودك — ابنِ ميناء للغزو البحري":
+    "That country is not on your border — build a port to invade by sea",
+  "لا يوجد ساحل يمكن الوصول إليه": "No reachable coast",
+  "هذه الدولة بعيدة عن موانئك": "That country is out of reach of your ports",
+  "نجت عاصمتك — بقي لك معقل أخير": "Your capital held — you are down to a last redoubt",
+  "ابدأ": "Start",
+  "كل الحملات": "All campaigns",
+  "نقطة بحث": "research",
+  "تمت ترقية": "Upgraded",
+  "اضغط مرة أخرى لبدء الهجوم على": "Click again to attack",
+  "غزو بحري على": "Naval invasion of",
+  "إنزال على": "Landing on",
+  "بانتظار المضيف لبدء مباراة جديدة…": "Waiting for the host to start a new match…",
+  "الخادم مشغول بالكامل  جرّب بعد قليل": "The server is full — try again in a moment",
 };
 
 
@@ -2515,6 +2645,24 @@ const PATTERNS = [
   [/^(.+) اختار (.+)$/, (m) => `${m[1]} chose ${m[2]}`],
   [/^(.+) أعلنت الحرب على (.+)$/, (m) => `${m[1]} declared war on ${m[2]}`],
   [/^(.+) \(أنت\)$/, (m) => `${m[1]} (you)`],
+
+  // --- event log lines from state.js. These are the sentences the player reads
+  // in the war feed; they are composed in Arabic around nation names, so a
+  // dictionary of whole sentences could never match them.
+  [/^(.+) أعلنت الحرب على (.+)$/, (m) => `${m[1]} declared war on ${m[2]}`],
+  [/^تحالف بين (.+) و(.+) — دفاع مشترك$/, (m) => `Alliance between ${m[1]} and ${m[2]} — mutual defence`],
+  [/^وقف إطلاق النار بين (.+) و(.+)$/, (m) => `Ceasefire between ${m[1]} and ${m[2]}`],
+  [/^(.+) اختار (.+)$/, (m) => `${m[1]} chose ${m[2]}`],
+  [/^تنبيه: هجوم على عاصمتك$/, () => "Alert: attack on your capital"],
+  [/^هذه الدولة بعيدة عن مؤنك$/, () => "This country is too far from your supply lines"],
+  [/^حلفاؤك في الحرب، لكن (.+) منهم بعيدون عن جبهة (.+)$/, (m) => `Your allies are in the war, but ${m[1]} of them are far from the ${m[2]} front`],
+  [/^أسطولك يتجه إلى (.+)$/, (m) => `Your fleet is heading for ${m[1]}`],
+  [/^حلفاؤك انضموا إلى الحرب ضد (.+)$/, (m) => `Your allies joined the war against ${m[1]}`],
+  [/^الهدف: (.+) من الأرض$/, (m) => `Goal: ${m[1]} of the world`],
+  [/^سيطر على (.+) من الأرض$/, (m) => `Control ${m[1]} of the world`],
+  [/^اضغط داخل أرضك لوضع (.+) — البناء مستمرّ، وزر الفأرة الأيمن يوقف$/, (m) => `Click inside your own land to place ${m[1]} — building continues, right-click to stop`],
+  [/^اضغط داخل أرضك لوضع (.+)$/, (m) => `Click inside your own land to place ${m[1]}`],
+  [/^كمّاشة على (.+)$/, (m) => `Pincer on ${m[1]}`],
 ];
 
 // Inputs arrive as one composed Arabic sentence ("روسيا أعلنت الحرب على أوكرانيا"),
@@ -2573,16 +2721,33 @@ function swapPatternsWithin(text) {
 }
 
 function swapPatterns(text) {
-  const s = String(text);
-  for (const [re, fn] of PATTERNS) {
-    const m = s.match(re);
-    if (m) {
+  // One direction only. These rules rewrite Arabic into English; running them
+  // while the language is Arabic would erase the Arabic the caller just wrote
+  // (every Arabic toast containing a number came out half-English).
+  if (lang === "ar") return String(text);
+  // Several rules match the same sentence with different reach — "الهدف: 50%
+  // من الأرض" is caught by the generic "X of the world" rule before the
+  // "Goal: …" rule ever runs, leaving half a sentence in Arabic. Rather than
+  // hand-order 80 regexes, apply them until nothing changes (a few passes at
+  // most); a rule that cannot rewrite a piece simply leaves it alone.
+  let s = String(text);
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false;
+    for (const [re, fn] of PATTERNS) {
+      const m = s.match(re);
+      if (!m) continue;
+      let out = s;
       try {
-        return fn(m);
+        out = fn(m);
       } catch {
-        return s;
+        continue;
+      }
+      if (out !== s) {
+        s = out;
+        changed = true;
       }
     }
+    if (!changed) break;
   }
   return s;
 }
@@ -2606,6 +2771,9 @@ function translateCore(text) {
   // the nation table for the tail.
   let out = swapPatterns(core);
   if (out === core) out = swapPatternsWithin(core);
+  // replaceNations is declared below with the nation table; calling it here is
+  // fine because this function only runs after module evaluation. It is what
+  // turns the nation names left inside a rewritten sentence into English.
   out = replaceNations(out);
   return out;
 }
@@ -2632,6 +2800,7 @@ function nationIn(text) {
   if (lang !== "en") return null;
   return nations.get(text) || null;
 }
+
 
 // ------------------------------------------------------------------ the DOM ---
 const ATTRS = ["placeholder", "title", "aria-label", "alt"];
@@ -3904,6 +4073,18 @@ class Game {
 
   eliminate(n, by) {
     if (!n.alive) return;
+    // Never finish off a player who has not taken a single country yet. They
+    // keep a last redoubt instead of being knocked out of a game they had not
+    // started playing; the protection lifts the moment they capture anything.
+    if (n.isPlayer && (n.stats.captures || 0) === 0 && this.playerProtectedFrom(n, this.byId[by] || n)) {
+      n.cells = Math.max(1, n.cells);
+      n.alive = true;
+      if (!n.redoubted) {
+        n.redoubted = true;
+        this.log(t("نجت عاصمتك — بقي لك معقل أخير"), "info");
+      }
+      return;
+    }
     n.alive = false;
     n.cells = 0;
     n.army = 0;
@@ -4085,8 +4266,28 @@ class Game {
   // (one extra "hop" across the water). Before this, holding a single port
   // meant every country on the planet was a legal target, so the whole world
   // declared war on the player at once and buried them in 100+ fronts.
+  // With a port, a nation can launch an amphibious assault on any coastal
+  // country it is not already bound to, anywhere in the world.
+  //
+  // This used to be "my neighbours and their neighbours", which meant a player
+  // who built a port still saw "this country is too far from your supply
+  // lines" for most of the map — the port bought almost nothing. Real reach is
+  // what a port implies: the sea.
   navalReach(n) {
     const set = new Set();
+    if (this.hasPort(n)) {
+      for (const c of this.world.countries) {
+        if (!c || c.id === n.id) continue;
+        // Coastal or not, a fleet can reach it: the landing picker only needs a
+        // shore cell, and inland targets are still attackable by land. Adding
+        // every living nation is the honest answer to "I have a navy, what can
+        // it hit" — filtering by coast is what made most of the map unreachable.
+        const other = this.byId[c.id];
+        if (other && other.alive) set.add(c.id);
+      }
+      set.delete(n.id);
+      return set;
+    }
     for (const id of n.def.neighbors) {
       set.add(id);
       const other = this.byId[id];
@@ -4094,6 +4295,12 @@ class Game {
     }
     set.delete(n.id);
     return set;
+  }
+
+  // True when the two nations share no land border, so an attack has to go by
+  // sea. Callers use this to decide between the land path and the fleet path.
+  overseas(n, target) {
+    return !this.adjacent(n, target);
   }
 
   canReach(n, target) {
@@ -4143,12 +4350,17 @@ class Game {
     const atk = new Attack(attacker, defender, troops, { naval });
     atk.createdAt = this.time;
     if (naval) {
-      atk.landingTimer = 1.6;
       atk.landingAt = this.findLandingCell(attacker, defender);
       if (atk.landingAt < 0) {
         attacker.army += troops;
         return t("لا يوجد ساحل يمكن الوصول إليه");
       }
+      // The fleet actually crosses the water: the timer is the journey, not a
+      // fixed 1.6s pause, so a landing halfway around the world visibly takes
+      // longer and the ships can be watched (and intercepted) on the way.
+      atk.landingTimer = this.crossingTime(attacker, atk.landingAt);
+      atk.sailFrom = this.findSailingCell(attacker, atk.landingAt);
+      atk.crossing = atk.landingTimer;
     }
     this.attacks.push(atk);
     void naval;
@@ -4162,6 +4374,53 @@ class Game {
       this.log(`${attacker.ar} تهجم عليك!`, "bad", { nation: attacker.id });
     }
     return null;
+  }
+
+  // Seconds a fleet needs to cross from the attacker's coast to the beachhead.
+  // Distance in map cells → seconds, clamped so a cross-Pacific invasion is a
+  // long moment rather than an eternity.
+  crossingTime(attacker, landingCell) {
+    const w = this.world.w;
+    const home = attacker.capital != null ? attacker.capital : attacker.def ? attacker.def.x + attacker.def.y * w : 0;
+    const ax = home % w;
+    const ay = (home / w) | 0;
+    const bx = landingCell % w;
+    const by = (landingCell / w) | 0;
+    const dist = Math.hypot(ax - bx, ay - by);
+    return Math.max(2.5, Math.min(14, dist * 0.22));
+  }
+
+  // Where the troop ships leave from: the coastal cell of the attacker nearest
+  // the beachhead. Falls back to the capital when no coast is found.
+  findSailingCell(attacker, landingCell) {
+    const w = this.world.w;
+    const owners = this.owners;
+    let best = -1;
+    let bestD = Infinity;
+    for (const cell of attacker.frontier) {
+      const x = cell % w;
+      const y = (cell / w) | 0;
+      const coastal =
+        (x > 0 && owners[cell - 1] < 0) ||
+        (x < w - 1 && owners[cell + 1] < 0) ||
+        (y > 0 && owners[cell - w] < 0) ||
+        (y < this.world.h - 1 && owners[cell + w] < 0);
+      if (!coastal) continue;
+      const bx = landingCell % w;
+      const by = (landingCell / w) | 0;
+      const d = (x - bx) ** 2 + (y - by) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = cell;
+      }
+    }
+    if (best >= 0) return best;
+    // A landlocked nation still has a capital to sail from — the ships just set
+    // off from there, which reads correctly on the map (they cross the water as
+    // soon as the route reaches the coast).
+    if (attacker.capital != null && attacker.capital >= 0) return attacker.capital;
+    const home = attacker.def;
+    return home ? home.x + home.y * w : -1;
   }
 
   findLandingCell(attacker, defender) {
@@ -5055,6 +5314,17 @@ class Game {
     if (this.rankIndex() >= RANKS.length - 1) this.unlockMedal("emperor");
   }
 
+  // An idle player should not be wiped out in the first two minutes: while the
+  // opening grace is running (or the player has done nothing at all), an
+  // offensive cannot finish them off. This is a floor under the difficulty
+  // curve, not a cheat — once the player takes land, the gloves are off.
+  playerProtectedFrom(p, attacker) {
+    if (!p || !p.isPlayer) return false;
+    const elapsed = this.time - (this.openedAt || 0);
+    const idle = (p.stats.captures || 0) === 0;
+    return idle && elapsed < 150 && p.cells < attacker.cells * 0.5;
+  }
+
   // Grace period at the start of a match (the classic 25s ceasefire).
   startCeasefire(seconds) {
     this.ceasefireEndsAt = this.time + Math.max(0, seconds);
@@ -5278,6 +5548,17 @@ class Game {
     }
   }
 
+  // How many live offensives already run between two nations — used to keep the
+  // AI from re-declaring a war it is already fighting.
+  warsBetween(a, b) {
+    let n = 0;
+    for (const atk of this.attacks) {
+      if (!atk.active) continue;
+      if ((atk.attacker === a && atk.defender === b) || (atk.attacker === b && atk.defender === a)) n++;
+    }
+    return n;
+  }
+
   aiConsiderWar(n) {
     if (n.war.size >= 2 && n.ai.aggression < 1.1) return;
     const candidates = [];
@@ -5294,20 +5575,40 @@ class Game {
       if (n.war.has(id)) continue;
       // don't dogpile a nation that is already collapsing
       const strength = other.army * this.attackMult(other);
-      const mine = n.army * this.attackMult(n) * (1 + n.ai.aggression * 0.35);
+      let mine = n.army * this.attackMult(n) * (1 + n.ai.aggression * 0.35);
       const p0 = other.isPlayer ? other : null;
       const isPlayerTarget = !!p0;
+      if (!isPlayerTarget) {
+        // The AI used to treat the human as the only real target: everyone else
+        // was skipped by the "don't attack anyone but the player" effect of the
+        // scoring below, so the map sat still and the whole world waited on the
+        // player. AI nations now fight each other on the same terms, with a
+        // mild preference for a neighbour that is weaker than they are, and a
+        // small bias against the player so the human is not dogpiled.
+        if (other.army < n.army * 0.85) mine *= 1.15;
+        if (this.warsBetween(n, other) > 0) mine *= 1.1;
+      }
       if (isPlayerTarget) {
         const elapsed = this.time - (this.openedAt || 0);
         // The human gets breathing room to build up, and AI coalitions only
         // form once the player has proven to be a threat.
-        const grace = this.mode === "daily" ? 45 : 110;
+        //
+        // But "breathing room" had become a no-entry zone: an AI needed 2.1×
+        // the player's strength to declare at all, so on a normal start nobody
+        // ever attacked — the map was at war with itself and the human sat
+        // untouched until one giant finally qualified. The bar is now modestly
+        // above parity, which still protects a small player without making the
+        // world ignore them.
+        const grace = this.mode === "daily" ? 45 : 75;
         const aggressive = (p0.stats.captures || 0) >= 2;
         if (elapsed < grace) continue;
-        if (!aggressive && mine < strength * 2.1) continue;
-        if (aggressive && mine < strength * 1.25) continue;
+        if (!aggressive && mine < strength * 1.45) continue;
+        if (aggressive && mine < strength * 1.1) continue;
         const alreadyAtWar = [...p0.war].some((id) => id !== other.id && this.byId[id]?.alive);
-        const limit = aggressive ? 2 : 1;
+        // Two simultaneous attackers is plenty for a player who has not taken
+        // anything yet; the old limit of 1 meant a player who fought one war off
+        // was invisible to the rest of the world.
+        const limit = aggressive ? 3 : 2;
         if (alreadyAtWar && [...p0.war].length >= limit) continue;
       }
       if (mine < strength * 0.75) continue;
@@ -5326,11 +5627,20 @@ class Game {
     if (!target) return;
     if (this.rng.chance(0.55 * n.ai.aggression)) {
       const other = this.byId[target.id];
-      this.declareWar(n, other);
+      // AI-vs-AI declarations are logged by the throttled branch below, so
+      // declareWar must not also write its own line — otherwise the feed got one
+      // entry per declaration (219 of them in a 400s sim) and drowned everything
+      // the player actually cares about.
+      this.declareWar(n, other, !n.isPlayer && !other.isPlayer);
       if (!n.isPlayer && !other.isPlayer) {
-        // keep the log readable: only surface wars involving neighbours of the player
-        const p2 = this.player();
-        if (p2 && (n.def.neighbors.includes(p2.id) || other.def.neighbors.includes(p2.id))) {
+        // The log used to show AI-vs-AI wars only when a player neighbour was
+        // involved, so the world could burn without the human ever reading a
+        // word about it — which is exactly why "the bots only attack me" was a
+        // reasonable read of the screen. Surface wars anywhere, throttled so the
+        // feed stays readable.
+        this.aiWarLog = this.aiWarLog || { last: 0 };
+        if (this.time - this.aiWarLog.last > 9) {
+          this.aiWarLog.last = this.time;
           this.log(`${n.ar} أعلنت الحرب على ${other.ar}`, "info", { nation: other.id });
         }
       }
@@ -5729,6 +6039,8 @@ const DEAD_LAND = [40, 40, 46];
 class Renderer {
   constructor(canvas, world, game) {
     this.canvas = canvas;
+    // Shift+drag build rectangle: two corner cells, or null when idle.
+    this.area = null;
     this.ctx = canvas.getContext("2d", { alpha: false });
     this.world = world;
     this.game = game;
@@ -6169,6 +6481,7 @@ class Renderer {
     this.drawAttacks(ctx, zoom);
     this.drawStrikes(ctx, zoom);
     if (this.brush && this.hoverCell >= 0) this.drawBrush(ctx, zoom);
+    if (this.area) this.drawArea(ctx, zoom);
     if (this.labels && zoom > 1.5) this.drawLabels(ctx, zoom);
   }
 
@@ -6323,28 +6636,100 @@ class Renderer {
   drawAttacks(ctx, zoom) {
     const { game } = this;
     const w = this.world.w;
+    // Any AI-vs-AI offensive near the camera is drawn, not just the ones that
+    // touch the player. The whole point of a world war is that you can see it:
+    // the old rule hid every other nation's fighting unless you happened to
+    // zoom past 1.6×, so a map with 160 AI wars in it looked completely dead.
+    // Near = inside the visible frame plus a margin, measured in world cells for
+    // the current zoom. The margin is generous (a full screen in each direction)
+    // so a war one pan away is already drawn instead of popping in.
+    const viewCellsX = (this.canvas.width || 1200) / zoom;
+    const viewCellsY = (this.canvas.height || 700) / zoom;
+    const near = (cell) => {
+      const x = cell % w;
+      const y = (cell / w) | 0;
+      return Math.abs(x - this.cam.x) < viewCellsX * 1.5 && Math.abs(y - this.cam.y) < viewCellsY * 1.5;
+    };
     for (const a of game.attacks) {
       if (!a.active) continue;
       const involved = a.attacker.isPlayer || a.defender.isPlayer;
-      if (!involved && zoom < 1.6) continue;
+      if (!involved) {
+        if (zoom < 0.85) continue;
+        const shown = (a.fronts.length ? a.fronts : [a.landingAt || -1]).some((c) => c >= 0 && near(c));
+        const home = a.attacker.capital != null && a.attacker.capital >= 0 ? near(a.attacker.capital) : false;
+        if (!shown && !home) continue;
+      }
       const targets = a.fronts;
       if (a.naval) {
-        const cap = a.attacker.capital;
-        if (cap < 0 || a.landingAt < 0) continue;
-        const x1 = ((cap % w) - this.cam.x) * zoom;
-        const y1 = (((cap / w) | 0) - this.cam.y) * zoom;
+        // The fleet: a line from the home coast to the beachhead and ships
+        // travelling along it. Before this the invasion was already decided —
+        // the player ordered it and land changed hands 1.6s later with nothing
+        // on screen in between, so a naval attack was indistinguishable from a
+        // land one.
+        const from = a.sailFrom != null && a.sailFrom >= 0 ? a.sailFrom : a.attacker.capital;
+        if (from < 0 || a.landingAt < 0) continue;
+        const x1 = ((from % w) - this.cam.x) * zoom;
+        const y1 = (((from / w) | 0) - this.cam.y) * zoom;
         const x2 = ((a.landingAt % w) - this.cam.x) * zoom;
         const y2 = (((a.landingAt / w) | 0) - this.cam.y) * zoom;
+        const mine = a.attacker.isPlayer;
+        const atSea = !a.landed;
         ctx.save();
-        ctx.globalAlpha = 0.45 + Math.sin(game.time * 4) * 0.2;
-        ctx.strokeStyle = a.attacker.isPlayer ? "#8fe3ff" : "#ff9d8f";
+        // route
+        ctx.globalAlpha = atSea ? 0.5 : 0.22;
+        ctx.strokeStyle = mine ? "#8fe3ff" : "#ff9d8f";
         ctx.lineWidth = Math.max(1.2, zoom * 0.3);
         ctx.setLineDash([6, 5]);
         ctx.beginPath();
         ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo((x1 + x2) / 2, Math.min(y1, y2) - 40, x2, y2);
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2 - 40;
+        ctx.quadraticCurveTo(mx, my, x2, y2);
         ctx.stroke();
         ctx.setLineDash([]);
+
+        if (atSea && a.crossing > 0) {
+          // progress along the curve, 0 at the home coast and 1 at the beach
+          const t = Math.min(1, Math.max(0, 1 - a.landingTimer / a.crossing));
+          const q = (k) => (1 - k) * (1 - k) * x1 + 2 * (1 - k) * k * mx + k * k * x2;
+          const qy = (k) => (1 - k) * (1 - k) * y1 + 2 * (1 - k) * k * my + k * k * y2;
+          // a small convoy, spaced back along the route
+          for (let i = 0; i < 3; i++) {
+            const k = Math.max(0, t - i * 0.045);
+            const px = q(k);
+            const py = qy(k);
+            const ang = Math.atan2(qy(Math.min(1, k + 0.02)) - py, q(Math.min(1, k + 0.02)) - px);
+            const s = Math.max(3, Math.min(9, zoom * 0.7));
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(ang);
+            // hull
+            ctx.fillStyle = i === 0 ? "#ffffff" : "rgba(220,240,255,0.85)";
+            ctx.beginPath();
+            ctx.moveTo(s * 0.6, 0);
+            ctx.lineTo(-s * 0.5, s * 0.34);
+            ctx.lineTo(-s * 0.3, 0);
+            ctx.lineTo(-s * 0.5, -s * 0.34);
+            ctx.closePath();
+            ctx.fill();
+            // wake
+            ctx.strokeStyle = "rgba(160,220,255,0.55)";
+            ctx.lineWidth = Math.max(1, s * 0.12);
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.55, 0);
+            ctx.lineTo(-s * 1.4, 0);
+            ctx.stroke();
+            ctx.restore();
+          }
+          // beachhead marker, pulsing while the fleet is still at sea
+          ctx.globalAlpha = 0.4 + 0.4 * Math.sin(game.time * 5);
+          ctx.strokeStyle = mine ? "#8fe3ff" : "#ff9d8f";
+          ctx.lineWidth = Math.max(1, zoom * 0.18);
+          ctx.beginPath();
+          ctx.arc(x2, y2, Math.max(4, zoom * 0.8), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
         ctx.fillStyle = "#fff";
         ctx.beginPath();
         ctx.arc(x2, y2, 2.6, 0, Math.PI * 2);
@@ -6467,6 +6852,43 @@ class Renderer {
     ctx.strokeStyle = this.brushOk ? "#b8f0a0" : "#ff8f8f";
     ctx.lineWidth = 1.5;
     ctx.strokeRect(s.x - size / 2, s.y - size / 2, size, size);
+    ctx.restore();
+  }
+
+  // The rectangle being dragged for an area build: a translucent fill plus a
+  // grid of dots on every cell that will be built, so the player sees exactly
+  // what they are about to pay for before releasing.
+  drawArea(ctx, zoom) {
+    const { a, b, ok } = this.area;
+    const w = this.world.w;
+    const ax = a % w;
+    const ay = (a / w) | 0;
+    const bx = b % w;
+    const by = (b / w) | 0;
+    const x0 = Math.min(ax, bx);
+    const x1 = Math.max(ax, bx);
+    const y0 = Math.min(ay, by);
+    const y1 = Math.max(ay, by);
+    const px = (x0 - this.cam.x) * zoom;
+    const py = (y0 - this.cam.y) * zoom;
+    const pw = (x1 - x0 + 1) * zoom;
+    const ph = (y1 - y0 + 1) * zoom;
+    ctx.save();
+    ctx.fillStyle = ok ? "rgba(184,240,160,0.18)" : "rgba(255,143,143,0.18)";
+    ctx.strokeStyle = ok ? "rgba(184,240,160,0.9)" : "rgba(255,143,143,0.9)";
+    ctx.lineWidth = Math.max(1, zoom * 0.2);
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeRect(px, py, pw, ph);
+    // one dot per cell that will receive a building
+    ctx.fillStyle = ok ? "rgba(200,255,180,0.75)" : "rgba(255,180,180,0.7)";
+    const r = Math.max(1, zoom * 0.16);
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        ctx.beginPath();
+        ctx.arc((x - this.cam.x) * zoom + zoom / 2, (y - this.cam.y) * zoom + zoom / 2, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.restore();
   }
 
@@ -8762,7 +9184,7 @@ async function openOnlineHome() {
     );
     return;
   }
-  setOnlineStatus(`متصل بالخادم • ${net.name}${net.remote ? " (أونلاين)" : ""}`, "ok");
+  setOnlineStatus(`${t("متصل بالخادم")} • ${net.name}${net.remote ? " (" + t("أونلاين") + ")" : ""}`, "ok");
   // Two portal entry points drop the player straight into a room instead of
   // the lobby browser: an invite link, and the platform's instant-multiplayer
   // flag (friends list / multiplayer page). Both then put them in a room that
@@ -8996,8 +9418,8 @@ function renderLobby(view) {
     : t("انتظر المضيف لبدء المباراة.");
 
   $("#lobby-chips").innerHTML = [
-    `الخريطة: ${PRESETS.find((p) => p.id === view.map)?.ar || view.map}`,
-    `العصر: ${ERAS[view.era]?.ar || view.era}`,
+    `${t("الخريطة:")} ${getLang() === "en" ? PRESETS.find((p) => p.id === view.map)?.en || view.map : PRESETS.find((p) => p.id === view.map)?.ar || view.map}`,
+    `${t("العصر:")} ${getLang() === "en" ? ERAS[view.era]?.en || eraName(view.era) : ERAS[view.era]?.ar || view.era}`,
     `${t("الهدف:")} ${Math.round(view.goal * 100)}%`,
     `الوضع: ${{ normal: t("كل لاعب لنفسه"), coop: t("تحالف"), ffa: t("آخر صامد") }[view.mode] || view.mode}`,
   ]
@@ -9141,7 +9563,7 @@ function fillFilters() {
   ).join("");
   const aiSel = $("#ai-select");
   aiSel.innerHTML = Object.entries(AI_LEVELS)
-    .map(([k, v]) => `<option value="${k}" ${k === app.aiLevel ? "selected" : ""}>الخصوم: ${v.ar}</option>`)
+    .map(([k, v]) => `<option value="${k}" ${k === app.aiLevel ? "selected" : ""}>${t("الخصوم:")} ${getLang() === "en" ? v.en || v.ar : v.ar}</option>`)
     .join("");
   const goalSel = $("#goal-select");
   const goalLabels = { 0.3: t("الهدف: 30% — حملة سريعة"), 0.5: t("الهدف: 50% — فتح العالم"), 0.75: t("الهدف: 75% — سيطرة كاملة") };
@@ -9725,6 +10147,10 @@ const TUTOR_STEPS = [
   },
 ];
 
+// Rectangle build selection (Shift + drag). Kept as module state so the
+// pointermove handler can grow it and pointerup can commit it.
+const area = { active: false, anchor: -1, end: -1, max: 64 };
+
 const tutor = { step: -1, since: 0, active: false };
 
 function tutorDone() {
@@ -9913,6 +10339,11 @@ function attachGameInput() {
 
   canvas.addEventListener("pointerdown", (e) => {
     if (e.button === 2) return;
+    // Shift+drag with a brush selected is an area build, not a camera pan. The
+    // pan handler below is installed first (it listens on the same node), so the
+    // area notice has to win here or a single gesture would do both: the map
+    // would slide while the rectangle grew under the cursor.
+    if (e.shiftKey && app.brush) return;
     canvas.setPointerCapture(e.pointerId);
     const rect = canvas.getBoundingClientRect();
     drag = {
@@ -9939,6 +10370,10 @@ function attachGameInput() {
       if (R().brush) R().brushOk = !app.game.canBuild(app.game.player(), R().brush, cell);
       updateTooltip(e.clientX, e.clientY, cell);
     }
+    if (area.active) {
+      area.end = cell >= 0 ? cell : area.end;
+      drawAreaGhost();
+    }
     if (drag) {
       const dx = e.clientX - drag.x;
       const dy = e.clientY - drag.y;
@@ -9953,8 +10388,29 @@ function attachGameInput() {
     }
   });
 
+  // Area build: hold Shift and drag while a building is selected to place a
+  // whole rectangle of it. Shift used to mean "keep the brush", which is now the
+  // default, so the modifier is free for the thing it is actually good at.
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!app.brush || !e.shiftKey) return;
+    const rect = canvas.getBoundingClientRect();
+    const cell = R().screenToCell(e.clientX - rect.left, e.clientY - rect.top);
+    if (cell < 0) return;
+    area.anchor = cell;
+    area.active = true;
+    area.end = cell;
+    e.preventDefault();
+  });
+
   canvas.addEventListener("pointerup", (e) => {
     canvas.classList.remove("grabbing");
+    if (area.active) {
+      const cells = areaCells();
+      area.active = false;
+      clearAreaGhost();
+      placeArea(cells);
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
@@ -10054,29 +10510,30 @@ function handleClick(cell, e) {
   }
 
   if (app.brush) {
-    if (netAct("build", { key: app.brush, cell })) {
-      sfx.build();
-      if (!e.shiftKey) {
+    // The brush stays selected after a placement.
+    //
+    // It used to clear unless Shift was held, which made building a row of
+    // three cities a chore: select, click, select, click. A player who picked a
+    // building wants to place it more than once; Right-click / Escape / picking
+    // it again now ends the run, and Shift keeps doing the opposite of what it
+    // used to (it ends the run after this placement).
+    const done = (ok) => {
+      if (ok) sfx.build();
+      else sfx.error();
+      if (e.shiftKey) {
         app.brush = null;
         R.brush = null;
         $("#map").classList.remove("placing");
-        updateTab();
       }
+      updateTab();
+    };
+    if (netAct("build", { key: app.brush, cell })) {
+      done(true);
       return;
     }
     const err = game.build(p, app.brush, cell);
-    if (err) {
-      toast(err, "bad");
-      sfx.error();
-    } else {
-      sfx.build();
-      if (!e.shiftKey) {
-        app.brush = null;
-        R.brush = null;
-        $("#map").classList.remove("placing");
-        updateTab();
-      }
-    }
+    if (err) toast(err, "bad");
+    done(!err);
     R.renderBase();
     return;
   }
@@ -10145,12 +10602,23 @@ function handleClick(cell, e) {
       if (err) toast(err, "bad");
       else toast(t("غزو بحري على") + " " + nationName(n) + "!");
     } else {
-      toast(t("ليست على حدودك — تحتاج ميناء لغزو بحري"));
+      // Land neighbours are always attackable; anything else needs a port, and
+      // the message says which of the two is missing instead of one vague line.
+      toast(t("هذه الدولة ليست على حدودك — ابنِ ميناء للغزو البحري"));
     }
   }
 }
 
 function handleRightClick(cell) {
+  if (app.brush) {
+    // Right-click ends a build run; the brush now persists after each placement,
+    // so this is the way out that does not require hunting for the card again.
+    app.brush = null;
+    app.renderer.brush = null;
+    $("#map").classList.remove("placing");
+    updateTab();
+    return;
+  }
   const game = app.game;
   const owner = game.owners[cell];
   if (owner < 0) return;
@@ -10248,8 +10716,15 @@ function onKey(e) {
     return;
   }
   if (k === "r") {
-    $("#modal-research").hidden = false;
-    updateResearch();
+    // R used to open a modal. It now takes the player to the research tab, and a
+    // second press opens the full-screen grid for the detailed view.
+    if (app.tab === "research") {
+      $("#modal-research").hidden = false;
+      updateResearch();
+    } else {
+      app.tab = "research";
+      updateTab();
+    }
   } else if (k === "q") {
     setForce(game.attackFraction - 0.1);
   } else if (k === "e") {
@@ -10343,6 +10818,7 @@ function loop(ts) {
   // surface that allows it.
   R.canvas.__game = app.game;
   R.canvas.__app = app;
+  R.canvas.__renderer = R;
 }
 
 let idleAt = 0;
@@ -10445,6 +10921,12 @@ function updateHud(force) {
   setRes("#res-gold", p.gold, "+" + fmt(rate.gold) + t("/ث"));
   setRes("#res-army", p.army, pct(p.army / Math.max(1, p.cap)));
   setRes("#res-research", p.research, "+" + rate.research.toFixed(1) + t("/ث"));
+  // Affordable research is advertised on the tab itself.
+  const techBadge = $("#research-badge");
+  if (techBadge) {
+    const ready = RESEARCH.some((r) => (p.tech[r.key] || 0) < 5 && p.research >= game.researchCost(r.key, p));
+    techBadge.hidden = !ready;
+  }
   $("#nation-name").textContent = p.ar;
   $("#rank-name").textContent = game.rankName(p) + (game.xpTotal > 1 ? ` • ${Math.round(game.xpTotal)} XP` : "");
   const col = p.def.color;
@@ -10600,10 +11082,10 @@ function updateEvents() {
     const pct2 = Math.round(clamp(ratio / 1.6, 0.05, 1) * 100);
     rows.push(`<div class="ev ${incoming ? "top" : ""}">
       <div class="ev-row">
-        <b>${mine ? "➤ هجومك على " + other.ar : "⚠ " + other.ar + " تهجم عليك"}</b>
+        <b>${mine ? "➤ " + t("هجومك على") + " " + nationName(other) : "⚠ " + nationName(other) + " " + t("تهجم عليك")}</b>
         <button class="mini" data-retreat="${a.id}">${mine ? t("انسحاب") : t("تحصين")}</button>
       </div>
-      <div class="ev-sub">${fmt(a.troops)} ${t("جندي")} • ${a.naval ? t("بحري") : t("برّي")} ${a.landingTimer > 0 ? "• إنزال…" : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">الجبهة متعثرة</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">كمّاشة</b>` : ""}</div>
+      <div class="ev-sub">${fmt(a.troops)} ${t("جندي")} • ${a.naval ? t("بحري") : t("برّي")} ${a.landingTimer > 0 ? t("• إنزال…") : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">${t("الجبهة متعثرة")}</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">${t("كمّاشة")}</b>` : ""}</div>
       <div class="bar ${mine ? "adv" : ""}"><i style="width:${pct2}%"></i></div>
     </div>`);
   }
@@ -10678,6 +11160,29 @@ function updateTab() {
     }).join("");
     body.querySelectorAll(".bcard").forEach((el) => {
       el.onclick = () => pickBuilding(el.dataset.b);
+    });
+  } else if (app.tab === "research") {
+    // Same cards as the old modal, but in the bottom bar where the player is
+    // already looking. The modal stays for the ✦ button and the R key.
+    body.innerHTML = `
+      <div class="tech-inline">
+        <div class="tech-inline-pts"><b>${Math.floor(p.research)}</b><small>${t("نقطة بحث")}</small></div>
+        ${RESEARCH.map((r) => {
+          const lvl = p.tech[r.key] || 0;
+          const cost = game.researchCost(r.key, p);
+          const can = p.research >= cost && lvl < 5;
+          const pips = Array.from({ length: 5 }, (_, i) => `<i class="${i < lvl ? "on" : ""}"></i>`).join("");
+          return `<button class="tcard ${can ? "can" : ""} ${lvl >= 5 ? "done" : ""}" data-tech="${r.key}" ${lvl >= 5 ? "disabled" : ""}
+            title="${r.ar} — ${t("المستوى")} ${lvl}/5">
+            <i class="ti">${r.icon}</i>
+            <b>${r.ar}</b>
+            <span class="pips">${pips}</span>
+            <span class="tcost">${lvl >= 5 ? t("مكتمل") : `${cost} ✦`}</span>
+          </button>`;
+        }).join("")}
+      </div>`;
+    body.querySelectorAll("[data-tech]").forEach((b) => {
+      b.onclick = () => buyTech(b.dataset.tech);
     });
   } else if (app.tab === "economy") {
     const rate = game.resourceRate(p);
@@ -10787,11 +11292,11 @@ function updateTab() {
       b.onclick = () => {
         const n = game.byId[+b.dataset.naval];
         if (netAct("attack", { target: n.id, frac: game.attackFraction })) {
-          toast(`أسطولك يتجه إلى ${n.ar}`, "good");
+          toast(`${t("أسطولك يتجه إلى")} ${nationName(n)}`, "good");
           return;
         }
         const err = game.launchAttack(p, n, game.attackFraction);
-        toast(err || `أسطولك يتجه إلى ${n.ar}`, err ? "bad" : "good");
+        toast(err || `${t("أسطولك يتجه إلى")} ${nationName(n)}`, err ? "bad" : "good");
       };
     });
   } else if (app.tab === "strikes") {
@@ -10842,7 +11347,85 @@ function pickBuilding(key, sticky) {
   app.brush = app.brush === key ? null : key;
   app.renderer.brush = app.brush;
   $("#map").classList.toggle("placing", !!app.brush);
-  if (app.brush && !sticky) toast(`اضغط داخل أرضك لوضع ${eraName(key)} — Shift لوضع عدة`);
+  if (app.brush && !sticky) {
+    toast(`${t("اضغط داخل أرضك لوضع")} ${eraName(key)} — ${t("البناء مستمرّ، وزر الفأرة الأيمن يوقف")}`);
+  }
+  updateTab();
+}
+
+// ------------------------------------------------------------ area building ---
+//
+// Shift + drag places the selected building on every cell of the rectangle that
+// is legal and affordable. The cost is paid per cell through the normal
+// game.build() path, so the same rules apply — nothing here bypasses the
+// simulation, it just does the clicking.
+
+function areaCells() {
+  if (!area.active || area.anchor < 0 || area.end < 0) return [];
+  const w = app.renderer.world.w;
+  const ax = area.anchor % w;
+  const ay = (area.anchor / w) | 0;
+  const bx = area.end % w;
+  const by = (area.end / w) | 0;
+  const x0 = Math.min(ax, bx);
+  const x1 = Math.max(ax, bx);
+  const y0 = Math.min(ay, by);
+  const y1 = Math.max(ay, by);
+  const out = [];
+  // Row-major order, capped: a mis-drag across the whole screen should not try
+  // to build five thousand things.
+  for (let y = y0; y <= y1 && out.length < area.max; y++) {
+    for (let x = x0; x <= x1 && out.length < area.max; x++) out.push(y * w + x);
+  }
+  return out;
+}
+
+function drawAreaGhost() {
+  const R = app.renderer;
+  if (!R || !app.brush) return;
+  const cells = areaCells();
+  const p = app.game.player();
+  // The rectangle is valid when at least one cell in it can take the building.
+  const ok = cells.some((c) => !app.game.canBuild(p, app.brush, c));
+  R.area = { a: area.anchor, b: area.end, ok };
+  R.render();
+}
+
+function clearAreaGhost() {
+  const R = app.renderer;
+  if (R) {
+    R.area = null;
+    R.render();
+  }
+}
+
+function placeArea(cells) {
+  const game = app.game;
+  const p = game.player();
+  const key = app.brush;
+  if (!key || !cells.length) return;
+  let built = 0;
+  let spent = 0;
+  for (const cell of cells) {
+    const before = p.gold;
+    if (netAct("build", { key, cell })) {
+      built++;
+      spent += game.buildingCost(key, 1);
+      continue;
+    }
+    const err = game.build(p, key, cell);
+    if (!err) {
+      built++;
+      spent += before - p.gold;
+    }
+  }
+  if (built) {
+    sfx.build();
+    toast(`${t("تم البناء")}: ${built} × ${eraName(key)} (${fmt(spent)} ◈)`, "good");
+  } else {
+    toast(t("لم يُبنَ شيء — تحقّق من الأرض والذهب"), "bad");
+  }
+  app.renderer.renderBase(true);
   updateTab();
 }
 
@@ -10909,6 +11492,19 @@ function game2rel(n) {
 
 // ------------------------------------------------------------ modals ---
 
+// One purchase path for both the modal and the bottom-bar tab.
+function buyTech(key) {
+  if (netAct("research", { key })) {
+    setTimeout(() => { updateResearch(); updateTab(); }, 300);
+    return;
+  }
+  const err = app.game.doResearch(app.game.player(), key);
+  if (err) toast(err, "bad");
+  else sfx.click?.();
+  updateResearch();
+  updateTab();
+}
+
 function updateResearch() {
   const game = app.game;
   const p = game.player();
@@ -10926,15 +11522,7 @@ function updateResearch() {
     </div>`;
   }).join("");
   grid.querySelectorAll("[data-tech]").forEach((b) => {
-    b.onclick = () => {
-      if (netAct("research", { key: b.dataset.tech })) {
-        setTimeout(updateResearch, 300);
-        return;
-      }
-      const err = app.game.doResearch(app.game.player(), b.dataset.tech);
-      if (err) toast(err, "bad");
-      updateResearch();
-    };
+    b.onclick = () => buyTech(b.dataset.tech);
   });
 }
 
@@ -11032,7 +11620,7 @@ function renderDiplo() {
       return;
     }
     const err = game.callAllies(n);
-    toast(err || `حلفاؤك انضموا إلى الحرب ضد ${n.ar}`, err ? "bad" : "good");
+    toast(err || `${t("حلفاؤك انضموا إلى الحرب ضد")} ${nationName(n)}`, err ? "bad" : "good");
     renderDiplo();
   }));
   list.querySelectorAll("[data-dow]").forEach((b) => (b.onclick = () => {
@@ -11211,6 +11799,8 @@ function howTo() {
     <ul>
       <li>أول 25 ثانية هدنة: ابنِ مدنًا ومصانع قبل أن تبدأ الحرب.</li>
       <li>المدينة ترفع سقف جيشك وذهبك. المصنع يزيد ذهبك. القاعدة تسرّع التجنيد.</li>
+      <li>اختر مبنى من الشريط ثم اضغط داخل أرضك: الفرشاة تبقى بيدك، فابنِ عشرة متتالية دون إعادة الاختيار. زر الفأرة الأيمن يوقف.</li>
+      <li><code>Shift</code> + سحب يرسم مستطيلًا ويبني فيه كله دفعة واحدة.</li>
     </ul>
     <h4>الهجوم</h4>
     <ul>
@@ -11222,7 +11812,13 @@ function howTo() {
     </ul>
     <h4>الأسطول والغزو البحري</h4>
     <ul>
-      <li>ابنِ ميناء (مفتاح <code>4</code>) ثم اضغط أي دولة ساحلية لا تجاورك.</li>
+      <li>ابنِ ميناء (مفتاح <code>4</code>) ثم اضغط أي دولة في العالم، ولو كانت في القارة الأخرى.</li>
+      <li>الأسطول يبحر فعلًا: ترى السفن تعبر الماء من سواحلك إلى ساحل الهدف، والإنزال يقع عند وصولها — والمسافة الأبعد تأخذ وقتًا أطول.</li>
+    </ul>
+    <h4>البحث</h4>
+    <ul>
+      <li>تاب <code>البحث</code> في الشريط السفلي، أو زر <code>✦</code> في الأعلى، أو مفتاح <code>R</code>. ضغطة واحدة على البطاقة تشتري الترقية.</li>
+      <li>نقطة صفراء صغيرة على التاب تعني أن لديك ما يكفي من نقاط البحث الآن.</li>
     </ul>
     <h4>الدبلوماسية</h4>
     <ul>
@@ -11326,10 +11922,21 @@ async function boot() {
   };
   $("#country-search").oninput = () => buildCountryList();
   $("#btn-random").onclick = randomCountry;
-  $("#btn-research").onclick = () => {
-    $("#modal-research").hidden = false;
-    updateResearch();
+  const openResearch = () => {
+    // One click to research, from either entry point: switch the bottom bar to
+    // the research tab rather than opening a modal over the map.
+    app.tab = "research";
+    updateTab();
+    if (app.renderer) app.renderer.render();
   };
+  $("#btn-research").onclick = () => {
+    // From the tab, ✦ opens the full grid; from anywhere else it goes to the tab.
+    if (app.tab === "research") {
+      $("#modal-research").hidden = false;
+      updateResearch();
+    } else openResearch();
+  };
+  $("#res-research").onclick = openResearch;
   $("#btn-diplo").onclick = () => openDiplo(null);
   $("#btn-menu").onclick = () => ($("#modal-menu").hidden = false);
   // Secondary HUD actions live behind a "more" button on narrow screens so the
@@ -11481,7 +12088,7 @@ async function boot() {
     online.lobby = null;
     $("#online-home").hidden = false;
     $("#online-lobby").hidden = true;
-    setOnlineStatus(`متصل بالخادم • ${net.name}`, "ok");
+    setOnlineStatus(`${t("متصل بالخادم")} • ${net.name}`, "ok");
   };
   $("#btn-ready").onclick = () => {
     online.ready = !online.ready;

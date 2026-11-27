@@ -334,7 +334,7 @@ async function openOnlineHome() {
     );
     return;
   }
-  setOnlineStatus(`متصل بالخادم • ${net.name}${net.remote ? " (أونلاين)" : ""}`, "ok");
+  setOnlineStatus(`${t("متصل بالخادم")} • ${net.name}${net.remote ? " (" + t("أونلاين") + ")" : ""}`, "ok");
   // Two portal entry points drop the player straight into a room instead of
   // the lobby browser: an invite link, and the platform's instant-multiplayer
   // flag (friends list / multiplayer page). Both then put them in a room that
@@ -568,8 +568,8 @@ function renderLobby(view) {
     : t("انتظر المضيف لبدء المباراة.");
 
   $("#lobby-chips").innerHTML = [
-    `الخريطة: ${PRESETS.find((p) => p.id === view.map)?.ar || view.map}`,
-    `العصر: ${ERAS[view.era]?.ar || view.era}`,
+    `${t("الخريطة:")} ${getLang() === "en" ? PRESETS.find((p) => p.id === view.map)?.en || view.map : PRESETS.find((p) => p.id === view.map)?.ar || view.map}`,
+    `${t("العصر:")} ${getLang() === "en" ? ERAS[view.era]?.en || eraName(view.era) : ERAS[view.era]?.ar || view.era}`,
     `${t("الهدف:")} ${Math.round(view.goal * 100)}%`,
     `الوضع: ${{ normal: t("كل لاعب لنفسه"), coop: t("تحالف"), ffa: t("آخر صامد") }[view.mode] || view.mode}`,
   ]
@@ -713,7 +713,7 @@ function fillFilters() {
   ).join("");
   const aiSel = $("#ai-select");
   aiSel.innerHTML = Object.entries(AI_LEVELS)
-    .map(([k, v]) => `<option value="${k}" ${k === app.aiLevel ? "selected" : ""}>الخصوم: ${v.ar}</option>`)
+    .map(([k, v]) => `<option value="${k}" ${k === app.aiLevel ? "selected" : ""}>${t("الخصوم:")} ${getLang() === "en" ? v.en || v.ar : v.ar}</option>`)
     .join("");
   const goalSel = $("#goal-select");
   const goalLabels = { 0.3: t("الهدف: 30% — حملة سريعة"), 0.5: t("الهدف: 50% — فتح العالم"), 0.75: t("الهدف: 75% — سيطرة كاملة") };
@@ -1297,6 +1297,10 @@ const TUTOR_STEPS = [
   },
 ];
 
+// Rectangle build selection (Shift + drag). Kept as module state so the
+// pointermove handler can grow it and pointerup can commit it.
+const area = { active: false, anchor: -1, end: -1, max: 64 };
+
 const tutor = { step: -1, since: 0, active: false };
 
 function tutorDone() {
@@ -1485,6 +1489,11 @@ function attachGameInput() {
 
   canvas.addEventListener("pointerdown", (e) => {
     if (e.button === 2) return;
+    // Shift+drag with a brush selected is an area build, not a camera pan. The
+    // pan handler below is installed first (it listens on the same node), so the
+    // area notice has to win here or a single gesture would do both: the map
+    // would slide while the rectangle grew under the cursor.
+    if (e.shiftKey && app.brush) return;
     canvas.setPointerCapture(e.pointerId);
     const rect = canvas.getBoundingClientRect();
     drag = {
@@ -1511,6 +1520,10 @@ function attachGameInput() {
       if (R().brush) R().brushOk = !app.game.canBuild(app.game.player(), R().brush, cell);
       updateTooltip(e.clientX, e.clientY, cell);
     }
+    if (area.active) {
+      area.end = cell >= 0 ? cell : area.end;
+      drawAreaGhost();
+    }
     if (drag) {
       const dx = e.clientX - drag.x;
       const dy = e.clientY - drag.y;
@@ -1525,8 +1538,29 @@ function attachGameInput() {
     }
   });
 
+  // Area build: hold Shift and drag while a building is selected to place a
+  // whole rectangle of it. Shift used to mean "keep the brush", which is now the
+  // default, so the modifier is free for the thing it is actually good at.
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!app.brush || !e.shiftKey) return;
+    const rect = canvas.getBoundingClientRect();
+    const cell = R().screenToCell(e.clientX - rect.left, e.clientY - rect.top);
+    if (cell < 0) return;
+    area.anchor = cell;
+    area.active = true;
+    area.end = cell;
+    e.preventDefault();
+  });
+
   canvas.addEventListener("pointerup", (e) => {
     canvas.classList.remove("grabbing");
+    if (area.active) {
+      const cells = areaCells();
+      area.active = false;
+      clearAreaGhost();
+      placeArea(cells);
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
@@ -1626,29 +1660,30 @@ function handleClick(cell, e) {
   }
 
   if (app.brush) {
-    if (netAct("build", { key: app.brush, cell })) {
-      sfx.build();
-      if (!e.shiftKey) {
+    // The brush stays selected after a placement.
+    //
+    // It used to clear unless Shift was held, which made building a row of
+    // three cities a chore: select, click, select, click. A player who picked a
+    // building wants to place it more than once; Right-click / Escape / picking
+    // it again now ends the run, and Shift keeps doing the opposite of what it
+    // used to (it ends the run after this placement).
+    const done = (ok) => {
+      if (ok) sfx.build();
+      else sfx.error();
+      if (e.shiftKey) {
         app.brush = null;
         R.brush = null;
         $("#map").classList.remove("placing");
-        updateTab();
       }
+      updateTab();
+    };
+    if (netAct("build", { key: app.brush, cell })) {
+      done(true);
       return;
     }
     const err = game.build(p, app.brush, cell);
-    if (err) {
-      toast(err, "bad");
-      sfx.error();
-    } else {
-      sfx.build();
-      if (!e.shiftKey) {
-        app.brush = null;
-        R.brush = null;
-        $("#map").classList.remove("placing");
-        updateTab();
-      }
-    }
+    if (err) toast(err, "bad");
+    done(!err);
     R.renderBase();
     return;
   }
@@ -1717,12 +1752,23 @@ function handleClick(cell, e) {
       if (err) toast(err, "bad");
       else toast(t("غزو بحري على") + " " + nationName(n) + "!");
     } else {
-      toast(t("ليست على حدودك — تحتاج ميناء لغزو بحري"));
+      // Land neighbours are always attackable; anything else needs a port, and
+      // the message says which of the two is missing instead of one vague line.
+      toast(t("هذه الدولة ليست على حدودك — ابنِ ميناء للغزو البحري"));
     }
   }
 }
 
 function handleRightClick(cell) {
+  if (app.brush) {
+    // Right-click ends a build run; the brush now persists after each placement,
+    // so this is the way out that does not require hunting for the card again.
+    app.brush = null;
+    app.renderer.brush = null;
+    $("#map").classList.remove("placing");
+    updateTab();
+    return;
+  }
   const game = app.game;
   const owner = game.owners[cell];
   if (owner < 0) return;
@@ -1820,8 +1866,15 @@ function onKey(e) {
     return;
   }
   if (k === "r") {
-    $("#modal-research").hidden = false;
-    updateResearch();
+    // R used to open a modal. It now takes the player to the research tab, and a
+    // second press opens the full-screen grid for the detailed view.
+    if (app.tab === "research") {
+      $("#modal-research").hidden = false;
+      updateResearch();
+    } else {
+      app.tab = "research";
+      updateTab();
+    }
   } else if (k === "q") {
     setForce(game.attackFraction - 0.1);
   } else if (k === "e") {
@@ -1915,6 +1968,7 @@ function loop(ts) {
   // surface that allows it.
   R.canvas.__game = app.game;
   R.canvas.__app = app;
+  R.canvas.__renderer = R;
 }
 
 let idleAt = 0;
@@ -2017,6 +2071,12 @@ function updateHud(force) {
   setRes("#res-gold", p.gold, "+" + fmt(rate.gold) + t("/ث"));
   setRes("#res-army", p.army, pct(p.army / Math.max(1, p.cap)));
   setRes("#res-research", p.research, "+" + rate.research.toFixed(1) + t("/ث"));
+  // Affordable research is advertised on the tab itself.
+  const techBadge = $("#research-badge");
+  if (techBadge) {
+    const ready = RESEARCH.some((r) => (p.tech[r.key] || 0) < 5 && p.research >= game.researchCost(r.key, p));
+    techBadge.hidden = !ready;
+  }
   $("#nation-name").textContent = p.ar;
   $("#rank-name").textContent = game.rankName(p) + (game.xpTotal > 1 ? ` • ${Math.round(game.xpTotal)} XP` : "");
   const col = p.def.color;
@@ -2172,10 +2232,10 @@ function updateEvents() {
     const pct2 = Math.round(clamp(ratio / 1.6, 0.05, 1) * 100);
     rows.push(`<div class="ev ${incoming ? "top" : ""}">
       <div class="ev-row">
-        <b>${mine ? "➤ هجومك على " + other.ar : "⚠ " + other.ar + " تهجم عليك"}</b>
+        <b>${mine ? "➤ " + t("هجومك على") + " " + nationName(other) : "⚠ " + nationName(other) + " " + t("تهجم عليك")}</b>
         <button class="mini" data-retreat="${a.id}">${mine ? t("انسحاب") : t("تحصين")}</button>
       </div>
-      <div class="ev-sub">${fmt(a.troops)} ${t("جندي")} • ${a.naval ? t("بحري") : t("برّي")} ${a.landingTimer > 0 ? "• إنزال…" : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">الجبهة متعثرة</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">كمّاشة</b>` : ""}</div>
+      <div class="ev-sub">${fmt(a.troops)} ${t("جندي")} • ${a.naval ? t("بحري") : t("برّي")} ${a.landingTimer > 0 ? t("• إنزال…") : ""}${mine && (a.stalled || 0) > 2 ? ` • <b class="warn-txt">${t("الجبهة متعثرة")}</b>` : ""}${mine && a.directions >= 3 ? ` • <b class="good-txt">${t("كمّاشة")}</b>` : ""}</div>
       <div class="bar ${mine ? "adv" : ""}"><i style="width:${pct2}%"></i></div>
     </div>`);
   }
@@ -2250,6 +2310,29 @@ function updateTab() {
     }).join("");
     body.querySelectorAll(".bcard").forEach((el) => {
       el.onclick = () => pickBuilding(el.dataset.b);
+    });
+  } else if (app.tab === "research") {
+    // Same cards as the old modal, but in the bottom bar where the player is
+    // already looking. The modal stays for the ✦ button and the R key.
+    body.innerHTML = `
+      <div class="tech-inline">
+        <div class="tech-inline-pts"><b>${Math.floor(p.research)}</b><small>${t("نقطة بحث")}</small></div>
+        ${RESEARCH.map((r) => {
+          const lvl = p.tech[r.key] || 0;
+          const cost = game.researchCost(r.key, p);
+          const can = p.research >= cost && lvl < 5;
+          const pips = Array.from({ length: 5 }, (_, i) => `<i class="${i < lvl ? "on" : ""}"></i>`).join("");
+          return `<button class="tcard ${can ? "can" : ""} ${lvl >= 5 ? "done" : ""}" data-tech="${r.key}" ${lvl >= 5 ? "disabled" : ""}
+            title="${r.ar} — ${t("المستوى")} ${lvl}/5">
+            <i class="ti">${r.icon}</i>
+            <b>${r.ar}</b>
+            <span class="pips">${pips}</span>
+            <span class="tcost">${lvl >= 5 ? t("مكتمل") : `${cost} ✦`}</span>
+          </button>`;
+        }).join("")}
+      </div>`;
+    body.querySelectorAll("[data-tech]").forEach((b) => {
+      b.onclick = () => buyTech(b.dataset.tech);
     });
   } else if (app.tab === "economy") {
     const rate = game.resourceRate(p);
@@ -2359,11 +2442,11 @@ function updateTab() {
       b.onclick = () => {
         const n = game.byId[+b.dataset.naval];
         if (netAct("attack", { target: n.id, frac: game.attackFraction })) {
-          toast(`أسطولك يتجه إلى ${n.ar}`, "good");
+          toast(`${t("أسطولك يتجه إلى")} ${nationName(n)}`, "good");
           return;
         }
         const err = game.launchAttack(p, n, game.attackFraction);
-        toast(err || `أسطولك يتجه إلى ${n.ar}`, err ? "bad" : "good");
+        toast(err || `${t("أسطولك يتجه إلى")} ${nationName(n)}`, err ? "bad" : "good");
       };
     });
   } else if (app.tab === "strikes") {
@@ -2414,7 +2497,85 @@ function pickBuilding(key, sticky) {
   app.brush = app.brush === key ? null : key;
   app.renderer.brush = app.brush;
   $("#map").classList.toggle("placing", !!app.brush);
-  if (app.brush && !sticky) toast(`اضغط داخل أرضك لوضع ${eraName(key)} — Shift لوضع عدة`);
+  if (app.brush && !sticky) {
+    toast(`${t("اضغط داخل أرضك لوضع")} ${eraName(key)} — ${t("البناء مستمرّ، وزر الفأرة الأيمن يوقف")}`);
+  }
+  updateTab();
+}
+
+// ------------------------------------------------------------ area building ---
+//
+// Shift + drag places the selected building on every cell of the rectangle that
+// is legal and affordable. The cost is paid per cell through the normal
+// game.build() path, so the same rules apply — nothing here bypasses the
+// simulation, it just does the clicking.
+
+function areaCells() {
+  if (!area.active || area.anchor < 0 || area.end < 0) return [];
+  const w = app.renderer.world.w;
+  const ax = area.anchor % w;
+  const ay = (area.anchor / w) | 0;
+  const bx = area.end % w;
+  const by = (area.end / w) | 0;
+  const x0 = Math.min(ax, bx);
+  const x1 = Math.max(ax, bx);
+  const y0 = Math.min(ay, by);
+  const y1 = Math.max(ay, by);
+  const out = [];
+  // Row-major order, capped: a mis-drag across the whole screen should not try
+  // to build five thousand things.
+  for (let y = y0; y <= y1 && out.length < area.max; y++) {
+    for (let x = x0; x <= x1 && out.length < area.max; x++) out.push(y * w + x);
+  }
+  return out;
+}
+
+function drawAreaGhost() {
+  const R = app.renderer;
+  if (!R || !app.brush) return;
+  const cells = areaCells();
+  const p = app.game.player();
+  // The rectangle is valid when at least one cell in it can take the building.
+  const ok = cells.some((c) => !app.game.canBuild(p, app.brush, c));
+  R.area = { a: area.anchor, b: area.end, ok };
+  R.render();
+}
+
+function clearAreaGhost() {
+  const R = app.renderer;
+  if (R) {
+    R.area = null;
+    R.render();
+  }
+}
+
+function placeArea(cells) {
+  const game = app.game;
+  const p = game.player();
+  const key = app.brush;
+  if (!key || !cells.length) return;
+  let built = 0;
+  let spent = 0;
+  for (const cell of cells) {
+    const before = p.gold;
+    if (netAct("build", { key, cell })) {
+      built++;
+      spent += game.buildingCost(key, 1);
+      continue;
+    }
+    const err = game.build(p, key, cell);
+    if (!err) {
+      built++;
+      spent += before - p.gold;
+    }
+  }
+  if (built) {
+    sfx.build();
+    toast(`${t("تم البناء")}: ${built} × ${eraName(key)} (${fmt(spent)} ◈)`, "good");
+  } else {
+    toast(t("لم يُبنَ شيء — تحقّق من الأرض والذهب"), "bad");
+  }
+  app.renderer.renderBase(true);
   updateTab();
 }
 
@@ -2481,6 +2642,19 @@ function game2rel(n) {
 
 // ------------------------------------------------------------ modals ---
 
+// One purchase path for both the modal and the bottom-bar tab.
+function buyTech(key) {
+  if (netAct("research", { key })) {
+    setTimeout(() => { updateResearch(); updateTab(); }, 300);
+    return;
+  }
+  const err = app.game.doResearch(app.game.player(), key);
+  if (err) toast(err, "bad");
+  else sfx.click?.();
+  updateResearch();
+  updateTab();
+}
+
 function updateResearch() {
   const game = app.game;
   const p = game.player();
@@ -2498,15 +2672,7 @@ function updateResearch() {
     </div>`;
   }).join("");
   grid.querySelectorAll("[data-tech]").forEach((b) => {
-    b.onclick = () => {
-      if (netAct("research", { key: b.dataset.tech })) {
-        setTimeout(updateResearch, 300);
-        return;
-      }
-      const err = app.game.doResearch(app.game.player(), b.dataset.tech);
-      if (err) toast(err, "bad");
-      updateResearch();
-    };
+    b.onclick = () => buyTech(b.dataset.tech);
   });
 }
 
@@ -2604,7 +2770,7 @@ function renderDiplo() {
       return;
     }
     const err = game.callAllies(n);
-    toast(err || `حلفاؤك انضموا إلى الحرب ضد ${n.ar}`, err ? "bad" : "good");
+    toast(err || `${t("حلفاؤك انضموا إلى الحرب ضد")} ${nationName(n)}`, err ? "bad" : "good");
     renderDiplo();
   }));
   list.querySelectorAll("[data-dow]").forEach((b) => (b.onclick = () => {
@@ -2783,6 +2949,8 @@ function howTo() {
     <ul>
       <li>أول 25 ثانية هدنة: ابنِ مدنًا ومصانع قبل أن تبدأ الحرب.</li>
       <li>المدينة ترفع سقف جيشك وذهبك. المصنع يزيد ذهبك. القاعدة تسرّع التجنيد.</li>
+      <li>اختر مبنى من الشريط ثم اضغط داخل أرضك: الفرشاة تبقى بيدك، فابنِ عشرة متتالية دون إعادة الاختيار. زر الفأرة الأيمن يوقف.</li>
+      <li><code>Shift</code> + سحب يرسم مستطيلًا ويبني فيه كله دفعة واحدة.</li>
     </ul>
     <h4>الهجوم</h4>
     <ul>
@@ -2794,7 +2962,13 @@ function howTo() {
     </ul>
     <h4>الأسطول والغزو البحري</h4>
     <ul>
-      <li>ابنِ ميناء (مفتاح <code>4</code>) ثم اضغط أي دولة ساحلية لا تجاورك.</li>
+      <li>ابنِ ميناء (مفتاح <code>4</code>) ثم اضغط أي دولة في العالم، ولو كانت في القارة الأخرى.</li>
+      <li>الأسطول يبحر فعلًا: ترى السفن تعبر الماء من سواحلك إلى ساحل الهدف، والإنزال يقع عند وصولها — والمسافة الأبعد تأخذ وقتًا أطول.</li>
+    </ul>
+    <h4>البحث</h4>
+    <ul>
+      <li>تاب <code>البحث</code> في الشريط السفلي، أو زر <code>✦</code> في الأعلى، أو مفتاح <code>R</code>. ضغطة واحدة على البطاقة تشتري الترقية.</li>
+      <li>نقطة صفراء صغيرة على التاب تعني أن لديك ما يكفي من نقاط البحث الآن.</li>
     </ul>
     <h4>الدبلوماسية</h4>
     <ul>
@@ -2898,10 +3072,21 @@ async function boot() {
   };
   $("#country-search").oninput = () => buildCountryList();
   $("#btn-random").onclick = randomCountry;
-  $("#btn-research").onclick = () => {
-    $("#modal-research").hidden = false;
-    updateResearch();
+  const openResearch = () => {
+    // One click to research, from either entry point: switch the bottom bar to
+    // the research tab rather than opening a modal over the map.
+    app.tab = "research";
+    updateTab();
+    if (app.renderer) app.renderer.render();
   };
+  $("#btn-research").onclick = () => {
+    // From the tab, ✦ opens the full grid; from anywhere else it goes to the tab.
+    if (app.tab === "research") {
+      $("#modal-research").hidden = false;
+      updateResearch();
+    } else openResearch();
+  };
+  $("#res-research").onclick = openResearch;
   $("#btn-diplo").onclick = () => openDiplo(null);
   $("#btn-menu").onclick = () => ($("#modal-menu").hidden = false);
   // Secondary HUD actions live behind a "more" button on narrow screens so the
@@ -3053,7 +3238,7 @@ async function boot() {
     online.lobby = null;
     $("#online-home").hidden = false;
     $("#online-lobby").hidden = true;
-    setOnlineStatus(`متصل بالخادم • ${net.name}`, "ok");
+    setOnlineStatus(`${t("متصل بالخادم")} • ${net.name}`, "ok");
   };
   $("#btn-ready").onclick = () => {
     online.ready = !online.ready;

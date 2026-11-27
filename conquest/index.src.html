@@ -244,7 +244,7 @@
       </div>
       <div class="res" id="res-gold"><i class="ri">◈</i><b>0</b><small>+0/ث</small></div>
       <div class="res" id="res-army"><i class="ri">⚔</i><b>0</b><small>0%</small></div>
-      <div class="res" id="res-research"><i class="ri">✦</i><b>0</b><small>بحث</small></div>
+      <button class="res res-btn" id="res-research" title="البحث (R)"><i class="ri">✦</i><b>0</b><small>بحث</small></button>
       <div class="goal-chip">
         <div class="gc-row"><span id="goal-label">الهدف: 50% من الأرض</span><b id="goal-pct">0%</b></div>
         <div class="bar"><i id="goal-bar"></i></div>
@@ -294,6 +294,10 @@
         <button class="tab" data-tab="military" data-short="الجيش"><span class="tab-long">الجيش</span><span class="tab-short">الجيش</span></button>
         <button class="tab" data-tab="navy" data-short="الأسطول"><span class="tab-long">الأسطول</span><span class="tab-short">الأسطول</span></button>
         <button class="tab" data-tab="strikes" data-short="ضربات"><span class="tab-long">الضربات</span><span class="tab-short">ضربات</span></button>
+        <!-- Research used to be reachable only from a hidden ✦ button behind the
+             "more" menu on narrow screens. It is now a tab of its own, which is
+             also what the ✦ resource chip in the top bar opens. -->
+        <button class="tab" data-tab="research" data-short="بحث"><span class="tab-long">البحث</span><span class="tab-short">بحث</span><span class="tab-badge" id="research-badge" hidden></span></button>
       </div>
       <div class="tab-body" id="tab-body"></div>
       <div class="force-row">

@@ -452,6 +452,18 @@ export class Game {
 
   eliminate(n, by) {
     if (!n.alive) return;
+    // Never finish off a player who has not taken a single country yet. They
+    // keep a last redoubt instead of being knocked out of a game they had not
+    // started playing; the protection lifts the moment they capture anything.
+    if (n.isPlayer && (n.stats.captures || 0) === 0 && this.playerProtectedFrom(n, this.byId[by] || n)) {
+      n.cells = Math.max(1, n.cells);
+      n.alive = true;
+      if (!n.redoubted) {
+        n.redoubted = true;
+        this.log(t("نجت عاصمتك — بقي لك معقل أخير"), "info");
+      }
+      return;
+    }
     n.alive = false;
     n.cells = 0;
     n.army = 0;
@@ -633,8 +645,28 @@ export class Game {
   // (one extra "hop" across the water). Before this, holding a single port
   // meant every country on the planet was a legal target, so the whole world
   // declared war on the player at once and buried them in 100+ fronts.
+  // With a port, a nation can launch an amphibious assault on any coastal
+  // country it is not already bound to, anywhere in the world.
+  //
+  // This used to be "my neighbours and their neighbours", which meant a player
+  // who built a port still saw "this country is too far from your supply
+  // lines" for most of the map — the port bought almost nothing. Real reach is
+  // what a port implies: the sea.
   navalReach(n) {
     const set = new Set();
+    if (this.hasPort(n)) {
+      for (const c of this.world.countries) {
+        if (!c || c.id === n.id) continue;
+        // Coastal or not, a fleet can reach it: the landing picker only needs a
+        // shore cell, and inland targets are still attackable by land. Adding
+        // every living nation is the honest answer to "I have a navy, what can
+        // it hit" — filtering by coast is what made most of the map unreachable.
+        const other = this.byId[c.id];
+        if (other && other.alive) set.add(c.id);
+      }
+      set.delete(n.id);
+      return set;
+    }
     for (const id of n.def.neighbors) {
       set.add(id);
       const other = this.byId[id];
@@ -642,6 +674,12 @@ export class Game {
     }
     set.delete(n.id);
     return set;
+  }
+
+  // True when the two nations share no land border, so an attack has to go by
+  // sea. Callers use this to decide between the land path and the fleet path.
+  overseas(n, target) {
+    return !this.adjacent(n, target);
   }
 
   canReach(n, target) {
@@ -691,12 +729,17 @@ export class Game {
     const atk = new Attack(attacker, defender, troops, { naval });
     atk.createdAt = this.time;
     if (naval) {
-      atk.landingTimer = 1.6;
       atk.landingAt = this.findLandingCell(attacker, defender);
       if (atk.landingAt < 0) {
         attacker.army += troops;
         return t("لا يوجد ساحل يمكن الوصول إليه");
       }
+      // The fleet actually crosses the water: the timer is the journey, not a
+      // fixed 1.6s pause, so a landing halfway around the world visibly takes
+      // longer and the ships can be watched (and intercepted) on the way.
+      atk.landingTimer = this.crossingTime(attacker, atk.landingAt);
+      atk.sailFrom = this.findSailingCell(attacker, atk.landingAt);
+      atk.crossing = atk.landingTimer;
     }
     this.attacks.push(atk);
     void naval;
@@ -710,6 +753,53 @@ export class Game {
       this.log(`${attacker.ar} تهجم عليك!`, "bad", { nation: attacker.id });
     }
     return null;
+  }
+
+  // Seconds a fleet needs to cross from the attacker's coast to the beachhead.
+  // Distance in map cells → seconds, clamped so a cross-Pacific invasion is a
+  // long moment rather than an eternity.
+  crossingTime(attacker, landingCell) {
+    const w = this.world.w;
+    const home = attacker.capital != null ? attacker.capital : attacker.def ? attacker.def.x + attacker.def.y * w : 0;
+    const ax = home % w;
+    const ay = (home / w) | 0;
+    const bx = landingCell % w;
+    const by = (landingCell / w) | 0;
+    const dist = Math.hypot(ax - bx, ay - by);
+    return Math.max(2.5, Math.min(14, dist * 0.22));
+  }
+
+  // Where the troop ships leave from: the coastal cell of the attacker nearest
+  // the beachhead. Falls back to the capital when no coast is found.
+  findSailingCell(attacker, landingCell) {
+    const w = this.world.w;
+    const owners = this.owners;
+    let best = -1;
+    let bestD = Infinity;
+    for (const cell of attacker.frontier) {
+      const x = cell % w;
+      const y = (cell / w) | 0;
+      const coastal =
+        (x > 0 && owners[cell - 1] < 0) ||
+        (x < w - 1 && owners[cell + 1] < 0) ||
+        (y > 0 && owners[cell - w] < 0) ||
+        (y < this.world.h - 1 && owners[cell + w] < 0);
+      if (!coastal) continue;
+      const bx = landingCell % w;
+      const by = (landingCell / w) | 0;
+      const d = (x - bx) ** 2 + (y - by) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = cell;
+      }
+    }
+    if (best >= 0) return best;
+    // A landlocked nation still has a capital to sail from — the ships just set
+    // off from there, which reads correctly on the map (they cross the water as
+    // soon as the route reaches the coast).
+    if (attacker.capital != null && attacker.capital >= 0) return attacker.capital;
+    const home = attacker.def;
+    return home ? home.x + home.y * w : -1;
   }
 
   findLandingCell(attacker, defender) {
@@ -1603,6 +1693,17 @@ export class Game {
     if (this.rankIndex() >= RANKS.length - 1) this.unlockMedal("emperor");
   }
 
+  // An idle player should not be wiped out in the first two minutes: while the
+  // opening grace is running (or the player has done nothing at all), an
+  // offensive cannot finish them off. This is a floor under the difficulty
+  // curve, not a cheat — once the player takes land, the gloves are off.
+  playerProtectedFrom(p, attacker) {
+    if (!p || !p.isPlayer) return false;
+    const elapsed = this.time - (this.openedAt || 0);
+    const idle = (p.stats.captures || 0) === 0;
+    return idle && elapsed < 150 && p.cells < attacker.cells * 0.5;
+  }
+
   // Grace period at the start of a match (the classic 25s ceasefire).
   startCeasefire(seconds) {
     this.ceasefireEndsAt = this.time + Math.max(0, seconds);
@@ -1826,6 +1927,17 @@ export class Game {
     }
   }
 
+  // How many live offensives already run between two nations — used to keep the
+  // AI from re-declaring a war it is already fighting.
+  warsBetween(a, b) {
+    let n = 0;
+    for (const atk of this.attacks) {
+      if (!atk.active) continue;
+      if ((atk.attacker === a && atk.defender === b) || (atk.attacker === b && atk.defender === a)) n++;
+    }
+    return n;
+  }
+
   aiConsiderWar(n) {
     if (n.war.size >= 2 && n.ai.aggression < 1.1) return;
     const candidates = [];
@@ -1842,20 +1954,40 @@ export class Game {
       if (n.war.has(id)) continue;
       // don't dogpile a nation that is already collapsing
       const strength = other.army * this.attackMult(other);
-      const mine = n.army * this.attackMult(n) * (1 + n.ai.aggression * 0.35);
+      let mine = n.army * this.attackMult(n) * (1 + n.ai.aggression * 0.35);
       const p0 = other.isPlayer ? other : null;
       const isPlayerTarget = !!p0;
+      if (!isPlayerTarget) {
+        // The AI used to treat the human as the only real target: everyone else
+        // was skipped by the "don't attack anyone but the player" effect of the
+        // scoring below, so the map sat still and the whole world waited on the
+        // player. AI nations now fight each other on the same terms, with a
+        // mild preference for a neighbour that is weaker than they are, and a
+        // small bias against the player so the human is not dogpiled.
+        if (other.army < n.army * 0.85) mine *= 1.15;
+        if (this.warsBetween(n, other) > 0) mine *= 1.1;
+      }
       if (isPlayerTarget) {
         const elapsed = this.time - (this.openedAt || 0);
         // The human gets breathing room to build up, and AI coalitions only
         // form once the player has proven to be a threat.
-        const grace = this.mode === "daily" ? 45 : 110;
+        //
+        // But "breathing room" had become a no-entry zone: an AI needed 2.1×
+        // the player's strength to declare at all, so on a normal start nobody
+        // ever attacked — the map was at war with itself and the human sat
+        // untouched until one giant finally qualified. The bar is now modestly
+        // above parity, which still protects a small player without making the
+        // world ignore them.
+        const grace = this.mode === "daily" ? 45 : 75;
         const aggressive = (p0.stats.captures || 0) >= 2;
         if (elapsed < grace) continue;
-        if (!aggressive && mine < strength * 2.1) continue;
-        if (aggressive && mine < strength * 1.25) continue;
+        if (!aggressive && mine < strength * 1.45) continue;
+        if (aggressive && mine < strength * 1.1) continue;
         const alreadyAtWar = [...p0.war].some((id) => id !== other.id && this.byId[id]?.alive);
-        const limit = aggressive ? 2 : 1;
+        // Two simultaneous attackers is plenty for a player who has not taken
+        // anything yet; the old limit of 1 meant a player who fought one war off
+        // was invisible to the rest of the world.
+        const limit = aggressive ? 3 : 2;
         if (alreadyAtWar && [...p0.war].length >= limit) continue;
       }
       if (mine < strength * 0.75) continue;
@@ -1874,11 +2006,20 @@ export class Game {
     if (!target) return;
     if (this.rng.chance(0.55 * n.ai.aggression)) {
       const other = this.byId[target.id];
-      this.declareWar(n, other);
+      // AI-vs-AI declarations are logged by the throttled branch below, so
+      // declareWar must not also write its own line — otherwise the feed got one
+      // entry per declaration (219 of them in a 400s sim) and drowned everything
+      // the player actually cares about.
+      this.declareWar(n, other, !n.isPlayer && !other.isPlayer);
       if (!n.isPlayer && !other.isPlayer) {
-        // keep the log readable: only surface wars involving neighbours of the player
-        const p2 = this.player();
-        if (p2 && (n.def.neighbors.includes(p2.id) || other.def.neighbors.includes(p2.id))) {
+        // The log used to show AI-vs-AI wars only when a player neighbour was
+        // involved, so the world could burn without the human ever reading a
+        // word about it — which is exactly why "the bots only attack me" was a
+        // reasonable read of the screen. Surface wars anywhere, throttled so the
+        // feed stays readable.
+        this.aiWarLog = this.aiWarLog || { last: 0 };
+        if (this.time - this.aiWarLog.last > 9) {
+          this.aiWarLog.last = this.time;
           this.log(`${n.ar} أعلنت الحرب على ${other.ar}`, "info", { nation: other.id });
         }
       }

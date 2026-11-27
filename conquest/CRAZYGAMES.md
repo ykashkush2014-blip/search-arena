@@ -7,7 +7,7 @@ Everything the portal asks for, and where each requirement is implemented.
 | | |
 |---|---|
 | Build file | `dist/conquest.html` (single self-contained file) |
-| Size | **1.46 MB** (limit 50 MB basic / 250 MB full) |
+| Size | **1.49 MB** (limit 50 MB basic / 250 MB full) |
 | File count | **1** (limit 1500) |
 | External assets | none — map, styles, audio and all 12 modules are inlined |
 | External requests | only `https://sdk.crazygames.com/crazygames-sdk-v3.js` |
@@ -117,6 +117,20 @@ reporting "not detected" even with a correct tag.
 | 4 | Label overlap | biggest nations first, hard budget of 40/22/10 labels by zoom | `polish.mjs`, `canvas-text.mjs` |
 | 5 | One product name | `Conquest.io — World Domination` on the title screen, the tab and the submission form | `polish.mjs` |
 | 6 | Background music | synthesised bed, own gain below the sfx master, starts on the first click, stopped by the same `setEnabled()` the portal's `muteAudio` drives | `music.mjs` — counts oscillators with a stub AudioContext |
+
+### QA round 2 (seven items, each with a check)
+
+| # | Reported | Cause found | What changed | Verified by |
+|---|---|---|---|---|
+| 1 | Arabic leaking into English | Fragments were composed into strings at runtime, so the dictionary never saw them; and `swapPatterns` rewrote Arabic→English even in Arabic mode | direction guards, fixed-point pattern loop, ~40 new keys, `t()` around composed fragments, event-log rules | `enstrings.mjs` 7/7, `deep.mjs` "all screens English", `i18n.mjs` 27/27 |
+| 2 | Chat covers the attack list | `.chat-dock` was `left:10px; bottom:178px; width:262px` — the exact column and height of `.events` | dock moved to the right column under the minimap, slim strip on short viewports, hidden only below 760 px | `chatspace.mjs` 7/7 (boxes computed for all 10 graded viewports) |
+| 3 | Naval attacks feel fake | `navalReach` was "my neighbours and theirs", so almost the whole map answered *too far from your supply lines* even with a port; the landing was a hidden 1.6 s timer | reach = every living nation when a port exists; travel time from real distance (2.5–14 s); convoy hulls with wakes rendered along the route; beachhead pulse | `naval.mjs` 14/14, `round2.mjs` |
+| 4 | Bots only attack the player | **They were already fighting each other, invisibly.** A headless sim shows ~122 000 AI→AI attack samples against 180 AI→player, yet AI-vs-AI fronts were skipped below 1.6× zoom and AI-vs-AI declarations were only logged when a *player neighbour* was involved — so on screen the world looked idle and every visible war was the player's. On top of that, a single attacker that did find the player could finish them off in one push | AI-vs-AI offensives drawn near the camera at any zoom ≥ 0.85; declarations anywhere in the world logged, throttled to one per 9 s (no more 219-line flood); an idle player keeps a last redoubt for 150 s instead of being knocked out of a game they had not started | `ainations.mjs` 3/3, `aivisible.mjs` 4/4, `aidraw.mjs` 3/3, `aivisible2.mjs` — **94 % of a 300 s match has AI-vs-AI combat on screen around the player's start**, up to 80 concurrent offensives |
+| 5 | Building one-by-one is tedious | the brush cleared after every placement unless Shift was held | brush persists; right-click / Escape ends the run; Shift+drag paints a rectangle (capped at 64 cells) with a live preview, and Shift+drag no longer pans the camera at the same time | `buildui.mjs` 11/11 (real bundle: 3 clicks → 3 buildings, 2×2 drag → 4) |
+| 6 | Research hard to reach | it lived behind a `✦` button inside the "more" overflow menu | research is a bottom-bar tab, also opened by the `✦` resource chip and by `R`; second press of either opens the detailed grid; the tab shows a dot when a tech is affordable | `researchui.mjs` 13/13 |
+| 7 | Regression | — | every earlier harness re-run against the new build | 30 harnesses, all green |
+
+Measured on the shipped build, 400 s of headless play with an idle player: **122 462 AI→AI attack samples, 32 live AI-vs-AI war pairs, 31 war declarations in the feed — all of them between nations other than the player**, and AI-vs-AI combat on screen in 94 % of the sampled frames. The player is attacked once they have taken something; they are not the only war on the map.
 
 ---
 
