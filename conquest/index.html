@@ -7,7 +7,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <meta name="theme-color" content="#0a1220" />
-<title>Conquest — World Domination</title>
+<title>Conquest.io — World Domination</title>
 <!-- The CrazyGames SDK must be a real <script> tag in <head>, not injected by
      JavaScript later: their launch checker looks for the tag itself, and with
      the runtime-injected version it reports "Gameplay Start: not detected"
@@ -27,7 +27,7 @@
         <div class="brand-mark">
           <span class="crown">♛</span>
         </div>
-        <h1 class="title">كونكوست<span class="io">.io</span></h1>
+        <h1 class="title">Conquest<span class="io">.io</span></h1>
         <p class="tagline">ابدأ من حدود دولة حقيقية… واحتلّ العالم</p>
       </header>
 
@@ -321,6 +321,22 @@
 
     <!-- toast -->
     <div class="toasts" id="toasts"></div>
+
+    <!-- Three-step onboarding, shown once on the first match only. It sits
+         above the map and points at real elements rather than explaining the
+         HUD in a wall of text: build a factory, attack a neighbour, watch the
+         progress move. Skippable from the first frame. -->
+    <div class="tutor" id="tutor" hidden>
+      <div class="tutor-card">
+        <span class="tutor-step" id="tutor-step">1 / 3</span>
+        <h4 id="tutor-title"></h4>
+        <p id="tutor-text"></p>
+        <div class="tutor-actions">
+          <button class="btn ghost" id="tutor-skip" type="button">تخطّي</button>
+          <button class="btn gold" id="tutor-next" type="button">التالي</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ============================ DIALOGS ============================ -->
@@ -853,12 +869,20 @@ input, select { font-family: inherit; }
   color: var(--gold); background: rgba(244,210,122,0.1);
   border-color: rgba(244,210,122,0.32);
 }
+/* The build bar must never clip a card. Cards are fixed-width and there can be
+   seven of them, so without wrap the last ones were cut in half by the dock —
+   the most visible defect in the game. Wrapping keeps every card whole at any
+   width; a thin scrollbar is still there for very narrow (mobile) frames. */
 .tab-body {
-  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px;
-  min-height: 74px; scrollbar-width: thin;
+  display: flex; gap: 6px; flex-wrap: wrap;
+  align-content: flex-start; overflow-x: auto; overflow-y: hidden;
+  padding-bottom: 2px; min-height: 74px;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent;
 }
+.tab-body::-webkit-scrollbar { height: 5px; }
+.tab-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
 .bcard {
-  flex: none; width: 116px;
+  flex: 0 0 auto; width: 112px; min-width: 0;
   border: 1px solid var(--line); border-radius: 10px;
   background: linear-gradient(180deg, rgba(28,42,62,0.9), rgba(14,22,35,0.9));
   padding: 7px; display: flex; flex-direction: column; gap: 3px;
@@ -878,7 +902,16 @@ input, select { font-family: inherit; }
 }
 .bcard .cost { font-size: 11px; color: var(--gold); display: flex; justify-content: space-between; }
 .bcard .cost span { color: var(--muted); font-size: 10px; }
-.bcard .desc { font-size: 9.5px; color: var(--muted); line-height: 1.35; height: 26px; overflow: hidden; }
+.bcard .desc {
+  font-size: 9.5px; color: var(--muted); line-height: 1.35;
+  /* two lines maximum, ellipsis instead of a hard cut mid-glyph */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; text-overflow: ellipsis; min-height: 26px;
+}
+.bcard .bh { min-width: 0; }
+.bcard .bh > span, .bcard .bh { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bcard .cost { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bcard button.pick { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bcard .lvl { font-size: 9.5px; color: var(--blue); }
 .bcard button.pick {
   margin-top: auto; border: 1px solid var(--line-2); border-radius: 6px;
@@ -1401,6 +1434,46 @@ input, select { font-family: inherit; }
 .warn-txt { color: #ffb27a; }
 .good-txt { color: #9fe1b4; }
 
+/* ------------------------------------------------------------------ tutor ---
+   The onboarding card sits over the map, not over the build bar, so the player
+   can follow the instruction while the thing it points at stays visible. */
+.tutor {
+  position: absolute; inset-inline: 0; bottom: 186px; z-index: 45;
+  display: flex; justify-content: center; pointer-events: none;
+}
+/* Short viewports (the 821x462 QA frame) have no room for a card above the
+   build bar — it would cover the bar it is pointing at. Lift it to the top
+   instead of shrinking the text. */
+@media (max-height: 560px) {
+  .tutor { bottom: auto; top: 58px; }
+}
+.tutor-card {
+  pointer-events: auto;
+  width: min(460px, 92vw);
+  background: linear-gradient(180deg, rgba(20,32,50,0.97), rgba(10,18,30,0.97));
+  border: 1px solid rgba(244,210,122,0.45);
+  border-radius: 14px; padding: 12px 14px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+  animation: tutorIn 0.22s ease;
+}
+@keyframes tutorIn { from { opacity: 0; transform: translateY(10px); } }
+.tutor-step {
+  font-size: 10.5px; color: var(--gold); letter-spacing: 0.06em;
+  text-transform: uppercase; font-weight: 700;
+}
+.tutor-card h4 { margin: 3px 0 5px; font-size: 14.5px; }
+.tutor-card p { margin: 0; font-size: 12px; line-height: 1.65; color: var(--muted); }
+.tutor-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.tutor-actions .btn { padding: 6px 14px; font-size: 12px; border-radius: 9px; }
+.tutor.done { display: none; }
+
+/* highlight ring used by the tutorial to point at the build bar */
+.tutor-target {
+  position: relative; z-index: 44;
+  box-shadow: 0 0 0 2px rgba(244,210,122,0.85), 0 0 22px rgba(244,210,122,0.35);
+  border-radius: 10px;
+}
+
 </style>
 
 <script>
@@ -1533,7 +1606,7 @@ __def("js/i18n-en.js", function (__req, __exp, __reexport) {
 const EN = {
   // ------------------------------------------------------------- menu / brand
   "كونكوست": "Conquest",
-  "كونكوست — فتح العالم": "Conquest — World Domination",
+  "كونكوست — فتح العالم": "Conquest.io — World Domination",
   "ابدأ من حدود دولة حقيقية… واحتلّ العالم": "Start from a real country's borders… and take the world",
   "ابدأ اللعب": "Play",
   "متابعة": "Continue",
@@ -2219,6 +2292,19 @@ const EN = {
     "Your local data is deleted instantly by clearing site data in your browser settings.",
   "تأكيد": "Confirm",
   "إلغاء": "Cancel",
+  // --- guided onboarding (3 steps, first match only)
+  "ابنِ مصنعًا": "Build a factory",
+  "اختر «مصنع» من شريط البناء ثم اضغط داخل أرضك. المصنع يرفع دخلك، والدخل هو ما يشتري الجيش.":
+    "Pick \"Factory\" from the build bar, then click inside your own land. Factories raise your income, and income buys armies.",
+  "اهجم على جارك": "Attack a neighbour",
+  "اضغط دولة على حدودك مرتين: الأولى تحددها، والثانية تأمر بالهجوم. القوة في الشريط السفلي تحدد حجم الهجوم.":
+    "Click a country on your border twice: the first selects it, the second orders the attack. The force slider sets how much of your army goes.",
+  "راقب تقدّمك": "Watch your progress",
+  "هدفك النسبة المئوية أعلى الشاشة. كلما اتسعت أرضك اقتربت من الفوز — وهذه هي النسبة التي تحسم المباراة.":
+    "Your goal is the percentage at the top of the screen. Every country you take moves it up — that number is what wins the match.",
+  "جاهز — العالم أمامك": "Ready — the world is yours",
+  "تخطّي": "Skip",
+  "التالي": "Next",
 };
 
 
@@ -2634,7 +2720,7 @@ function translateDom(root = typeof document !== "undefined" ? document.body : n
 // The tab title lives in <head>, outside the body the walker covers, and a
 // player who switches to English still sees a browser tab reading "كونكوست".
 const TITLES = {
-  "كونكوست — فتح العالم": "Conquest — World Domination",
+  "كونكوست — فتح العالم": "Conquest.io — World Domination",
 };
 
 function applyDocumentTitle() {
@@ -2927,6 +3013,11 @@ const MEDALS = [
   { id: "emperor", ar: t("الإمبراطور"), en: "Emperor", hintAr: t("الوصول لأعلى رتبة") },
 ];
 
+// Opening truce in seconds. 25 was a long time to watch a still map; 10 still
+// lets a player place a first building before the AI moves. Daily challenges
+// can override it in their own config.
+const OPENING_TRUCE = 10;
+
 const BALANCE = {
   tick: 0.1, // simulation step (seconds)
 
@@ -3024,7 +3115,7 @@ const MODES = [
 
 
 __exp.__done = true;
-return { ERAS, BUILDINGS, BUILDING_BY_KEY, ERA_BUILDING_NAMES, RESEARCH, MAX_TECH, RANKS, MEDALS, BALANCE, AI_LEVELS, MODES };
+return { ERAS, BUILDINGS, BUILDING_BY_KEY, ERA_BUILDING_NAMES, RESEARCH, MAX_TECH, RANKS, MEDALS, OPENING_TRUCE, BALANCE, AI_LEVELS, MODES };
 });
 
 __def("js/world.js", function (__req, __exp, __reexport) {
@@ -3361,7 +3452,7 @@ return { initWorld, setWorldData, getWorldData, DIRS, PRESETS, base64ToInt32, rl
 __def("js/state.js", function (__req, __exp, __reexport) {
 // Game simulation: nations, economy, front-line combat, strikes, diplomacy,
 // victory conditions and serialisation. No DOM access in this file.
-const { BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MAX_TECH, RANKS, RESEARCH } = __req("js/data.js");
+const { BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MAX_TECH, OPENING_TRUCE, RANKS, RESEARCH } = __req("js/data.js");
 const { t } = __req("js/i18n.js");
 const { gridToRle, rleToGrid } = __req("js/world.js");
 
@@ -3432,6 +3523,9 @@ class Nation {
 class Attack {
   constructor(attacker, defender, troops, opts = {}) {
     this.id = uidCounter++;
+    // Stable per-attack phase, so its arrow animation is out of step with the
+    // neighbour's instead of every front pulsing in unison.
+    this.seed = (uidCounter * 2.399) % (Math.PI * 2);
     this.attacker = attacker;
     this.defender = defender;
     this.troops = Math.max(1, Math.floor(troops));
@@ -6259,17 +6353,67 @@ class Renderer {
         continue;
       }
       if (!targets.length) continue;
-      const n = Math.min(involved ? 34 : 8, targets.length);
-      ctx.fillStyle = a.attacker.isPlayer ? "rgba(255,240,160,0.95)" : "rgba(255,120,110,0.92)";
+      // An attack used to be a scatter of static dots, which reads as "dirt" at
+      // a glance: the map looked exactly the same whether a war was raging or
+      // not. Two cues fix that — a short arrow travelling from the staging cell
+      // into the front, and a pulse on the front itself — so combat is legible
+      // without opening a panel.
+      const mine = a.attacker.isPlayer;
+      const hue = mine ? "255,235,150" : "255,120,110";
+      const n = Math.min(involved ? 26 : 6, targets.length);
       const phase = (game.time * 14) | 0;
       const size = Math.max(1.5, zoom * 0.4);
+      const pulse = 0.5 + 0.5 * Math.sin(game.time * 6 + a.seed);
       for (let k = 0; k < n; k++) {
         const pair = targets[(k * 61 + phase) % targets.length];
+        const from = pair[0];
         const cell = pair[1];
         const x = ((cell % w) - this.cam.x) * zoom;
         const y = (((cell / w) | 0) - this.cam.y) * zoom;
         if (x < -10 || y < -10 || x > this.viewW + 10 || y > this.viewH + 10) continue;
+
+        // Arrow: from the staging cell towards the front, animated along its
+        // length so several arrows visibly march at once.
+        const fx = ((from % w) - this.cam.x) * zoom;
+        const fy = (((from / w) | 0) - this.cam.y) * zoom;
+        if (Math.abs(x - fx) + Math.abs(y - fy) > 4) {
+          const t = ((game.time * 1.6 + (k % 7) / 7) % 1);
+          const hx = fx + (x - fx) * t;
+          const hy = fy + (y - fy) * t;
+          const ang = Math.atan2(y - fy, x - fx);
+          const len = Math.max(4, Math.min(16, Math.hypot(x - fx, y - fy) * 0.28));
+          ctx.save();
+          ctx.strokeStyle = `rgba(${hue},${0.35 + 0.45 * t})`;
+          ctx.fillStyle = `rgba(${hue},${0.45 + 0.5 * t})`;
+          ctx.lineWidth = Math.max(1, zoom * 0.22);
+          // shaft
+          ctx.beginPath();
+          ctx.moveTo(hx - Math.cos(ang) * len, hy - Math.sin(ang) * len);
+          ctx.lineTo(hx, hy);
+          ctx.stroke();
+          // head
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.lineTo(hx - Math.cos(ang - 0.5) * len * 0.55, hy - Math.sin(ang - 0.5) * len * 0.55);
+          ctx.lineTo(hx - Math.cos(ang + 0.5) * len * 0.55, hy - Math.sin(ang + 0.5) * len * 0.55);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Front flare: a soft ring that breathes, marking the contested cell.
+        const r = Math.max(2.4, zoom * 0.55) * (0.85 + pulse * 0.5);
+        ctx.save();
+        ctx.globalAlpha = 0.5 + pulse * 0.4;
+        ctx.strokeStyle = `rgba(${hue},0.95)`;
+        ctx.lineWidth = Math.max(1, zoom * 0.16);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = `rgba(${hue},0.95)`;
         ctx.fillRect(x - size / 2, y - size / 2, size, size);
+        ctx.restore();
       }
     }
   }
@@ -6333,10 +6477,18 @@ class Renderer {
     ctx.textBaseline = "middle";
     const size = Math.max(10, Math.min(19, zoom * 2.6));
     ctx.font = `700 ${size}px "Cairo", "Tajawal", system-ui, sans-serif`;
-    const list = [...game.nations.values()].sort((a, b) => a.cells - b.cells);
+    // Big nations first, so they always win a slot; then a hard budget of
+    // labels on screen. Without the budget, zooming out drew a dozen names on
+    // top of each other in Europe and none of them was readable.
+    const list = [...game.nations.values()].sort((a, b) => b.cells - a.cells);
+    const budget = zoom > 3 ? 40 : zoom > 2 ? 22 : 10;
+    let drawn = 0;
     for (const n of list) {
       if (!n.alive) continue;
+      if (drawn >= budget) break;
       const c = n.def || world.countries[n.id];
+      // Threshold scales with the zoom: below it the name is smaller than its
+      // own territory and would just overlap its neighbours.
       if (n.cells * zoom * zoom < 2400) continue;
       const x = (c.x - this.cam.x) * zoom;
       // Nation names are data, not copy: the map bundle carries both spellings.
@@ -6350,6 +6502,7 @@ class Renderer {
       ctx.strokeText(label, x, y);
       ctx.fillStyle = n.isPlayer ? "#ffe9a8" : "rgba(255,255,255,0.9)";
       ctx.fillText(label, x, y);
+      drawn++;
     }
     ctx.restore();
   }
@@ -6780,6 +6933,7 @@ class Sfx {
     this.enabled = true;
     this.last = new Map();
     this.master = null;
+    this.music = null;
   }
 
   ensure() {
@@ -6795,6 +6949,15 @@ class Sfx {
       this.ctx = null;
     }
     return this.ctx;
+  }
+
+  // The single switch for every sound. CrazyGames' muteAudio sets this, and it
+  // must also silence the music bed — leaving the music playing while the
+  // effects are muted is the exact bug the portal checks for.
+  setEnabled(on) {
+    this.enabled = !!on;
+    if (!this.enabled) this.stopMusic();
+    return this.enabled;
   }
 
   resume() {
@@ -6846,6 +7009,78 @@ class Sfx {
     filt.connect(g);
     g.connect(this.master);
     src.start(ctx.currentTime + delay);
+  }
+
+  // ------------------------------------------------------------- music ---
+  //
+  // A slow bed under the effects: four-bar loop, four notes, all synthesised.
+  // Deliberately quiet (its own gain, well below the sfx master) and started
+  // only from a click — browsers refuse to start an AudioContext otherwise,
+  // and CrazyGames' muteAudio must be able to win, so the music is gated by the
+  // same `enabled` flag as everything else.
+  startMusic() {
+    const ctx = this.ensure();
+    if (!ctx || this.music || !this.enabled) return;
+    try {
+      const bus = ctx.createGain();
+      bus.gain.value = 0.0;
+      // A tiny lowpass keeps it from competing with the attack sounds.
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 900;
+      bus.connect(filter);
+      filter.connect(this.master);
+      this.music = { bus, filter, timer: null, step: 0 };
+      // Fade in over a second so it never startles.
+      bus.gain.setValueAtTime(0.0001, ctx.currentTime);
+      bus.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + 1.2);
+      this.musicTimer();
+    } catch {
+      this.music = null;
+    }
+  }
+
+  // One note per half second; a minor pentatonic wandering, no melody to tire
+  // of. Notes are short and soft, with a long release.
+  musicTimer() {
+    const ctx = this.ctx;
+    if (!ctx || !this.music) return;
+    const scale = [196.0, 233.08, 261.63, 311.13, 349.23, 392.0];
+    const step = this.music.step++;
+    const note = scale[(step * 3 + ((step / 8) | 0)) % scale.length];
+    const t0 = ctx.currentTime + 0.02;
+    try {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = step % 8 === 0 ? "triangle" : "sine";
+      osc.frequency.setValueAtTime(note, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.25);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.9);
+      osc.connect(g);
+      g.connect(this.music.bus);
+      osc.start(t0);
+      osc.stop(t0 + 2.0);
+    } catch {
+      /* a failed note is not worth a broken game */
+    }
+    this.music.timer = setTimeout(() => this.musicTimer(), 620);
+  }
+
+  stopMusic() {
+    const ctx = this.ctx;
+    if (!this.music) return;
+    const { bus, timer } = this.music;
+    clearTimeout(timer);
+    this.music = null;
+    if (!ctx) return;
+    try {
+      bus.gain.cancelScheduledValues(ctx.currentTime);
+      bus.gain.setValueAtTime(Math.max(0.0001, bus.gain.value), ctx.currentTime);
+      bus.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
+    } catch {
+      /* ignore */
+    }
   }
 
   click() {
@@ -8220,7 +8455,7 @@ __def("js/main.js", function (__req, __exp, __reexport) {
 const { World, PRESETS, initWorld, difficultyOf } = __req("js/world.js");
 const { Game } = __req("js/state.js");
 const { Renderer } = __req("js/render.js");
-const { AI_LEVELS, BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MEDALS, MODES, RANKS, RESEARCH } = __req("js/data.js");
+const { AI_LEVELS, BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MEDALS, MODES, OPENING_TRUCE, RANKS, RESEARCH } = __req("js/data.js");
 const { CAMPAIGNS, dailyChallenge } = __req("js/campaigns.js");
 const { Rng } = __req("js/rng.js");
 const { sfx } = __req("js/audio.js");
@@ -9300,7 +9535,7 @@ function startGame(countryId) {
     opts.daily = app.daily.ar;
   }
   const game = new Game(opts);
-  game.startCeasefire(app.mode === "daily" && app.daily?.ceasefire === 0 ? 0 : 25);
+  game.startCeasefire(app.mode === "daily" && app.daily?.ceasefire === 0 ? 0 : OPENING_TRUCE);
   if (app.mode === "daily" && app.daily) {
     const p = game.player();
     if (p && app.daily.gold) p.gold = app.daily.gold;
@@ -9336,7 +9571,7 @@ function startCampaign(camp) {
     seed: Date.now() & 0xffffffff,
     campaign: camp.id,
   });
-  game.startCeasefire(25);
+  game.startCeasefire(OPENING_TRUCE);
   game.campaign = camp;
   bootGame(game, world);
 }
@@ -9436,7 +9671,15 @@ function applyChatSetting() {
 // own preference wins, exactly as before.
 function applyAudioSetting() {
   const platformMuted = getSettings().muteAudio;
-  sfx.enabled = !platformMuted && profile.settings.sound !== false;
+  // setEnabled() also stops the music bed: muting the effects and leaving the
+  // music running is exactly the state the portal's muteAudio check fails on.
+  const on = !platformMuted && profile.settings.sound !== false;
+  const was = sfx.enabled;
+  sfx.setEnabled(on);
+  if (on && !was) sfx.resume();
+  // Resume the bed once the player is in a match (or the menu) and sound is on.
+  if (on && app.started) sfx.startMusic();
+  if (!on) sfx.stopMusic();
   const toggle = $("#set-sound");
   if (toggle) {
     toggle.checked = profile.settings.sound !== false;
@@ -9444,6 +9687,135 @@ function applyAudioSetting() {
     toggle.disabled = platformMuted;
     toggle.closest(".row")?.classList.toggle("locked", platformMuted);
   }
+}
+
+// ---------------------------------------------------------------- tutorial ---
+//
+// First-match onboarding. Three steps, each one a real action the player can
+// take right now, and each advances by watching what actually happened rather
+// than by a "Next" button the player can click through without reading:
+//
+//   1. build a factory   → advances when a factory exists
+//   2. attack a neighbour → advances when an attack exists
+//   3. watch your progress → advances as the war goal percentage moves
+//
+// Shown once (a flag in the profile), skippable at any point, never on top of
+// the build bar the step is asking about.
+const TUTOR_KEY = "tutorDone";
+
+const TUTOR_STEPS = [
+  {
+    title: "ابنِ مصنعًا",
+    text: "اختر «مصنع» من شريط البناء ثم اضغط داخل أرضك. المصنع يرفع دخلك، والدخل هو ما يشتري الجيش.",
+    check: (game, p) => (p.buildings || []).some((b) => b.key === "factory"),
+    target: "build",
+  },
+  {
+    title: "اهجم على جارك",
+    text: "اضغط دولة على حدودك مرتين: الأولى تحددها، والثانية تأمر بالهجوم. القوة في الشريط السفلي تحدد حجم الهجوم.",
+    check: (game) => game.attacks.some((a) => a.active && a.attacker.isPlayer),
+    target: "attack",
+  },
+  {
+    title: "راقب تقدّمك",
+    text: "هدفك النسبة المئوية أعلى الشاشة. كلما اتسعت أرضك اقتربت من الفوز — وهذه هي النسبة التي تحسم المباراة.",
+    check: () => true,
+    target: "goal",
+    hold: 4200, // a step that is only reading needs time to be read
+  },
+];
+
+const tutor = { step: -1, since: 0, active: false };
+
+function tutorDone() {
+  return !!profile[TUTOR_KEY];
+}
+
+function tutorStart() {
+  if (tutorDone()) return;
+  tutor.active = true;
+  tutor.step = 0;
+  tutor.since = performance.now();
+  tutorRender();
+}
+
+function tutorStop() {
+  tutor.active = false;
+  const el = $("#tutor");
+  if (el) el.hidden = true;
+  tutorClearTarget();
+  profile[TUTOR_KEY] = true;
+  saveSettings();
+}
+
+function tutorClearTarget() {
+  for (const el of $$(".tutor-target")) el.classList.remove("tutor-target");
+}
+
+// Point at the thing the current step is talking about. Deliberately quiet:
+// a ring on the build bar, not an overlay that hides the map.
+function tutorFocus(target) {
+  tutorClearTarget();
+  if (target === "build") $("#tabs")?.classList.add("tutor-target");
+  if (target === "attack") $("#tab-body")?.classList.add("tutor-target");
+  if (target === "goal") $("#goal-label")?.classList.add("tutor-target");
+}
+
+function tutorRender() {
+  const box = $("#tutor");
+  if (!box) return;
+  const step = TUTOR_STEPS[tutor.step];
+  if (!tutor.active || !step) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  $("#tutor-step").textContent = `${tutor.step + 1} / ${TUTOR_STEPS.length}`;
+  $("#tutor-title").textContent = t(step.title);
+  $("#tutor-text").textContent = t(step.text);
+  // The last step has nothing to click: it is finished by reading it.
+  $("#tutor-next").hidden = tutor.step < TUTOR_STEPS.length - 1;
+  tutorFocus(step.target);
+  translateDom(box);
+}
+
+function tutorNext() {
+  if (!tutor.active) return;
+  tutor.step++;
+  tutor.since = performance.now();
+  if (tutor.step >= TUTOR_STEPS.length) {
+    tutorStop();
+    toast(t("جاهز — العالم أمامك"), "good");
+    return;
+  }
+  tutorRender();
+}
+
+// Called from the game loop; cheap (a couple of property reads per frame).
+function tutorTick() {
+  if (!tutor.active) return;
+  const game = app.game;
+  if (!game || game.result || app.paused) return;
+  const step = TUTOR_STEPS[tutor.step];
+  const p = game.player();
+  if (!step || !p) return;
+  const waited = performance.now() - tutor.since;
+  // A minimum dwell stops a step from flashing past before it can be read.
+  const minDwell = step.hold || 900;
+  if (waited < minDwell) return;
+  let ok = false;
+  try {
+    ok = step.check(game, p);
+  } catch {
+    ok = false;
+  }
+  if (!ok) return;
+  // Step 3 is a reading step: it ends on its own timer.
+  if (tutor.step === TUTOR_STEPS.length - 1) {
+    tutorStop();
+    return;
+  }
+  tutorNext();
 }
 
 function bootGame(game, prebuiltWorld) {
@@ -9488,6 +9860,9 @@ function bootGame(game, prebuiltWorld) {
     if (!game.remote) showEnd(summary);
   };
   show("game");
+  // First-match onboarding, local play only: online is a shared room (the
+  // others are already playing) and a daily run has its own rules.
+  if (!game.remote && game.mode !== "online") tutorStart();
   requestAnimationFrame(() => {
     app.renderer.resize();
     app.renderer.baseKey = "";
@@ -9960,7 +10335,14 @@ function loop(ts) {
   }
   const R = app.renderer;
   R.render();
+  tutorTick();
   hudTick(dt);
+  // Harnesses need to drive a real match (place a factory, order an attack) and
+  // the single-file build exposes no modules. Two plain property writes on a
+  // node the page already owns — no DOM mutation, no global — is the smallest
+  // surface that allows it.
+  R.canvas.__game = app.game;
+  R.canvas.__app = app;
 }
 
 let idleAt = 0;
@@ -10902,16 +11284,26 @@ async function boot() {
   renderMedals();
   void platformReady;
   $("#btn-quick").onclick = () => {
+    app.started = true;
     sfx.resume();
     sfx.click();
+    if (profile.settings.sound !== false && !getSettings().muteAudio) sfx.startMusic();
     quickStart();
   };
   $("#btn-play").onclick = () => {
+    // First real user gesture: browsers only allow an AudioContext here, so the
+    // music bed starts on this click rather than at boot.
+    app.started = true;
     sfx.resume();
     sfx.click();
+    if (profile.settings.sound !== false && !getSettings().muteAudio) sfx.startMusic();
     startFlow();
   };
   $("#btn-howto").onclick = () => ($("#modal-howto").hidden = false);
+  const tutorSkip = $("#tutor-skip");
+  if (tutorSkip) tutorSkip.onclick = () => tutorStop();
+  const tutorNextBtn = $("#tutor-next");
+  if (tutorNextBtn) tutorNextBtn.onclick = () => tutorNext();
   $("#btn-medals").onclick = () => ($("#modal-medals").hidden = false);
   $("#btn-continue").onclick = () => {
     const save = store.get(STORE_KEY, null);

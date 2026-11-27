@@ -9,7 +9,7 @@
 export const EN = {
   // ------------------------------------------------------------- menu / brand
   "كونكوست": "Conquest",
-  "كونكوست — فتح العالم": "Conquest — World Domination",
+  "كونكوست — فتح العالم": "Conquest.io — World Domination",
   "ابدأ من حدود دولة حقيقية… واحتلّ العالم": "Start from a real country's borders… and take the world",
   "ابدأ اللعب": "Play",
   "متابعة": "Continue",
@@ -695,4 +695,17 @@ export const EN = {
     "Your local data is deleted instantly by clearing site data in your browser settings.",
   "تأكيد": "Confirm",
   "إلغاء": "Cancel",
+  // --- guided onboarding (3 steps, first match only)
+  "ابنِ مصنعًا": "Build a factory",
+  "اختر «مصنع» من شريط البناء ثم اضغط داخل أرضك. المصنع يرفع دخلك، والدخل هو ما يشتري الجيش.":
+    "Pick \"Factory\" from the build bar, then click inside your own land. Factories raise your income, and income buys armies.",
+  "اهجم على جارك": "Attack a neighbour",
+  "اضغط دولة على حدودك مرتين: الأولى تحددها، والثانية تأمر بالهجوم. القوة في الشريط السفلي تحدد حجم الهجوم.":
+    "Click a country on your border twice: the first selects it, the second orders the attack. The force slider sets how much of your army goes.",
+  "راقب تقدّمك": "Watch your progress",
+  "هدفك النسبة المئوية أعلى الشاشة. كلما اتسعت أرضك اقتربت من الفوز — وهذه هي النسبة التي تحسم المباراة.":
+    "Your goal is the percentage at the top of the screen. Every country you take moves it up — that number is what wins the match.",
+  "جاهز — العالم أمامك": "Ready — the world is yours",
+  "تخطّي": "Skip",
+  "التالي": "Next",
 };

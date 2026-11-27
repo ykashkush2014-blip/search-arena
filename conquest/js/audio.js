@@ -6,6 +6,7 @@ export class Sfx {
     this.enabled = true;
     this.last = new Map();
     this.master = null;
+    this.music = null;
   }
 
   ensure() {
@@ -21,6 +22,15 @@ export class Sfx {
       this.ctx = null;
     }
     return this.ctx;
+  }
+
+  // The single switch for every sound. CrazyGames' muteAudio sets this, and it
+  // must also silence the music bed — leaving the music playing while the
+  // effects are muted is the exact bug the portal checks for.
+  setEnabled(on) {
+    this.enabled = !!on;
+    if (!this.enabled) this.stopMusic();
+    return this.enabled;
   }
 
   resume() {
@@ -72,6 +82,78 @@ export class Sfx {
     filt.connect(g);
     g.connect(this.master);
     src.start(ctx.currentTime + delay);
+  }
+
+  // ------------------------------------------------------------- music ---
+  //
+  // A slow bed under the effects: four-bar loop, four notes, all synthesised.
+  // Deliberately quiet (its own gain, well below the sfx master) and started
+  // only from a click — browsers refuse to start an AudioContext otherwise,
+  // and CrazyGames' muteAudio must be able to win, so the music is gated by the
+  // same `enabled` flag as everything else.
+  startMusic() {
+    const ctx = this.ensure();
+    if (!ctx || this.music || !this.enabled) return;
+    try {
+      const bus = ctx.createGain();
+      bus.gain.value = 0.0;
+      // A tiny lowpass keeps it from competing with the attack sounds.
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 900;
+      bus.connect(filter);
+      filter.connect(this.master);
+      this.music = { bus, filter, timer: null, step: 0 };
+      // Fade in over a second so it never startles.
+      bus.gain.setValueAtTime(0.0001, ctx.currentTime);
+      bus.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + 1.2);
+      this.musicTimer();
+    } catch {
+      this.music = null;
+    }
+  }
+
+  // One note per half second; a minor pentatonic wandering, no melody to tire
+  // of. Notes are short and soft, with a long release.
+  musicTimer() {
+    const ctx = this.ctx;
+    if (!ctx || !this.music) return;
+    const scale = [196.0, 233.08, 261.63, 311.13, 349.23, 392.0];
+    const step = this.music.step++;
+    const note = scale[(step * 3 + ((step / 8) | 0)) % scale.length];
+    const t0 = ctx.currentTime + 0.02;
+    try {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = step % 8 === 0 ? "triangle" : "sine";
+      osc.frequency.setValueAtTime(note, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.25);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.9);
+      osc.connect(g);
+      g.connect(this.music.bus);
+      osc.start(t0);
+      osc.stop(t0 + 2.0);
+    } catch {
+      /* a failed note is not worth a broken game */
+    }
+    this.music.timer = setTimeout(() => this.musicTimer(), 620);
+  }
+
+  stopMusic() {
+    const ctx = this.ctx;
+    if (!this.music) return;
+    const { bus, timer } = this.music;
+    clearTimeout(timer);
+    this.music = null;
+    if (!ctx) return;
+    try {
+      bus.gain.cancelScheduledValues(ctx.currentTime);
+      bus.gain.setValueAtTime(Math.max(0.0001, bus.gain.value), ctx.currentTime);
+      bus.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
+    } catch {
+      /* ignore */
+    }
   }
 
   click() {

@@ -1,6 +1,6 @@
 // Game simulation: nations, economy, front-line combat, strikes, diplomacy,
 // victory conditions and serialisation. No DOM access in this file.
-import { BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MAX_TECH, RANKS, RESEARCH } from "./data.js";
+import { BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MAX_TECH, OPENING_TRUCE, RANKS, RESEARCH } from "./data.js";
 import { t } from "./i18n.js";
 import { gridToRle, rleToGrid } from "./world.js";
 
@@ -71,6 +71,9 @@ export class Nation {
 class Attack {
   constructor(attacker, defender, troops, opts = {}) {
     this.id = uidCounter++;
+    // Stable per-attack phase, so its arrow animation is out of step with the
+    // neighbour's instead of every front pulsing in unison.
+    this.seed = (uidCounter * 2.399) % (Math.PI * 2);
     this.attacker = attacker;
     this.defender = defender;
     this.troops = Math.max(1, Math.floor(troops));

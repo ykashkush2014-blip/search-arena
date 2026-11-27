@@ -228,6 +228,11 @@ export const MEDALS = [
   { id: "emperor", ar: t("الإمبراطور"), en: "Emperor", hintAr: t("الوصول لأعلى رتبة") },
 ];
 
+// Opening truce in seconds. 25 was a long time to watch a still map; 10 still
+// lets a player place a first building before the AI moves. Daily challenges
+// can override it in their own config.
+export const OPENING_TRUCE = 10;
+
 export const BALANCE = {
   tick: 0.1, // simulation step (seconds)
 

@@ -7,7 +7,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <meta name="theme-color" content="#0a1220" />
-<title>Conquest — World Domination</title>
+<title>Conquest.io — World Domination</title>
 <!-- The CrazyGames SDK must be a real <script> tag in <head>, not injected by
      JavaScript later: their launch checker looks for the tag itself, and with
      the runtime-injected version it reports "Gameplay Start: not detected"
@@ -31,7 +31,7 @@
         <div class="brand-mark">
           <span class="crown">♛</span>
         </div>
-        <h1 class="title">كونكوست<span class="io">.io</span></h1>
+        <h1 class="title">Conquest<span class="io">.io</span></h1>
         <p class="tagline">ابدأ من حدود دولة حقيقية… واحتلّ العالم</p>
       </header>
 
@@ -325,6 +325,22 @@
 
     <!-- toast -->
     <div class="toasts" id="toasts"></div>
+
+    <!-- Three-step onboarding, shown once on the first match only. It sits
+         above the map and points at real elements rather than explaining the
+         HUD in a wall of text: build a factory, attack a neighbour, watch the
+         progress move. Skippable from the first frame. -->
+    <div class="tutor" id="tutor" hidden>
+      <div class="tutor-card">
+        <span class="tutor-step" id="tutor-step">1 / 3</span>
+        <h4 id="tutor-title"></h4>
+        <p id="tutor-text"></p>
+        <div class="tutor-actions">
+          <button class="btn ghost" id="tutor-skip" type="button">تخطّي</button>
+          <button class="btn gold" id="tutor-next" type="button">التالي</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ============================ DIALOGS ============================ -->

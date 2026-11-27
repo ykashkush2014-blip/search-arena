@@ -135,7 +135,8 @@ These are the only gaps, and none of them block a Basic Launch:
 
 ## Submission metadata
 
-- **Title:** CONQUEST — World Domination
+- **Title:** Conquest.io — World Domination  (matches the title screen, the
+  browser tab and the store listing name; the same string everywhere)
 - **Genre:** strategy / io
 - **Controls:** mouse or touch to pick a nation and select targets; `1`–`8`
   build, `R` research, `Q`/`E` attack strength, `Space` pause, `+`/`-` speed,

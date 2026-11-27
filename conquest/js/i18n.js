@@ -405,7 +405,7 @@ export function translateDom(root = typeof document !== "undefined" ? document.b
 // The tab title lives in <head>, outside the body the walker covers, and a
 // player who switches to English still sees a browser tab reading "كونكوست".
 const TITLES = {
-  "كونكوست — فتح العالم": "Conquest — World Domination",
+  "كونكوست — فتح العالم": "Conquest.io — World Domination",
 };
 
 export function applyDocumentTitle() {

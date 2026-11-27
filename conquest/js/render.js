@@ -638,17 +638,67 @@ export class Renderer {
         continue;
       }
       if (!targets.length) continue;
-      const n = Math.min(involved ? 34 : 8, targets.length);
-      ctx.fillStyle = a.attacker.isPlayer ? "rgba(255,240,160,0.95)" : "rgba(255,120,110,0.92)";
+      // An attack used to be a scatter of static dots, which reads as "dirt" at
+      // a glance: the map looked exactly the same whether a war was raging or
+      // not. Two cues fix that — a short arrow travelling from the staging cell
+      // into the front, and a pulse on the front itself — so combat is legible
+      // without opening a panel.
+      const mine = a.attacker.isPlayer;
+      const hue = mine ? "255,235,150" : "255,120,110";
+      const n = Math.min(involved ? 26 : 6, targets.length);
       const phase = (game.time * 14) | 0;
       const size = Math.max(1.5, zoom * 0.4);
+      const pulse = 0.5 + 0.5 * Math.sin(game.time * 6 + a.seed);
       for (let k = 0; k < n; k++) {
         const pair = targets[(k * 61 + phase) % targets.length];
+        const from = pair[0];
         const cell = pair[1];
         const x = ((cell % w) - this.cam.x) * zoom;
         const y = (((cell / w) | 0) - this.cam.y) * zoom;
         if (x < -10 || y < -10 || x > this.viewW + 10 || y > this.viewH + 10) continue;
+
+        // Arrow: from the staging cell towards the front, animated along its
+        // length so several arrows visibly march at once.
+        const fx = ((from % w) - this.cam.x) * zoom;
+        const fy = (((from / w) | 0) - this.cam.y) * zoom;
+        if (Math.abs(x - fx) + Math.abs(y - fy) > 4) {
+          const t = ((game.time * 1.6 + (k % 7) / 7) % 1);
+          const hx = fx + (x - fx) * t;
+          const hy = fy + (y - fy) * t;
+          const ang = Math.atan2(y - fy, x - fx);
+          const len = Math.max(4, Math.min(16, Math.hypot(x - fx, y - fy) * 0.28));
+          ctx.save();
+          ctx.strokeStyle = `rgba(${hue},${0.35 + 0.45 * t})`;
+          ctx.fillStyle = `rgba(${hue},${0.45 + 0.5 * t})`;
+          ctx.lineWidth = Math.max(1, zoom * 0.22);
+          // shaft
+          ctx.beginPath();
+          ctx.moveTo(hx - Math.cos(ang) * len, hy - Math.sin(ang) * len);
+          ctx.lineTo(hx, hy);
+          ctx.stroke();
+          // head
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.lineTo(hx - Math.cos(ang - 0.5) * len * 0.55, hy - Math.sin(ang - 0.5) * len * 0.55);
+          ctx.lineTo(hx - Math.cos(ang + 0.5) * len * 0.55, hy - Math.sin(ang + 0.5) * len * 0.55);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Front flare: a soft ring that breathes, marking the contested cell.
+        const r = Math.max(2.4, zoom * 0.55) * (0.85 + pulse * 0.5);
+        ctx.save();
+        ctx.globalAlpha = 0.5 + pulse * 0.4;
+        ctx.strokeStyle = `rgba(${hue},0.95)`;
+        ctx.lineWidth = Math.max(1, zoom * 0.16);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = `rgba(${hue},0.95)`;
         ctx.fillRect(x - size / 2, y - size / 2, size, size);
+        ctx.restore();
       }
     }
   }
@@ -712,10 +762,18 @@ export class Renderer {
     ctx.textBaseline = "middle";
     const size = Math.max(10, Math.min(19, zoom * 2.6));
     ctx.font = `700 ${size}px "Cairo", "Tajawal", system-ui, sans-serif`;
-    const list = [...game.nations.values()].sort((a, b) => a.cells - b.cells);
+    // Big nations first, so they always win a slot; then a hard budget of
+    // labels on screen. Without the budget, zooming out drew a dozen names on
+    // top of each other in Europe and none of them was readable.
+    const list = [...game.nations.values()].sort((a, b) => b.cells - a.cells);
+    const budget = zoom > 3 ? 40 : zoom > 2 ? 22 : 10;
+    let drawn = 0;
     for (const n of list) {
       if (!n.alive) continue;
+      if (drawn >= budget) break;
       const c = n.def || world.countries[n.id];
+      // Threshold scales with the zoom: below it the name is smaller than its
+      // own territory and would just overlap its neighbours.
       if (n.cells * zoom * zoom < 2400) continue;
       const x = (c.x - this.cam.x) * zoom;
       // Nation names are data, not copy: the map bundle carries both spellings.
@@ -729,6 +787,7 @@ export class Renderer {
       ctx.strokeText(label, x, y);
       ctx.fillStyle = n.isPlayer ? "#ffe9a8" : "rgba(255,255,255,0.9)";
       ctx.fillText(label, x, y);
+      drawn++;
     }
     ctx.restore();
   }

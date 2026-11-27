@@ -6,7 +6,7 @@ import { Game } from "./state.js";
 import { Renderer } from "./render.js";
 import {
   AI_LEVELS, BALANCE, BUILDINGS, BUILDING_BY_KEY, ERAS, MEDALS, MODES,
-  RANKS, RESEARCH,
+  OPENING_TRUCE, RANKS, RESEARCH,
 } from "./data.js";
 import { CAMPAIGNS, dailyChallenge } from "./campaigns.js";
 import { Rng } from "./rng.js";
@@ -1107,7 +1107,7 @@ function startGame(countryId) {
     opts.daily = app.daily.ar;
   }
   const game = new Game(opts);
-  game.startCeasefire(app.mode === "daily" && app.daily?.ceasefire === 0 ? 0 : 25);
+  game.startCeasefire(app.mode === "daily" && app.daily?.ceasefire === 0 ? 0 : OPENING_TRUCE);
   if (app.mode === "daily" && app.daily) {
     const p = game.player();
     if (p && app.daily.gold) p.gold = app.daily.gold;
@@ -1143,7 +1143,7 @@ function startCampaign(camp) {
     seed: Date.now() & 0xffffffff,
     campaign: camp.id,
   });
-  game.startCeasefire(25);
+  game.startCeasefire(OPENING_TRUCE);
   game.campaign = camp;
   bootGame(game, world);
 }
@@ -1243,7 +1243,15 @@ function applyChatSetting() {
 // own preference wins, exactly as before.
 function applyAudioSetting() {
   const platformMuted = getSettings().muteAudio;
-  sfx.enabled = !platformMuted && profile.settings.sound !== false;
+  // setEnabled() also stops the music bed: muting the effects and leaving the
+  // music running is exactly the state the portal's muteAudio check fails on.
+  const on = !platformMuted && profile.settings.sound !== false;
+  const was = sfx.enabled;
+  sfx.setEnabled(on);
+  if (on && !was) sfx.resume();
+  // Resume the bed once the player is in a match (or the menu) and sound is on.
+  if (on && app.started) sfx.startMusic();
+  if (!on) sfx.stopMusic();
   const toggle = $("#set-sound");
   if (toggle) {
     toggle.checked = profile.settings.sound !== false;
@@ -1251,6 +1259,135 @@ function applyAudioSetting() {
     toggle.disabled = platformMuted;
     toggle.closest(".row")?.classList.toggle("locked", platformMuted);
   }
+}
+
+// ---------------------------------------------------------------- tutorial ---
+//
+// First-match onboarding. Three steps, each one a real action the player can
+// take right now, and each advances by watching what actually happened rather
+// than by a "Next" button the player can click through without reading:
+//
+//   1. build a factory   → advances when a factory exists
+//   2. attack a neighbour → advances when an attack exists
+//   3. watch your progress → advances as the war goal percentage moves
+//
+// Shown once (a flag in the profile), skippable at any point, never on top of
+// the build bar the step is asking about.
+const TUTOR_KEY = "tutorDone";
+
+const TUTOR_STEPS = [
+  {
+    title: "ابنِ مصنعًا",
+    text: "اختر «مصنع» من شريط البناء ثم اضغط داخل أرضك. المصنع يرفع دخلك، والدخل هو ما يشتري الجيش.",
+    check: (game, p) => (p.buildings || []).some((b) => b.key === "factory"),
+    target: "build",
+  },
+  {
+    title: "اهجم على جارك",
+    text: "اضغط دولة على حدودك مرتين: الأولى تحددها، والثانية تأمر بالهجوم. القوة في الشريط السفلي تحدد حجم الهجوم.",
+    check: (game) => game.attacks.some((a) => a.active && a.attacker.isPlayer),
+    target: "attack",
+  },
+  {
+    title: "راقب تقدّمك",
+    text: "هدفك النسبة المئوية أعلى الشاشة. كلما اتسعت أرضك اقتربت من الفوز — وهذه هي النسبة التي تحسم المباراة.",
+    check: () => true,
+    target: "goal",
+    hold: 4200, // a step that is only reading needs time to be read
+  },
+];
+
+const tutor = { step: -1, since: 0, active: false };
+
+function tutorDone() {
+  return !!profile[TUTOR_KEY];
+}
+
+function tutorStart() {
+  if (tutorDone()) return;
+  tutor.active = true;
+  tutor.step = 0;
+  tutor.since = performance.now();
+  tutorRender();
+}
+
+function tutorStop() {
+  tutor.active = false;
+  const el = $("#tutor");
+  if (el) el.hidden = true;
+  tutorClearTarget();
+  profile[TUTOR_KEY] = true;
+  saveSettings();
+}
+
+function tutorClearTarget() {
+  for (const el of $$(".tutor-target")) el.classList.remove("tutor-target");
+}
+
+// Point at the thing the current step is talking about. Deliberately quiet:
+// a ring on the build bar, not an overlay that hides the map.
+function tutorFocus(target) {
+  tutorClearTarget();
+  if (target === "build") $("#tabs")?.classList.add("tutor-target");
+  if (target === "attack") $("#tab-body")?.classList.add("tutor-target");
+  if (target === "goal") $("#goal-label")?.classList.add("tutor-target");
+}
+
+function tutorRender() {
+  const box = $("#tutor");
+  if (!box) return;
+  const step = TUTOR_STEPS[tutor.step];
+  if (!tutor.active || !step) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  $("#tutor-step").textContent = `${tutor.step + 1} / ${TUTOR_STEPS.length}`;
+  $("#tutor-title").textContent = t(step.title);
+  $("#tutor-text").textContent = t(step.text);
+  // The last step has nothing to click: it is finished by reading it.
+  $("#tutor-next").hidden = tutor.step < TUTOR_STEPS.length - 1;
+  tutorFocus(step.target);
+  translateDom(box);
+}
+
+function tutorNext() {
+  if (!tutor.active) return;
+  tutor.step++;
+  tutor.since = performance.now();
+  if (tutor.step >= TUTOR_STEPS.length) {
+    tutorStop();
+    toast(t("جاهز — العالم أمامك"), "good");
+    return;
+  }
+  tutorRender();
+}
+
+// Called from the game loop; cheap (a couple of property reads per frame).
+function tutorTick() {
+  if (!tutor.active) return;
+  const game = app.game;
+  if (!game || game.result || app.paused) return;
+  const step = TUTOR_STEPS[tutor.step];
+  const p = game.player();
+  if (!step || !p) return;
+  const waited = performance.now() - tutor.since;
+  // A minimum dwell stops a step from flashing past before it can be read.
+  const minDwell = step.hold || 900;
+  if (waited < minDwell) return;
+  let ok = false;
+  try {
+    ok = step.check(game, p);
+  } catch {
+    ok = false;
+  }
+  if (!ok) return;
+  // Step 3 is a reading step: it ends on its own timer.
+  if (tutor.step === TUTOR_STEPS.length - 1) {
+    tutorStop();
+    return;
+  }
+  tutorNext();
 }
 
 function bootGame(game, prebuiltWorld) {
@@ -1295,6 +1432,9 @@ function bootGame(game, prebuiltWorld) {
     if (!game.remote) showEnd(summary);
   };
   show("game");
+  // First-match onboarding, local play only: online is a shared room (the
+  // others are already playing) and a daily run has its own rules.
+  if (!game.remote && game.mode !== "online") tutorStart();
   requestAnimationFrame(() => {
     app.renderer.resize();
     app.renderer.baseKey = "";
@@ -1767,7 +1907,14 @@ function loop(ts) {
   }
   const R = app.renderer;
   R.render();
+  tutorTick();
   hudTick(dt);
+  // Harnesses need to drive a real match (place a factory, order an attack) and
+  // the single-file build exposes no modules. Two plain property writes on a
+  // node the page already owns — no DOM mutation, no global — is the smallest
+  // surface that allows it.
+  R.canvas.__game = app.game;
+  R.canvas.__app = app;
 }
 
 let idleAt = 0;
@@ -2709,16 +2856,26 @@ async function boot() {
   renderMedals();
   void platformReady;
   $("#btn-quick").onclick = () => {
+    app.started = true;
     sfx.resume();
     sfx.click();
+    if (profile.settings.sound !== false && !getSettings().muteAudio) sfx.startMusic();
     quickStart();
   };
   $("#btn-play").onclick = () => {
+    // First real user gesture: browsers only allow an AudioContext here, so the
+    // music bed starts on this click rather than at boot.
+    app.started = true;
     sfx.resume();
     sfx.click();
+    if (profile.settings.sound !== false && !getSettings().muteAudio) sfx.startMusic();
     startFlow();
   };
   $("#btn-howto").onclick = () => ($("#modal-howto").hidden = false);
+  const tutorSkip = $("#tutor-skip");
+  if (tutorSkip) tutorSkip.onclick = () => tutorStop();
+  const tutorNextBtn = $("#tutor-next");
+  if (tutorNextBtn) tutorNextBtn.onclick = () => tutorNext();
   $("#btn-medals").onclick = () => ($("#modal-medals").hidden = false);
   $("#btn-continue").onclick = () => {
     const save = store.get(STORE_KEY, null);
