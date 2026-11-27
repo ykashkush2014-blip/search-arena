@@ -106,6 +106,18 @@ match. It is called from the game loop (`main.js` ~1798) when a match is live,
 so the tester has to start one — launching into the menu and waiting will keep
 reporting "not detected" even with a correct tag.
 
+
+### Polish round (six items, each with a check)
+
+| # | Item | What changed | Verified by |
+|---|---|---|---|
+| 1 | Build bar no longer clips | row wraps, cards keep their width, labels ellipsise | `polish.mjs` (stylesheet contract) |
+| 2 | First impression | opening truce 25s → 10s; 3-step onboarding (factory → attack → progress) that advances on the action, not on "Next" | `tutor.mjs` 17 checks, full flow |
+| 3 | Combat is visible | animated arrows from staging cell into the front + a breathing flare on the contested cell | `arrows.mjs` — 285 stroke segments and 15 arcs during a real attack, 0 before |
+| 4 | Label overlap | biggest nations first, hard budget of 40/22/10 labels by zoom | `polish.mjs`, `canvas-text.mjs` |
+| 5 | One product name | `Conquest.io — World Domination` on the title screen, the tab and the submission form | `polish.mjs` |
+| 6 | Background music | synthesised bed, own gain below the sfx master, starts on the first click, stopped by the same `setEnabled()` the portal's `muteAudio` drives | `music.mjs` — counts oscillators with a stub AudioContext |
+
 ---
 
 ## Gameplay requirements
