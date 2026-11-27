@@ -777,4 +777,5 @@ export const EN = {
   "الميناء يُبنى على الشاطئ فقط": "A port can only be built on the coast",
   "لا يوجد طريق بحري مفتوح إلى هذا الساحل": "No open sea route to that coast",
   "ابنِ ميناء للغزو البحري": "build a port to invade by sea",
+  "واحد فقط": "one only",
 };

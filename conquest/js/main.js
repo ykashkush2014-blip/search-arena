@@ -1554,6 +1554,7 @@ function attachGameInput() {
     area.anchor = cell;
     area.active = true;
     area.end = cell;
+    drawAreaGhost();
     e.preventDefault();
   });
 
@@ -1669,31 +1670,34 @@ function handleClick(cell, e) {
   }
 
   if (app.brush) {
-    // The brush stays selected after a placement.
-    //
-    // It used to clear unless Shift was held, which made building a row of
-    // three cities a chore: select, click, select, click. A player who picked a
-    // building wants to place it more than once; Right-click / Escape / picking
-    // it again now ends the run, and Shift keeps doing the opposite of what it
-    // used to (it ends the run after this placement).
-    const done = (ok) => {
-      if (ok) sfx.build();
-      else sfx.error();
-      if (e.shiftKey) {
-        app.brush = null;
-        R.brush = null;
-        $("#map").classList.remove("placing");
-      }
+    // ONE building per selection. After a placement the brush, the hover square
+    // and the placing mode all clear immediately — the player asked for this
+    // three times, so it is now unconditional (no Shift, no mode, no exception).
+    // Shift+drag is the one gesture that builds more than one, and it is a
+    // rectangle the player draws on purpose, not repeated single clicks.
+    const err = netAct("build", { key: app.brush, cell })
+      ? null
+      : game.build(p, app.brush, cell);
+    if (err) {
+      toast(err, "bad");
+      sfx.error();
+      // A refusal keeps the selection: the click was not a placement, so the
+      // player can try another cell without re-picking the building.
       updateTab();
-    };
-    if (netAct("build", { key: app.brush, cell })) {
-      done(true);
       return;
     }
-    const err = game.build(p, app.brush, cell);
-    if (err) toast(err, "bad");
-    done(!err);
+    sfx.build();
+    clearBrush();
+    // Clear the square here as well as in clearBrush(): the pointer is still
+    // over the map, and leaving hoverCell set is exactly what made the square
+    // appear to "stay" after a build. (`R` here is the renderer instance, not
+    // the `R()` helper used elsewhere — calling it threw, and the exception
+    // aborted the redraw that hides the square.)
+    R.hoverCell = -1;
+    lastHoverCell = -2;
     R.renderBase();
+    R.render();
+    updateTab();
     return;
   }
 
@@ -1771,11 +1775,7 @@ function handleClick(cell, e) {
 function handleRightClick(cell) {
   if (app.brush) {
     // Right-click ends the build run and the square goes with it.
-    app.brush = null;
-    app.renderer.brush = null;
-    app.renderer.hoverCell = -1;
-    $("#map").classList.remove("placing");
-    updateTab();
+    clearBrush();
     return;
   }
   const game = app.game;
@@ -1893,11 +1893,7 @@ function onKey(e) {
     togglePause();
   } else if (k === "escape") {
     closeModals();
-    if (app.brush) {
-      app.brush = null;
-      app.renderer.brush = null;
-      $("#map").classList.remove("placing");
-    }
+    if (app.brush) clearBrush();
   } else if (k === "f") {
     const p = game.player();
     if (p && p.capital >= 0) {
@@ -2507,12 +2503,33 @@ function pickBuilding(key, sticky) {
     toast(`${t("تحتاج")} ${fmt(app.game.buildPrice(p, key, 1))} ${t("ذهب")}`, "bad");
     return;
   }
-  app.brush = app.brush === key ? null : key;
-  app.renderer.brush = app.brush;
-  $("#map").classList.toggle("placing", !!app.brush);
-  if (app.brush && !sticky) {
-    toast(`${t("اضغط داخل أرضك لوضع")} ${eraName(key)} — ${t("البناء مستمرّ، وزر الفأرة الأيمن يوقف")}`);
+  // Picking the same card again cancels; picking a new one arms exactly one
+  // placement. There is no "keep placing" mode any more.
+  if (app.brush === key) {
+    clearBrush();
+    return;
   }
+  app.brush = key;
+  app.renderer.brush = key;
+  $("#map").classList.add("placing");
+  if (!sticky) toast(`${t("اضغط داخل أرضك لوضع")} ${eraName(key)} — ${t("واحد فقط")}`);
+  updateTab();
+}
+
+// Drop the build selection completely: brush, placing mode, hover square and the
+// highlighted card. Every exit path (a placement, right-click, Escape, picking
+// another building) goes through here so they cannot drift apart.
+function clearBrush() {
+  app.brush = null;
+  const R = app.renderer;
+  if (R) {
+    R.brush = null;
+    R.hoverCell = -1;
+    R.area = null;
+    if (typeof R.render === "function") R.render();
+  }
+  const map = $("#map");
+  if (map) map.classList.remove("placing");
   updateTab();
 }
 
@@ -2550,7 +2567,10 @@ function drawAreaGhost() {
   const p = app.game.player();
   // The rectangle is valid when at least one cell in it can take the building.
   const ok = cells.some((c) => !app.game.canBuild(p, app.brush, c));
-  R.area = { a: area.anchor, b: area.end, ok };
+  R.area = { a: area.anchor, b: area.end, ok, count: cells.length };
+  // Draw the overlay immediately, and clear the hover square so the two do not
+  // sit on top of each other while the rectangle is being dragged.
+  R.hoverCell = -1;
   R.render();
 }
 

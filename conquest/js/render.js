@@ -1046,6 +1046,24 @@ export class Renderer {
     ctx.drawImage(this.baseCanvas, 0, 0);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawDynamic(ctx, this.cam.zoom);
+    // Keep one frame alive even when the game loop is paused or between ticks:
+    // the hover square has to be on screen the instant the pointer moves, not on
+    // the next simulation frame. Cheap (drawImage of a ready base layer).
+    this.requestFrame();
+  }
+
+  // Coalesce redraws into one per animation frame. Anything that changes the
+  // overlay (hover cell, brush, area rectangle, camera) calls this, so the
+  // square never lags behind the cursor.
+  requestFrame() {
+    if (this._framePending) return;
+    this._framePending = true;
+    const run = () => {
+      this._framePending = false;
+      this.render();
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+    else setTimeout(run, 16);
   }
 
   // Animated layer: selection ring, attack fronts, missiles, explosions, brush.

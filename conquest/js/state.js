@@ -799,7 +799,11 @@ export class Game {
     // Never let a nation commit its last soldiers: keep a garrison floor, so a
     // single over-committed offensive can't leave the homeland defenceless.
     const cap = this.capacityOf ? this.capacityOf(attacker) : attacker.cap || attacker.army;
-    const garrison = Math.max(600, cap * (attacker.isPlayer ? 0.18 : 0.25));
+    // The garrison is a slice of the army that exists, not of the army the
+    // nation could theoretically support. Keyed to capacity, a nation holding
+    // 17k of a 68k capacity was told it had "no reserve left" and stood still —
+    // which is why early wars were declared and never fought.
+    const garrison = Math.max(600, Math.min(cap, attacker.army) * (attacker.isPlayer ? 0.18 : 0.25));
     const available = Math.floor(attacker.army - garrison);
     if (available < 200) {
       return attacker.isPlayer
@@ -1266,8 +1270,18 @@ export class Game {
     // `ordered` is the force the player explicitly put on this front; it only
     // grows when they reinforce, never from the automatic drip feed.
     const ordered = a.ordered || a.startTroops || a.troops;
-    const supplyLine = Math.min(defLocal * 2.5, Math.max(ordered * 1.6, defLocal * 1.2));
-    const reserve = attacker.cap ? Math.max(attacker.cap * 0.25, 4000) : 4000;
+    // Opening pressure on the human is a raid that spends itself: the supply
+    // line may top the force up but never grows it beyond the original order,
+    // so the offensive takes a strip of border and then stalls out. Without
+    // this the drip feed scaled with the *defender's* army, so a small raid
+    // snowballed into a 15 000-strong invasion and deleted an idle player at
+    // minute five — the attack the player asked to see turned into the only
+    // thing that happened in the match.
+    const humanOpening = a.defender.isPlayer && this.time - (this.openedAt || 0) < 360;
+    const supplyLine = humanOpening
+      ? ordered * 1.05
+      : Math.min(defLocal * 2.5, Math.max(ordered * 1.6, defLocal * 1.2));
+    const reserve = Math.max(Math.min(attacker.cap || attacker.army, attacker.army) * 0.25, 4000);
     if (attacker.alive && attacker.army > reserve && a.troops < supplyLine && ratio >= B.haltRatio * 0.85) {
       const feed = Math.min(attacker.army - reserve, Math.min(supplyLine - a.troops, attacker.army * dt / (B.reinforceCapTime ?? 10)));
       if (feed > 0) {
@@ -2081,6 +2095,21 @@ export class Game {
       ai.nextWar = Math.max(18, (80 / (0.5 + ai.sizeFactor)) * (1.4 - ai.aggression) + this.rng.float() * 30);
       this.aiConsiderWar(n);
     }
+    // Opening pressure: until the human has been in a war, a few neighbours
+    // check every few seconds whether it is time.
+    //
+    // Without this the player's first war simply waited for whichever AI
+    // happened to roll its 18–40 s dice in the player's favour, which measured
+    // out at 3–5 minutes or never. The guarantee the player asked for — an
+    // attack inside the opening three minutes — cannot be left to that lottery.
+    if (!n.isPlayer && !this.openingWarDone()) {
+      ai.openingTick = (ai.openingTick || 0) - dt;
+      if (ai.openingTick <= 0) {
+        ai.openingTick = 2 + this.rng.float() * 2;
+        const p = this.player();
+        if (p && p.alive && this.adjacent(n, p)) this.aiConsiderWar(n, true);
+      }
+    }
     ai.nextPeace -= dt;
     if (ai.nextPeace <= 0) {
       ai.nextPeace = 40 + this.rng.float() * 60;
@@ -2172,15 +2201,44 @@ export class Game {
           this.retreat(weakest.id);
         }
       }
-      const strongEnough = defensive || ratio > 0.55 * (1.4 - n.ai.aggression * 0.4) || n.army > this.capacityOf(n) * 0.8;
+      // The opening war on the human is exempt from the strength gate: the
+      // player is at their troop cap by the first minute while every neighbour
+      // is still filling up, so a strict comparison made the early declaration a
+      // dead letter — war announced at 70 s, no soldier moved until minute four.
+      // The raid is small and its supply line is capped, which is what keeps it
+      // a fight rather than an execution.
+      const openingWar = enemy.isPlayer && this.time - (this.openedAt || 0) < 360;
+      const strongEnough = defensive || openingWar || ratio > 0.55 * (1.4 - n.ai.aggression * 0.4) || n.army > this.capacityOf(n) * 0.8;
       // A human is never knocked out in the opening minutes. The attacker may
       // take ground — that is the fight — but it cannot finish the player off
       // before they have had a chance to play.
-      const tooEarlyForKnockout = enemy.isPlayer && this.time - (this.openedAt || 0) < 180;
-      if (tooEarlyForKnockout) continue;
+      // This used to skip the whole offensive for the first three minutes "so
+      // the human is never knocked out early" — but capitulation is already
+      // guarded in stepAttack, so all it did was declare a war on the player
+      // and then stand still for two and a half minutes. The player asked to be
+      // attacked, not to be told about it.
       if (strongEnough) {
         if (this.rng.chance(defensive ? 0.9 : 0.55 + n.ai.aggression * 0.2)) {
-          this.launchAttack(n, enemy, this.rng.range(0.35, 0.7));
+          // The opening war on the human is a probing raid, not a full
+          // invasion: the point is that the player sees the attack coming
+          // inside the first three minutes, not that they are erased before
+          // they have spent a single gold coin. Full-strength offensives
+          // resume after the opening.
+          const openingRaid = enemy.isPlayer && this.time - (this.openedAt || 0) < 360;
+          // One order per front. launchAttack() on a front that is already
+          // running *reinforces* it and raises `ordered`, and `ordered` sets how
+          // many troops the supply line keeps feeding in — so re-ordering the
+          // same war on every think tick compounded into a 29 000-strong
+          // invasion out of an 8 % raid and erased an idle player at minute
+          // five. The automatic supply line already keeps a live front fed.
+          const running = this.attacks.some((a) => a.active && a.attacker === n && a.defender === enemy);
+          if (running) continue;
+          if (openingRaid) {
+            const already = this.attacks.filter((a) => a.active && a.defender === enemy).length;
+            if (already < 2) this.launchAttack(n, enemy, this.rng.range(0.3, 0.5));
+          } else {
+            this.launchAttack(n, enemy, this.rng.range(0.35, 0.7));
+          }
         }
       }
       // pull back hopeless pushes
@@ -2212,14 +2270,45 @@ export class Game {
     return false;
   }
 
-  aiConsiderWar(n) {
-    if (n.war.size >= 2 && n.ai.aggression < 1.1) return;
-    // Two simultaneous wars per nation. Without this, a strong AI kept opening
-    // a new front every time it finished one, and the attack table filled up so
-    // a defender could never get a counter-offensive in edgewise (the cap is
-    // global, 150, and it was already full).
-    const ownWar = this.attacks.filter((a) => a.active && a.attacker === n).length;
-    if (ownWar >= 2) return;
+  // The window in which a neighbour is expected to open the war on the human.
+  openingAttackWindow(p) {
+    if (!p || !p.isPlayer || !p.alive) return false;
+    const elapsed = this.time - (this.openedAt || 0);
+    return elapsed >= 65 && elapsed <= 175 && p.war.size === 0;
+  }
+
+  // Rises from 0 at 55 s to almost certain by 160 s, so the first war lands
+  // inside the player's three-minute window in essentially every match.
+  openingAttackChance(p) {
+    const elapsed = this.time - (this.openedAt || 0);
+    return Math.min(0.97, 0.26 + (elapsed - 65) * 0.015);
+  }
+
+  // True once the human has been at war at least once. Used only to decide
+  // whether the fast opening scan is still needed.
+  openingWarDone() {
+    const p = this.player();
+    if (!p) return true;
+    if (p.war.size > 0) {
+      this.openingWarSeen = true;
+      return true;
+    }
+    return !!this.openingWarSeen;
+  }
+
+  aiConsiderWar(n, openingPass = false) {
+    // The opening pass skips the war budget: during the first three minutes a
+    // border nation of the human is supposed to open that war even if it is
+    // already busy elsewhere. Every other consideration still applies below.
+    if (!openingPass) {
+      if (n.war.size >= 2 && n.ai.aggression < 1.1) return;
+      // Two simultaneous wars per nation. Without this, a strong AI kept opening
+      // a new front every time it finished one, and the attack table filled up so
+      // a defender could never get a counter-offensive in edgewise (the cap is
+      // global, 150, and it was already full).
+      const ownWar = this.attacks.filter((a) => a.active && a.attacker === n).length;
+      if (ownWar >= 2) return;
+    }
     const candidates = [];
     const targets = [...n.def.neighbors];
     if (this.hasPort(n) && this.rng.chance(0.45)) {
@@ -2238,6 +2327,19 @@ export class Game {
       const p0 = other.isPlayer ? other : null;
       const isPlayerTarget = !!p0;
       if (isPlayerTarget) {
+        // The opening rule comes first and overrides the general war budget: a
+        // neighbour of the human is expected to press the attack while the match
+        // is young, even if it is already busy elsewhere. Without this exemption
+        // the "attack within three minutes" guarantee was silently impossible —
+        // every neighbour had already spent its war budget on other AI nations by
+        // the time the player was eligible.
+        const opening = openingPass && this.openingAttackWindow(p0);
+        if (opening && !this.playerProvoked(n, p0)) {
+          if (!n.war.has(p0.id) && this.adjacent(n, p0) && this.rng.chance(this.openingAttackChance(p0))) {
+            candidates.push({ id: p0.id, score: 1e6 });
+          }
+          continue;
+        }
         // The bots mostly leave the human alone — but not always, and not
         // forever.
         //
@@ -2249,16 +2351,24 @@ export class Game {
         // dead) and "attacked from minute one" (which felt unfair).
         const provoked = this.playerProvoked(n, p0);
         if (!provoked) {
-          const minutes = (this.time - (this.openedAt || 0)) / 60;
-          // Nothing unprovoked in the first minute: the player must at least
-          // have time to see the map.
-          if (minutes < 1) continue;
-          const chance = Math.min(0.55, 0.1 + minutes * 0.055);
+          // The player asked for the first attack inside three minutes, every
+          // time. Being "stronger" cannot be the gate for that, because in the
+          // opening minutes nobody is much stronger than anybody: the map opens
+          // with comparable armies, so the previous gate produced one attack in
+          // ten matches. What guards the player instead is TIME (nothing before
+          // ~70 s) and a hard one-attacker limit (see below), not a strength
+          // comparison.
+          const elapsed = this.time - (this.openedAt || 0);
+          if (elapsed < 70) continue;
+          // After the 70 s mark the chance climbs steeply, so by the three
+          // minute mark the human has certainly been noticed.
+          const minutes = elapsed / 60;
+          const opening = elapsed < 180 ? 0.16 + (minutes - 1) * 0.34 : 0.5;
+          const chance = Math.min(0.55, opening);
           if (strength < 1) continue;              // never attack a nation with no army
-          // "Sometimes" must not mean "always the weaker one": inside a 25%
-          // band either side can be the one that picks the fight, which is what
-          // makes it feel like other nations have their own plans.
-          if (mine < strength * 0.75) continue;
+          // Only refuse if the player is vastly stronger (3x): a modest edge is
+          // no reason for the whole world to sit still.
+          if (mine < strength * 0.34) continue;
           if (!this.rng.chance(chance * (n.ai.aggression || 1))) continue;
         }
         const elapsed = this.time - (this.openedAt || 0);
@@ -2276,7 +2386,12 @@ export class Game {
         const limit = aggressive ? 3 : 2;
         if (alreadyAtWar && [...p0.war].length >= limit) continue;
       }
-      if (mine < strength * 0.75) continue;
+      // A declared target that is not a nation (a ruin) is skipped; otherwise the
+      // shared strength gate. The human already went through the opening rules
+      // above, so they must not be filtered again by this line — that double
+      // gate is why the first attack landed at minute four instead of minute two.
+      const alreadyCleared = isPlayerTarget && !this.playerProvoked(n, p0);
+      if (!alreadyCleared && mine < strength * 0.75) continue;
       const juicy = other.cells / Math.max(1, n.cells);
       const score = (mine / Math.max(1, strength)) * (0.5 + juicy) * this.rng.range(0.6, 1.5);
       candidates.push({ id, score });
