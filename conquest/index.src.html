@@ -1,0 +1,473 @@
+<!doctype html>
+<!-- English is the default language (CrazyGames requires it; Arabic is a
+     setting). js/i18n.js rewrites lang/dir at import time from the saved
+     choice, so an Arabic player still gets rtl before anything paints. -->
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#0a1220" />
+<title>Conquest.io — World Domination</title>
+<!-- The CrazyGames SDK must be a real <script> tag in <head>, not injected by
+     JavaScript later: their launch checker looks for the tag itself, and with
+     the runtime-injected version it reports "Gameplay Start: not detected"
+     even though gameplayStart() is being called correctly. defer keeps it off
+     the critical path, and js/crazygames.js still treats a missing SDK as a
+     no-op (a downloaded file, or an offline machine, never sees this load). -->
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ============================ MAIN MENU ============================ -->
+  <section class="screen" id="screen-menu">
+    <div class="bg-map"></div>
+    <div class="menu-wrap">
+      <header class="brand">
+        <div class="brand-mark">
+          <span class="crown">♛</span>
+        </div>
+        <h1 class="title">Conquest<span class="io">.io</span></h1>
+        <p class="tagline">ابدأ من حدود دولة حقيقية… واحتلّ العالم</p>
+      </header>
+
+      <div class="mode-grid" id="mode-grid"></div>
+
+      <div class="menu-actions">
+        <button class="btn ghost" id="btn-continue" hidden>
+          <span class="k">متابعة</span><small>استئناف آخر معركة</small>
+        </button>
+        <!-- One way in: pick your country, then play. The old "start instantly"
+             button is gone — it dropped the player into a random nation, which
+             made the first click skip the only choice that matters. -->
+        <button class="btn gold" id="btn-play">العب</button>
+        <button class="btn ghost" id="btn-medals">
+          <span class="k">الأوسمة</span>
+          <small id="medal-count">0 / 19</small>
+        </button>
+        <button class="btn ghost" id="btn-howto">كيف تلعب</button>
+      </div>
+
+      <footer class="menu-foot">
+        <span>خريطة حقيقية • 236 دولة • 5 عصور • وضع الدبلوماسية</span>
+      </footer>
+    </div>
+  </section>
+
+  <!-- ========================= COUNTRY SELECT ========================= -->
+  <section class="screen" id="screen-country" hidden>
+    <div class="select-head">
+      <button class="icon-btn" id="btn-back-menu">→</button>
+      <div>
+        <h2 id="select-title">اختر دولتك</h2>
+        <p id="select-sub">كل دولة لها حدودها الحقيقية وصعوبتها الخاصة</p>
+      </div>
+      <div class="spacer"></div>
+      <!-- The one-click path: a nation is preselected, so this starts a match
+           immediately and the list is only there to change your mind. -->
+      <button class="btn gold play-now" id="btn-play-now"><i class="ico">▶</i><span>العب</span></button>
+      <div class="filters">
+        <select id="era-select" class="select"></select>
+        <select id="map-select" class="select"></select>
+        <select id="ai-select" class="select"></select>
+        <select id="goal-select" class="select"></select>
+      </div>
+    </div>
+
+    <div class="select-body">
+      <aside class="country-list">
+        <div class="search-row">
+          <input id="country-search" class="search" placeholder="ابحث عن دولة…" />
+          <button class="icon-btn" id="btn-random" title="اختيار عشوائي">🎲</button>
+        </div>
+        <div class="list" id="country-list"></div>
+      </aside>
+      <div class="map-pick">
+        <canvas id="pick-canvas"></canvas>
+        <div class="pick-hint">اضغط أي دولة على الخريطة لاختيارها</div>
+      </div>
+      <aside class="country-card" id="country-card">
+        <div class="card-empty">لم تختر دولة بعد</div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================= ONLINE ============================= -->
+  <section class="screen" id="screen-online" hidden>
+    <div class="online-bg"></div>
+
+    <!-- join / create -->
+    <div class="online-wrap" id="online-home">
+      <header class="online-head">
+        <button class="icon-btn" id="btn-online-back">→</button>
+        <div>
+          <h2>الأونلاين</h2>
+          <p>العب مع أصدقائك على نفس الخادم — كل لاعب يدير دولة حقيقية</p>
+        </div>
+      </header>
+
+      <div class="online-cards">
+        <div class="online-card wide-card">
+          <h3>عوالم مفتوحة — بلا كود</h3>
+          <p>اختر عالمًا من القائمة والعب فورًا، أو اضغط «العب الآن» لندخلك أنت وأصدقاؤك في أول عالم متاح.</p>
+          <div class="quick-row">
+            <button class="btn gold" id="btn-quick-play">⚡ العب الآن</button>
+            <button class="btn" id="btn-refresh-rooms">↻ تحديث القائمة</button>
+          </div>
+          <div class="room-list" id="room-list">
+            <div class="room-empty">…جارٍ البحث عن عوالم</div>
+          </div>
+        </div>
+
+        <div class="online-card">
+          <h3>إنشاء غرفة خاصة</h3>
+          <p>ستحصل على كود من 4 أحرف تشاركه مع أصدقائك.</p>
+          <label class="field"><span>اسمك</span><input id="online-name" class="search" maxlength="18" placeholder="قائد" autocomplete="off" /></label>
+          <div class="field-row">
+            <label class="field"><span>الوضع</span>
+              <select id="online-mode" class="select">
+                <option value="normal">فتح عادي — كل لاعب لنفسه</option>
+                <option value="coop">تحالف — فريق واحد ضد العالم</option>
+                <option value="ffa">معركة أخيرة — آخر لاعب صامد</option>
+              </select>
+            </label>
+            <label class="field"><span>الهدف</span>
+              <select id="online-goal" class="select">
+                <option value="0.3">30% من الأرض</option>
+                <option value="0.5" selected>50% من الأرض</option>
+              </select>
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>الخصوم (AI)</span>
+              <select id="online-ai" class="select">
+                <option value="easy">سهل</option>
+                <option value="normal" selected>عادي</option>
+                <option value="hard">صعب</option>
+                <option value="brutal">وحشي</option>
+              </select>
+            </label>
+            <label class="field"><span>الخريطة</span>
+              <select id="online-map" class="select">
+                <option value="world">العالم</option>
+                <option value="europe">أوروبا</option>
+                <option value="asia">آسيا</option>
+                <option value="africa">أفريقيا</option>
+                <option value="americas">الأمريكتان</option>
+              </select>
+            </label>
+          </div>
+          <button class="btn gold" id="btn-create-room">إنشاء الغرفة</button>
+        </div>
+
+        <div class="online-card">
+          <h3>الانضمام بكود</h3>
+          <p>لو وصلك كود من صاحب الغرفة، اكتبه هنا.</p>
+          <label class="field"><span>كود الغرفة</span><input id="online-code" class="search code-input" maxlength="4" placeholder="A1B2" /></label>
+          <button class="btn" id="btn-join-room">انضم</button>
+          <div class="online-status" id="online-status">غير متصل</div>
+          <ul class="online-tips">
+            <li>حتى 8 لاعبين في الغرفة.</li>
+            <li>الخادم هو الحكم — لا مجال للغش من المتصفح.</li>
+            <li>لو انقطع لاعب، يدير الذكاء الاصطناعي دولته حتى يعود.</li>
+          </ul>
+          <!-- CrazyGames asks for a privacy notice whenever a game sends data to
+               its own server (online names, room codes, chat). A quiet line with
+               an in-game policy is what their docs recommend — not a popup. -->
+          <p class="privacy-note">
+            باللعب أونلاين يُرسل اسمك المختار وكود الغرفة ورسائل الدردشة إلى خادم اللعبة لإدارة المباراة.
+            <button class="link-btn" id="btn-privacy" type="button">سياسة الخصوصية</button>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- lobby -->
+    <div class="online-wrap lobby" id="online-lobby" hidden>
+      <header class="online-head">
+        <button class="icon-btn" id="btn-leave-room">→</button>
+        <div>
+          <h2>غرفة <b class="room-code" id="room-code">----</b></h2>
+          <p id="lobby-sub">بانتظار اللاعبين…</p>
+        </div>
+        <div class="spacer"></div>
+        <div class="lobby-chips" id="lobby-chips"></div>
+      </header>
+
+      <div class="lobby-grid">
+        <aside class="lobby-seats" id="lobby-seats"></aside>
+        <div class="lobby-map">
+          <canvas id="lobby-canvas"></canvas>
+          <div class="lobby-hint">الخريطة للعرض — اختر دولتك من القائمة</div>
+        </div>
+        <aside class="lobby-nations">
+          <h3>اختر دولتك</h3>
+          <input id="nation-search" class="search" placeholder="ابحث باسم الدولة…" />
+          <div class="nation-list" id="nation-list"></div>
+        </aside>
+        <aside class="lobby-chat">
+          <div class="chat-log" id="lobby-chat"></div>
+          <div class="chat-row">
+            <input id="chat-input" class="search" maxlength="200" placeholder="اكتب رسالة…" />
+            <button class="icon-btn" id="chat-send">➤</button>
+          </div>
+        </aside>
+      </div>
+
+      <footer class="lobby-foot">
+        <button class="btn ghost" id="btn-ready">جاهز</button>
+        <button class="btn gold" id="btn-start-online" hidden>ابدأ المباراة</button>
+        <span class="lobby-note" id="lobby-note"></span>
+      </footer>
+    </div>
+  </section>
+
+  <!-- ============================== GAME ============================== -->
+  <section class="screen game" id="screen-game" hidden>
+    <canvas id="map"></canvas>
+
+    <!-- floating mobile controls: zoom + quick actions (thumb reach) -->
+    <div class="touch-pad" id="touch-pad">
+      <button class="tbtn" id="zoom-in" aria-label="تكبير">＋</button>
+      <button class="tbtn" id="zoom-out" aria-label="تصغير">－</button>
+      <button class="tbtn" id="touch-attack" aria-label="هجوم">⚔</button>
+      <button class="tbtn" id="touch-home" aria-label="عاصمتي">⌂</button>
+    </div>
+
+    <!-- top bar -->
+    <header class="hud-top">
+      <div class="nation-chip" id="nation-chip">
+        <span class="flag" id="flag">—</span>
+        <div class="nc-text">
+          <b id="nation-name">—</b>
+          <small id="rank-name">مجنّد</small>
+        </div>
+      </div>
+      <div class="res" id="res-gold"><i class="ri">◈</i><b>0</b><small>+0/ث</small></div>
+      <div class="res" id="res-army"><i class="ri">⚔</i><b>0</b><small>0%</small></div>
+      <button class="res res-btn" id="res-research" title="البحث (R)"><i class="ri">✦</i><b>0</b><small>بحث</small></button>
+      <div class="goal-chip">
+        <div class="gc-row"><span id="goal-label">الهدف: 50% من الأرض</span><b id="goal-pct">0%</b></div>
+        <div class="bar"><i id="goal-bar"></i></div>
+      </div>
+      <div class="spacer"></div>
+      <div class="clock" id="clock">00:00</div>
+      <button class="icon-btn" id="btn-speed" title="السرعة (Space للإيقاف)">▶</button>
+      <button class="icon-btn" id="btn-diplo" title="الدبلوماسية">🤝</button>
+      <button class="icon-btn" id="btn-menu" title="القائمة">☰</button>
+      <button class="icon-btn" id="btn-more" title="المزيد" aria-expanded="false">⋯</button>
+      <div class="hud-more" id="hud-more" hidden>
+        <button class="icon-btn" id="btn-research" title="البحث (R)">✦</button>
+        <button class="icon-btn" id="btn-fs" title="ملء الشاشة">⛶</button>
+        <button class="icon-btn danger" id="btn-surrender" title="الاستسلام (أونلاين)" hidden>🏳️</button>
+      </div>
+    </header>
+
+    <!-- objectives -->
+    <div class="panel objectives" id="objectives">
+      <div class="panel-title"><span>الأهداف</span><b id="ceasefire-badge">هدنة</b></div>
+      <div class="obj" id="obj-main">
+        <div class="obj-row"><span id="obj-text">سيطر على 50% من الأرض</span><b id="obj-val">0%</b></div>
+        <div class="bar"><i id="obj-bar"></i></div>
+      </div>
+      <div class="obj-sub" id="obj-sub">أرضك: 0 خلية • جيران: 0</div>
+      <div class="obj-tactics" id="obj-tactics"></div>
+      <div class="obj-extra" id="obj-extra"></div>
+    </div>
+
+    <!-- feed -->
+    <div class="panel feed" id="feed"></div>
+
+    <!-- minimap -->
+    <div class="minimap-wrap">
+      <canvas id="minimap"></canvas>
+      <div class="mm-view" id="mm-view"></div>
+    </div>
+
+    <!-- event panel: ongoing attacks -->
+    <div class="panel events" id="events"></div>
+
+    <!-- bottom bar -->
+    <footer class="hud-bottom">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="empire" data-short="الدولة"><span class="tab-long">الإمبراطورية</span><span class="tab-short">الدولة</span></button>
+        <button class="tab" data-tab="economy" data-short="اقتصاد"><span class="tab-long">الاقتصاد</span><span class="tab-short">اقتصاد</span></button>
+        <button class="tab" data-tab="military" data-short="الجيش"><span class="tab-long">الجيش</span><span class="tab-short">الجيش</span></button>
+        <button class="tab" data-tab="navy" data-short="الأسطول"><span class="tab-long">الأسطول</span><span class="tab-short">الأسطول</span></button>
+        <button class="tab" data-tab="strikes" data-short="ضربات"><span class="tab-long">الضربات</span><span class="tab-short">ضربات</span></button>
+        <!-- Research used to be reachable only from a hidden ✦ button behind the
+             "more" menu on narrow screens. It is now a tab of its own, which is
+             also what the ✦ resource chip in the top bar opens. -->
+        <button class="tab" data-tab="research" data-short="بحث"><span class="tab-long">البحث</span><span class="tab-short">بحث</span><span class="tab-badge" id="research-badge" hidden></span></button>
+      </div>
+      <div class="tab-body" id="tab-body"></div>
+      <div class="force-row">
+        <label>قوة الهجوم <b id="force-val">50%</b></label>
+        <input type="range" id="force-slider" min="10" max="100" value="50" step="5" />
+        <div class="force-btns">
+          <button class="mini" id="force-down">Q −</button>
+          <button class="mini" id="force-up">E +</button>
+        </div>
+      </div>
+    </footer>
+
+    <!-- country tooltip -->
+    <div class="tooltip" id="tooltip" hidden></div>
+
+    <!-- online chat dock -->
+    <div class="chat-dock" id="chat-dock" hidden>
+      <div class="dock-head">
+        <b>غرفة <span id="dock-room">----</span></b>
+        <span class="ping" id="dock-ping">—</span>
+        <button class="icon-btn small" id="dock-chat-toggle">💬</button>
+      </div>
+      <div class="dock-log" id="dock-log"></div>
+      <div class="dock-row">
+        <input id="dock-input" class="search" maxlength="200" placeholder="رسالة…" />
+        <button class="icon-btn small" id="dock-send">➤</button>
+      </div>
+    </div>
+
+    <!-- toast -->
+    <div class="toasts" id="toasts"></div>
+
+    <!-- Three-step onboarding, shown once on the first match only. It sits
+         above the map and points at real elements rather than explaining the
+         HUD in a wall of text: build a factory, attack a neighbour, watch the
+         progress move. Skippable from the first frame. -->
+    <div class="tutor" id="tutor" hidden>
+      <div class="tutor-card">
+        <span class="tutor-step" id="tutor-step">1 / 3</span>
+        <h4 id="tutor-title"></h4>
+        <p id="tutor-text"></p>
+        <div class="tutor-actions">
+          <button class="btn ghost" id="tutor-skip" type="button">تخطّي</button>
+          <button class="btn gold" id="tutor-next" type="button">التالي</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ DIALOGS ============================ -->
+  <div class="modal" id="modal-research" hidden>
+    <div class="modal-card">
+      <header><h3>البحث</h3><span class="pts" id="research-pts">0 نقطة</span>
+        <button class="icon-btn" data-close>✕</button>
+      </header>
+      <div class="tech-grid" id="tech-grid"></div>
+      <p class="hint">نقاط البحث تُنتجها مختبرات الأبحاث. كل مسار حتى 5 مستويات.</p>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-diplo" hidden>
+    <div class="modal-card wide">
+      <header><h3>الدبلوماسية</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="offers" id="offers"></div>
+      <div class="diplo-list" id="diplo-list"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-menu" hidden>
+    <div class="modal-card narrow">
+      <header><h3>القائمة</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="menu-list">
+        <button class="btn" id="btn-resume">استئناف</button>
+        <button class="btn ghost" id="btn-save">حفظ اللعبة</button>
+        <button class="btn ghost" id="btn-settings">إعدادات</button>
+        <button class="btn ghost" id="btn-abandon">الخروج للقائمة</button>
+      </div>
+      <div class="settings" id="settings" hidden>
+        <label class="row"><span>اللغة</span>
+          <select id="set-lang" class="select">
+            <option value="en">English</option>
+            <option value="ar">العربية</option>
+          </select>
+        </label>
+        <label class="row"><span>المؤثرات الصوتية</span><input type="checkbox" id="set-sound" checked /></label>
+        <label class="row"><span>أسماء الدول على الخريطة</span><input type="checkbox" id="set-labels" checked /></label>
+        <label class="row"><span>سرعة المحاكاة</span>
+          <select id="set-speed" class="select">
+            <option value="1">عادي</option>
+            <option value="1.5">سريع</option>
+            <option value="2.5">سريع جدًا</option>
+          </select>
+        </label>
+        <label class="row"><span>الحركة عند السحب</span><input type="checkbox" id="set-drag" checked /></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-end" hidden>
+    <div class="modal-card narrow end">
+      <h2 id="end-title">النصر!</h2>
+      <p id="end-sub"></p>
+      <div class="end-stats" id="end-stats"></div>
+      <div class="end-online" id="end-online" hidden></div>
+      <div class="menu-list">
+        <button class="btn" id="btn-again">حملة جديدة</button>
+        <button class="btn ghost" id="btn-to-menu">القائمة الرئيسية</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-medals" hidden>
+    <div class="modal-card wide">
+      <header><h3>الأوسمة</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="medal-grid" id="medal-grid"></div>
+    </div>
+  </div>
+
+  <!-- Privacy policy, kept in-game (Bloxd.io style) so the build stays one file. -->
+  <div class="modal" id="modal-privacy" hidden>
+    <div class="modal-card">
+      <header><h3>سياسة الخصوصية</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="howto">
+        <h4>اللعب الفردي</h4>
+        <ul>
+          <li>لا يغادر أي شيء جهازك — التقدم والأوسمة والإعدادات تُحفظ محليًا في متصفحك فقط.</li>
+        </ul>
+        <h4>اللعب الأونلاين</h4>
+        <ul>
+          <li>يُرسل اسمك المختار وكود الغرفة وأفعالك داخل المباراة ورسائل الدردشة إلى خادم اللعبة، لأن الخادم هو من يدير المباراة بين اللاعبين.</li>
+          <li>رسائل الدردشة تمر عبر فلتر ألفاظ نابية قبل عرضها على باقي اللاعبين.</li>
+        </ul>
+        <h4>ما لا نفعله</h4>
+        <ul>
+          <li>لا حسابات ولا بريد إلكتروني ولا كلمات مرور.</li>
+          <li>لا تتبع إعلاني ولا بيع لأي بيانات.</li>
+        </ul>
+        <h4>الحذف</h4>
+        <ul>
+          <li>بياناتك المحلية تُحذف فورًا بمسح بيانات الموقع من إعدادات متصفحك.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic in-game confirm. Native confirm() can be blocked or ugly inside
+       the portal iframe, so every yes/no question goes through this modal. -->
+  <div class="modal" id="modal-confirm" hidden>
+    <div class="modal-card narrow">
+      <h3 id="confirm-text" style="margin:0 0 14px"></h3>
+      <div class="menu-list">
+        <button class="btn danger" id="btn-confirm-yes" type="button">تأكيد</button>
+        <button class="btn ghost" type="button" data-close>إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-howto" hidden>
+    <div class="modal-card wide">
+      <header><h3>كيف تلعب</h3><button class="icon-btn" data-close>✕</button></header>
+      <div class="howto" id="howto-body"></div>
+    </div>
+  </div>
+
+</div>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

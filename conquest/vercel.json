@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "outputDirectory": null,
+  "functions": {
+    "server.js": {
+      "maxDuration": 300,
+      "memory": 1024,
+      "includeFiles": [
+        "js/**",
+        "data/**",
+        "index.html",
+        "styles.css",
+        "media/**"
+      ]
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/server.js"
+    }
+  ]
+}

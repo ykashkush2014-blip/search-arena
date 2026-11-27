@@ -1,0 +1,65 @@
+# CONQUEST — إعداد Fly.io (التطبيق الحقيقي: conquest-online-8129)
+#
+# النشر:  cd conquest && fly launch --copy-config --no-deploy   ثم  fly deploy
+# (أو fly deploy مباشرة إذا كان التطبيق موجودًا)
+#
+# تطبيق واحد يقدّم الصفحة + ملفات اللعبة + WebSocket على نفس المنفذ،
+# لذلك الأونلاين (غرف بكود) يعمل بلا أي إعداد إضافي.
+#
+# اسم التطبيق يجب أن يطابق ما تنشره فعلًا. كان هنا "conquest-online" بينما
+# التطبيق الحقيقي "conquest-online-8129"، فأي `fly deploy` من داخل مجلد
+# conquest ينشئ/ينشر تطبيقًا آخر — أي أن النشر ينجح ولا يتغيّر شيء في اللعبة.
+
+app = "conquest-online-8129"
+primary_region = "fra" # fra / cdg / ams / iad — أقرب منطقة لك
+
+[build]
+  # الصورة تُبنى من Dockerfile (بلا تبعيات، Node 22 + ملفات اللعبة فقط).
+  # قسم [build] الفارغ كان يعني أن Fly تختار الباني بنفسها — وهذا يتغيّر
+  # بين إصدارات flyctl، وقد ينتج نشرًا يفشل بلا سبب واضح.
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  NODE_ENV = "production"
+  # سقف الغرف: كل غرفة ~50MB في الذاكرة، والماشينة 512MB. بلا سقف تنفد
+  # الذاكرة بعد ليلة من إنشاء الغرف، فيقتل Fly العملية ويبدو الأمر وكأن
+  # الخادم "انطفأ من نفسه". الرفض المهذّب أفضل من الموت.
+  MAX_ROOMS = "6"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # ماشين واحدة فقط. الغرف (rooms = new Map()) في ذاكرة العملية، فلا توجد
+  # قاعدة مشتركة: ماشينتان = عالمَان منفصلان، وصديقان لا يتلاقيان. الاتساع
+  # هنا عمودي (shared-cpu-2x) لا أفقي؛ وللتوسّع الأفقي لاحقًا يلزم مخزن
+  # مشترك (Redis) للغرف، وهذا تغيير معماري لا إعداد.
+  # لا تُوقف الماشين أبدًا: الغرف تعيش في ذاكرة الخادم، وإيقافه يمسح المباريات.
+  # (auto_stop_machines الافتراضي في Fly هو true — أي أن التطبيق ينطفئ بعد
+  # دقائق من الخمول. هذه القيمة هي أهم سطر في الملف كلّه.)
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 250
+    soft_limit = 200
+
+  # فحص الصحة — نفس المسار الذي يوفّره الخادم.
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/health"
+
+# قياس فعلي: الخادم الخامل ~56MB، وكل غرفة مباراة ~50MB إضافية.
+# 512MB تكفي 6-8 غرف في نفس الوقت بأريحية. للتقليل إلى 256MB:
+#   fly scale memory 256   (تكفي غرفتين-ثلاث)
+# ماشين واحدة فقط: الغرف (rooms = new Map()) في ذاكرة العملية بلا مخزن
+# مشترك، فماشينتان = عالمَان منفصلان لا يلتقي فيهما صديقان. للنشر بماشين
+# واحدة دائمًا: fly deploy --ha=false  (أو fly scale count 1 --yes).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
